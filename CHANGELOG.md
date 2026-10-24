@@ -22,6 +22,11 @@ release.
 
 ### Added
 
+- `icons`: Lucide icons for media apps such as asteria (#6): `picture` (Lucide's `image`),
+  `images`, `music`, `list_music`, `smartphone`, `monitor_smartphone`, `play`, `pause`,
+  `skip_back`, `skip_forward`, `volume_2`, `volume_x`, `star`, `tag`, `search`,
+  `clipboard_copy`, `upload`, `download` and `cloud_off`.
+
 `corundum-framework-gui`, as it came from sapphire-framework:
 
 - `Shell`: the app's screens on a rail, a bottom bar when narrower than `COMPACT_WIDTH`,
