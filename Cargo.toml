@@ -19,5 +19,6 @@ tracing-subscriber = "0.3"
 # null pointer; a debug build's precondition check aborts there on the window's first frame
 # (demo/README.md). Without debug assertions in that crate alone the empty slice is read as
 # empty, as in a release build. An app built in debug for Android needs the same lines.
+# Drop this once android-activity no longer slices the null text (#19).
 [profile.dev.package.android-activity]
 debug-assertions = false
