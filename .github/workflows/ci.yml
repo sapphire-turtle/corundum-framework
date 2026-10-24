@@ -15,3 +15,6 @@ jobs:
       post-test: |
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --locked -- -D warnings
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features serde --locked -- -D warnings
+        # The facade's default (no egui) and its gui alone (no eframe).
+        cargo clippy -p corundum-framework --all-targets --locked -- -D warnings
+        cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings

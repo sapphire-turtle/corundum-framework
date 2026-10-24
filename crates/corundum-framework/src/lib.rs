@@ -1,0 +1,38 @@
+//! `corundum-framework` — a single-dependency facade over the crates the sapphire apps and
+//! asteria share.
+//!
+//! Depend on this one crate and turn on the features you need; each feature re-exports a
+//! `corundum-framework-*` crate as a module, the same way sapphire-framework's facade does.
+//! The default is the part without egui, for the crates without a window (a server, a CLI);
+//! an app turns on `gui`.
+//!
+//! ```toml
+//! # A desktop app:
+//! corundum-framework = { version = "0.1", features = ["eframe", "serde"] }
+//! # The same app on an Android phone:
+//! corundum-framework = { version = "0.1", features = ["android", "serde"] }
+//! ```
+//!
+//! ## Modules (feature-gated)
+//!
+//! | feature | module | crate |
+//! |---|---|---|
+//! | `platform` (default) | [`platform`] | `corundum-framework-platform`: the app's directories, the system's languages, the JNI / Objective-C bridging |
+//! | `gui` | [`gui`] | `corundum-framework-gui`: the shell, theme, fonts, icons and translations (brings `platform`) |
+//! | `eframe` | `gui::window::run` | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
+//! | `android` | `gui::window::run_android` | `corundum-framework-gui` with its `android` feature: the window on an Android phone |
+//! | `serde` | — | `Serialize` / `Deserialize` on the gui's theme and language settings |
+
+#[cfg(feature = "platform")]
+pub use corundum_framework_platform as platform;
+
+#[cfg(feature = "gui")]
+pub use corundum_framework_gui as gui;
+
+// The egui the components are built against, at the top as well: an app that depends on
+// this facade alone renders with this one.
+#[cfg(feature = "gui")]
+pub use corundum_framework_gui::egui;
+
+#[cfg(feature = "eframe")]
+pub use corundum_framework_gui::eframe;
