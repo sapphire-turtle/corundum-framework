@@ -12,7 +12,7 @@ desktops and on phones.
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | The look: the shell, theme, fonts, icons, translations and window | unreleased |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
-| `corundum-framework` | The facade over the crates above | planned |
+| [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
 
 ### corundum-framework-gui
@@ -53,6 +53,23 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   crate's `platform` reads.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
+
+### corundum-framework
+
+One dependency for the crates above, as sapphire-framework's facade is: each feature
+re-exports a crate as a module (`corundum_framework::platform`, `::gui`), and the rest pass
+through to the gui crate.
+
+| Feature | What it enables | Default |
+|---|---|---|
+| `platform` | `platform`: corundum-framework-platform | yes |
+| `gui` | `gui` and `egui`: corundum-framework-gui without eframe (brings `platform`) | no |
+| `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
+| `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
+| `serde` | The gui crate's `serde` | no |
+
+The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
+Android app `android`.
 
 ## Status
 

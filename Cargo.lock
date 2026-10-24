@@ -706,6 +706,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "corundum-framework"
+version = "0.1.0"
+dependencies = [
+ "corundum-framework-gui",
+ "corundum-framework-platform",
+]
+
+[[package]]
 name = "corundum-framework-gui"
 version = "0.1.0"
 dependencies = [
