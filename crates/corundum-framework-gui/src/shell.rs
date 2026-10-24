@@ -391,7 +391,8 @@ fn unsafe_margin(ui: &egui::Ui) -> egui::epaint::MarginF32 {
 /// A rail or bar button's side, where there is room for it.
 const BUTTON: f32 = 36.0;
 
-/// A `side`-point square button with `icon` in it ([`BUTTON`], or less on a crowded bar).
+/// A button with `icon` in it, `side` points wide ([`BUTTON`], or less on a crowded bar) and
+/// [`BUTTON`] tall, so a narrowed one still lines up with the rest and is as easy to tap.
 fn icon_button(
     ui: &mut egui::Ui,
     open: bool,
@@ -410,7 +411,7 @@ fn icon_button(
             crate::icons::button(icon, icon_size)
                 .selected(open)
                 .frame_when_inactive(open)
-                .min_size(egui::vec2(side, side)),
+                .min_size(egui::vec2(side, BUTTON)),
         )
     })
     .inner
@@ -790,8 +791,12 @@ mod tests {
             }
             assert!(cells[8].right() <= footer.left(), "{width}");
             assert!(footer.right() <= foot.left(), "{width}");
-            // The footer keeps its full size; the cells give way.
+            // The footer keeps its full size; the cells give way in width only, and line up.
             assert_eq!(footer.width(), BUTTON, "{width}");
+            for rect in &cells {
+                assert_eq!(rect.height(), BUTTON, "{width}: {rect:?}");
+                assert_eq!(rect.center().y, footer.center().y, "{width}: {rect:?}");
+            }
         }
     }
 
