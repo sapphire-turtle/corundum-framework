@@ -10,7 +10,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
-| `corundum-framework` | 上記のクレートをまとめるファサード | 予定 |
+| [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
 
 ### corundum-framework-gui
@@ -38,6 +38,20 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
+
+### corundum-framework
+
+上記のクレートを一つの依存で使うためのファサードです。sapphire-framework のファサードと同じ形です。feature ごとにクレートをモジュールとして再公開し（`corundum_framework::platform`、`::gui`）、残りの feature は gui クレートに渡します。
+
+| feature | 有効になるもの | 既定 |
+|---|---|---|
+| `platform` | `platform`：corundum-framework-platform | はい |
+| `gui` | `gui` と `egui`：eframe を含まない corundum-framework-gui（`platform` も有効になる） | いいえ |
+| `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |
+| `android` | `gui::window::run_android`：Android のウィンドウ（`gui` も有効になる） | いいえ |
+| `serde` | gui クレートの `serde` | いいえ |
+
+既定では egui を含みません。サーバーや CLI はそのまま使えます。デスクトップのアプリは `eframe` を、Android のアプリは `android` を有効にします。
 
 ## 状態
 

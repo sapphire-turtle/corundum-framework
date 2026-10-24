@@ -29,6 +29,9 @@ release.
 
 ### Added
 
+- `corundum-framework` (#10), the facade over the crates: `platform` (default) and `gui`
+  re-export them as modules; `eframe`, `android` and `serde` pass through to the gui crate.
+  The default leaves egui out, as sapphire-framework's facade leaves out its gui.
 - `corundum-framework-platform` (#9), a crate without egui for what an app asks of the OS:
   `dirs` (config, data and cache roots, the `dirs` crate's on the desktops and the
   sandbox's on iOS and Android, and an app's own `AppDirs` under them), `locale`

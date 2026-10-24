@@ -45,6 +45,7 @@ jobs:
         run: |
           for t in aarch64-apple-ios aarch64-apple-ios-sim; do
             cargo clippy -p corundum-framework-platform -p corundum-framework-gui --target "$t" --all-targets --locked -- -D warnings || exit 1
+            cargo clippy -p corundum-framework --target "$t" --all-targets --locked --features eframe,serde -- -D warnings || exit 1
           done
 
       # The simulator's CoreText lists the simulator's own fonts, not the Mac's, so this runs
@@ -83,6 +84,7 @@ jobs:
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-platform --all-targets --locked -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --no-default-features -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --features android -- -D warnings
+          cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework --all-targets --locked --features android,serde -- -D warnings
 
       # Built before the emulator starts, so the emulator step only runs it.
       - name: Build the tests

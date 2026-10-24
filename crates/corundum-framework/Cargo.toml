@@ -1,0 +1,41 @@
+[package]
+name = "corundum-framework"
+# Versioned on its own, as the crates under it are.
+version = "0.1.0"
+edition.workspace = true
+description = "The application framework shared by sapphire and asteria apps - single-dependency facade over the corundum-framework-* crates"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme.workspace = true
+keywords = ["gui", "egui", "dirs", "android", "ios"]
+categories = ["gui", "os"]
+
+# Facade crate, as sapphire-framework is: depend on this one crate and turn on features for
+# the pieces you need. Each feature exposes a member crate as a module
+# (`corundum_framework::gui`, `::platform`); the member crates stay split so that the ones
+# without a window never build egui.
+#
+# The default is the part without egui, as sapphire-framework's default is its workspace
+# without the gui: a server or a CLI takes the default, an app turns on `gui` (with `eframe`
+# for the desktop window, or `android` for the phone's).
+[features]
+default = ["platform"]
+
+# ── modules ──────────────────────────────────────────────────────────────────
+platform = ["dep:corundum-framework-platform"]
+# The components alone, for an app that renders egui without eframe. corundum-framework-gui
+# is built on corundum-framework-platform, so `gui` brings `platform` along.
+gui = ["dep:corundum-framework-gui", "platform"]
+
+# ── gui passthrough ──────────────────────────────────────────────────────────
+# `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
+eframe = ["gui", "corundum-framework-gui/eframe"]
+# `gui::window::run_android`: the window on an Android phone (GameActivity), with logcat.
+android = ["gui", "corundum-framework-gui/android"]
+# Serialize / Deserialize on the gui's theme and language settings (applies when `gui` is on).
+serde = ["corundum-framework-gui?/serde"]
+
+[dependencies]
+corundum-framework-platform = { version = "0.1.0", path = "../corundum-framework-platform", optional = true }
+# Without eframe unless asked for: eframe's default window does not build on Android.
+corundum-framework-gui = { version = "0.1.0", path = "../corundum-framework-gui", optional = true, default-features = false }
