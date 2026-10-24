@@ -348,7 +348,7 @@ pub(super) struct PickerRects {
 #[cfg(test)]
 impl PickerRects {
     pub(super) fn id() -> egui::Id {
-        egui::Id::new("corundum_tint_picker_rects")
+        egui::Id::unique("corundum_tint_picker_rects")
     }
 }
 
