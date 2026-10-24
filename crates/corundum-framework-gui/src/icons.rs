@@ -109,13 +109,108 @@ pub fn dice_5() -> egui::ImageSource<'static> {
     icon!("dice-5")
 }
 
+/// A picture or photo. Lucide's `image`, named apart from [`image`] the drawing helper.
+pub fn picture() -> egui::ImageSource<'static> {
+    icon!("image")
+}
+
+/// Pictures, a gallery.
+pub fn images() -> egui::ImageSource<'static> {
+    icon!("images")
+}
+
+/// Music, or a track.
+pub fn music() -> egui::ImageSource<'static> {
+    icon!("music")
+}
+
+/// A playlist.
+pub fn list_music() -> egui::ImageSource<'static> {
+    icon!("list-music")
+}
+
+/// A phone, the device.
+pub fn smartphone() -> egui::ImageSource<'static> {
+    icon!("smartphone")
+}
+
+/// The display: how the app looks on this screen and device.
+pub fn monitor_smartphone() -> egui::ImageSource<'static> {
+    icon!("monitor-smartphone")
+}
+
+/// Play.
+pub fn play() -> egui::ImageSource<'static> {
+    icon!("play")
+}
+
+/// Pause.
+pub fn pause() -> egui::ImageSource<'static> {
+    icon!("pause")
+}
+
+/// Back to the previous track.
+pub fn skip_back() -> egui::ImageSource<'static> {
+    icon!("skip-back")
+}
+
+/// On to the next track.
+pub fn skip_forward() -> egui::ImageSource<'static> {
+    icon!("skip-forward")
+}
+
+/// Sound, or the volume.
+pub fn volume_2() -> egui::ImageSource<'static> {
+    icon!("volume-2")
+}
+
+/// Muted.
+pub fn volume_x() -> egui::ImageSource<'static> {
+    icon!("volume-x")
+}
+
+/// A rating, or a favourite.
+pub fn star() -> egui::ImageSource<'static> {
+    icon!("star")
+}
+
+/// A tag.
+pub fn tag() -> egui::ImageSource<'static> {
+    icon!("tag")
+}
+
+/// Search.
+pub fn search() -> egui::ImageSource<'static> {
+    icon!("search")
+}
+
+/// Copy to the clipboard.
+pub fn clipboard_copy() -> egui::ImageSource<'static> {
+    icon!("clipboard-copy")
+}
+
+/// Upload, or send to the server.
+pub fn upload() -> egui::ImageSource<'static> {
+    icon!("upload")
+}
+
+/// Download, or fetch from the server.
+pub fn download() -> egui::ImageSource<'static> {
+    icon!("download")
+}
+
+/// Offline: not synced.
+pub fn cloud_off() -> egui::ImageSource<'static> {
+    icon!("cloud-off")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     type Icon = fn() -> egui::ImageSource<'static>;
 
-    const ALL: [(&str, Icon); 17] = [
+    const ALL: [(&str, Icon); 36] = [
         ("settings", settings),
         ("arrow_left", arrow_left),
         ("x", x),
@@ -133,6 +228,25 @@ mod tests {
         ("file_text", file_text),
         ("rotate_ccw", rotate_ccw),
         ("dice_5", dice_5),
+        ("picture", picture),
+        ("images", images),
+        ("music", music),
+        ("list_music", list_music),
+        ("smartphone", smartphone),
+        ("monitor_smartphone", monitor_smartphone),
+        ("play", play),
+        ("pause", pause),
+        ("skip_back", skip_back),
+        ("skip_forward", skip_forward),
+        ("volume_2", volume_2),
+        ("volume_x", volume_x),
+        ("star", star),
+        ("tag", tag),
+        ("search", search),
+        ("clipboard_copy", clipboard_copy),
+        ("upload", upload),
+        ("download", download),
+        ("cloud_off", cloud_off),
     ];
 
     #[test]
