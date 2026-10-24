@@ -15,7 +15,12 @@ fn every_module_feature_has_a_matching_optional_dependency() {
 #[test]
 fn the_default_leaves_egui_out() {
     let manifest = include_str!("../Cargo.toml");
-    assert!(manifest.contains("\ndefault = [\"platform\"]\n"));
+    // By line: a Windows checkout ends them with CRLF.
+    assert!(
+        manifest
+            .lines()
+            .any(|line| line.trim_end() == "default = [\"platform\"]")
+    );
 }
 
 #[cfg(feature = "platform")]
