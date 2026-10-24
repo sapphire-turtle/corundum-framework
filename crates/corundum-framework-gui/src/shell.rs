@@ -304,9 +304,9 @@ impl<D: Copy + PartialEq> Shell<D> {
 }
 
 fn icon_button(ui: &mut egui::Ui, open: bool, icon: egui::ImageSource<'static>) -> egui::Response {
-    let image = crate::icons::image(ui, icon, 20.0);
+    // The open destination's icon takes the accent, as egui's selected text does.
     ui.add(
-        egui::Button::image(image)
+        crate::icons::button(icon, 20.0)
             .selected(open)
             .frame_when_inactive(open)
             .min_size(egui::vec2(36.0, 36.0)),
