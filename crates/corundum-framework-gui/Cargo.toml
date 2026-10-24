@@ -79,6 +79,6 @@ objc2-core-text = { version = "0.3.2", default-features = false, features = ["st
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6", optional = true }
 android_log-sys = { version = "0.3", optional = true }
-jni = "0.21"
+jni = "0.22"
 ndk-context = "0.1"
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"], optional = true }

@@ -44,39 +44,33 @@ fn android_languages() -> Option<Vec<String>> {
 
 #[cfg(target_os = "android")]
 fn read_locale_list(ctx: &ndk_context::AndroidContext) -> jni::errors::Result<String> {
-    use jni::JavaVM;
+    use jni::objects::JString;
+    use jni::{JavaVM, jni_sig, jni_str};
 
     // SAFETY: `ndk_context` holds the process's JavaVM, set by android-activity before
     // `android_main` runs and valid for the process's lifetime.
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
-    let mut env = vm.attach_current_thread()?;
-    let tags = read_tags(&mut env);
-    // A failed call leaves its Java exception pending, and the next JNI call on this
-    // thread would fail with it: clear it, the caller falls back.
-    if tags.is_err() && env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
-    }
-    tags
-}
-
-#[cfg(target_os = "android")]
-fn read_tags(env: &mut jni::JNIEnv) -> jni::errors::Result<String> {
-    use jni::objects::JString;
-    // The thread may stay attached, so locals made here would never be freed: a frame
-    // frees them on the way out.
-    env.with_local_frame(16, |env| {
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
+    // The attachment runs the closure in a local frame of its own, so the locals made here
+    // are freed even if the thread stays attached; and it catches (and clears) a Java
+    // exception a call throws, so none is left pending: the caller falls back.
+    vm.attach_current_thread(|env| {
         let list = env
             .call_static_method(
-                "android/os/LocaleList",
-                "getDefault",
-                "()Landroid/os/LocaleList;",
+                jni_str!("android/os/LocaleList"),
+                jni_str!("getDefault"),
+                jni_sig!("()Landroid/os/LocaleList;"),
                 &[],
             )?
             .l()?;
         let tags = env
-            .call_method(&list, "toLanguageTags", "()Ljava/lang/String;", &[])?
+            .call_method(
+                &list,
+                jni_str!("toLanguageTags"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
             .l()?;
-        env.get_string(&JString::from(tags)).map(String::from)
+        env.cast_local::<JString>(tags)?.try_to_string(env)
     })
 }
 
