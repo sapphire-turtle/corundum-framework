@@ -11,7 +11,7 @@ desktops and on phones.
 | Crate | What it is | Status |
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | The look: the shell, theme, fonts, icons, translations and window | unreleased |
-| `corundum-framework-platform` | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | planned |
+| [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
 | `corundum-framework` | The facade over the crates above | planned |
 | `corundum-framework-demo` | A demo app showing every component | planned |
 
@@ -38,6 +38,21 @@ desktops and on phones.
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not
 build there).
+
+### corundum-framework-platform
+
+What an app asks of the OS, without egui, so the crates without a window (a server, a
+CLI) can use it too, and no app has to call JNI or Objective-C itself.
+
+- **Directories**: `dirs::{config_dir, data_dir, cache_dir}` and an app's own `AppDirs`
+  under them: the `dirs` crate's on the desktops, the sandbox's on iOS (`NSFileManager`)
+  and Android (the context's files and cache directories).
+- **Languages**: `locale::system_languages`, the system's preferred languages (Android's
+  whole `LocaleList`, where `sys-locale` gives only one).
+- **Window support**: the clipboard and the window insets on Android, which the gui
+  crate's `platform` reads.
+- **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
+  caught, and the application context and activity, for an app's own JNI calls.
 
 ## Status
 

@@ -9,7 +9,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | クレート | 内容 | 状態 |
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
-| `corundum-framework-platform` | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 予定 |
+| [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
 | `corundum-framework` | 上記のクレートをまとめるファサード | 予定 |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
 
@@ -29,6 +29,15 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `serde` | テーマと言語の設定に `Serialize` / `Deserialize` | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
+
+### corundum-framework-platform
+
+アプリが OS に求めるもののうち、egui に依存しない部分です。ウィンドウを持たないクレート（サーバー、CLI）でも使えます。アプリが JNI や Objective-C を直接呼ばずに済むようにします。
+
+- **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。
+- **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
+- **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
+- **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ## 状態
 

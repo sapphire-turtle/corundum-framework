@@ -1,0 +1,29 @@
+[package]
+name = "corundum-framework-platform"
+# Versioned on its own, as corundum-framework-gui is.
+version = "0.1.0"
+edition.workspace = true
+description = "What sapphire and asteria apps ask of the OS, without egui: app directories (phones included), the system's languages, the JNI / Objective-C bridging"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme.workspace = true
+keywords = ["dirs", "locale", "android", "ios", "jni"]
+categories = ["os"]
+
+# No egui here: the crates without a window (workspace, server, bridge, CLI) need the
+# directories too. corundum-framework-gui builds on this one.
+[dependencies]
+dirs = "7"
+sys-locale = "0.3"
+tracing.workspace = true
+unic-langid = "0.9"
+
+# iOS: the sandbox's directories, from NSFileManager rather than $HOME.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSFileManager", "NSPathUtilities", "NSString", "NSURL"] }
+
+# Android: the language list, the directories, the clipboard and the insets, read from the
+# JVM through the context android-activity (or any host) leaves in ndk-context.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.22"
+ndk-context = "0.1"
