@@ -1,14 +1,13 @@
 //! Android's half of [`platform`](super): the clipboard, through JNI.
 
-use jni::JavaVM;
 use jni::objects::{JObject, JString};
+use jni::{Env, JavaVM, jni_sig, jni_str};
 
 /// The primary clip's text, coerced as Android's own paste would, or `None`.
 pub(super) fn clipboard_text() -> Option<String> {
     match read_clipboard() {
         Ok(text) => text,
         Err(err) => {
-            clear_exception();
             tracing::warn!("could not read the clipboard: {err}");
             None
         }
@@ -24,35 +23,32 @@ pub(crate) fn set_activity(activity: *mut std::ffi::c_void) {
     ACTIVITY.store(activity as usize, std::sync::atomic::Ordering::SeqCst);
 }
 
-/// A failed call leaves a Java exception pending, and the next JNI call with one pending
-/// aborts the process: clear it.
-fn clear_exception() {
+/// Run `f` on this thread attached to the process's JavaVM.
+///
+/// The attachment runs `f` in a local frame of its own, so the locals made there are
+/// freed on the way out although the thread stays attached for the activity's life. A
+/// Java exception a call throws is caught and cleared, and comes back as the error: none
+/// is left pending to abort the next JNI call.
+fn with_env<T>(f: impl FnOnce(&mut Env) -> jni::errors::Result<T>) -> jni::errors::Result<T> {
     let ctx = ndk_context::android_context();
-    // SAFETY: as in `read_clipboard`.
-    if let Ok(vm) = unsafe { JavaVM::from_raw(ctx.vm().cast()) }
-        && let Ok(env) = vm.attach_current_thread()
-        && env.exception_check().unwrap_or(false)
-    {
-        let _ = env.exception_clear();
-    }
+    // SAFETY: `ndk_context` holds the process's JavaVM, set by android-activity before
+    // `android_main` runs and valid for the process's lifetime.
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
+    vm.attach_current_thread(f)
 }
 
 fn read_clipboard() -> jni::errors::Result<Option<String>> {
-    let ctx = ndk_context::android_context();
-    // SAFETY: `ndk_context` holds the process's JavaVM and the application context, set by
-    // android-activity before `android_main` runs and valid for the process's lifetime.
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
-    let activity = unsafe { JObject::from_raw(ctx.context().cast()) };
-    let mut env = vm.attach_current_thread()?;
-    // The thread stays attached for the activity's life, so locals made here would
-    // never be freed: a frame frees them on the way out.
-    env.with_local_frame(32, |env| {
+    let context = ndk_context::android_context().context();
+    with_env(|env| {
+        // SAFETY: `ndk_context` holds the application context, a global reference valid
+        // for the process's lifetime.
+        let activity = unsafe { JObject::from_raw(env, context.cast()) };
         let name = env.new_string("clipboard")?;
         let manager = env
             .call_method(
                 &activity,
-                "getSystemService",
-                "(Ljava/lang/String;)Ljava/lang/Object;",
+                jni_str!("getSystemService"),
+                jni_sig!("(Ljava/lang/String;)Ljava/lang/Object;"),
                 &[(&name).into()],
             )?
             .l()?;
@@ -62,31 +58,33 @@ fn read_clipboard() -> jni::errors::Result<Option<String>> {
         let clip = env
             .call_method(
                 &manager,
-                "getPrimaryClip",
-                "()Landroid/content/ClipData;",
+                jni_str!("getPrimaryClip"),
+                jni_sig!("()Landroid/content/ClipData;"),
                 &[],
             )?
             .l()?;
         if clip.is_null() {
             return Ok(None);
         }
-        let count = env.call_method(&clip, "getItemCount", "()I", &[])?.i()?;
+        let count = env
+            .call_method(&clip, jni_str!("getItemCount"), jni_sig!("()I"), &[])?
+            .i()?;
         if count < 1 {
             return Ok(None);
         }
         let item = env
             .call_method(
                 &clip,
-                "getItemAt",
-                "(I)Landroid/content/ClipData$Item;",
+                jni_str!("getItemAt"),
+                jni_sig!("(I)Landroid/content/ClipData$Item;"),
                 &[0.into()],
             )?
             .l()?;
         let text = env
             .call_method(
                 &item,
-                "coerceToText",
-                "(Landroid/content/Context;)Ljava/lang/CharSequence;",
+                jni_str!("coerceToText"),
+                jni_sig!("(Landroid/content/Context;)Ljava/lang/CharSequence;"),
                 &[(&activity).into()],
             )?
             .l()?;
@@ -94,9 +92,14 @@ fn read_clipboard() -> jni::errors::Result<Option<String>> {
             return Ok(None);
         }
         let text = env
-            .call_method(&text, "toString", "()Ljava/lang/String;", &[])?
+            .call_method(
+                &text,
+                jni_str!("toString"),
+                jni_sig!("()Ljava/lang/String;"),
+                &[],
+            )?
             .l()?;
-        let text: String = env.get_string(&JString::from(text))?.into();
+        let text = env.cast_local::<JString>(text)?.try_to_string(env)?;
         Ok(Some(text))
     })
 }
@@ -107,7 +110,6 @@ pub(crate) fn window_insets() -> Option<[i32; 4]> {
     match read_insets() {
         Ok(insets) => insets,
         Err(err) => {
-            clear_exception();
             tracing::debug!("could not read the window insets: {err}");
             None
         }
@@ -119,27 +121,31 @@ fn read_insets() -> jni::errors::Result<Option<[i32; 4]>> {
     if activity == 0 {
         return Ok(None);
     }
-    let ctx = ndk_context::android_context();
-    // SAFETY: the VM as in `read_clipboard`; the activity is the global reference
-    // android-activity holds for as long as the activity lives, which outlasts the window
-    // that asks.
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }?;
-    let activity = unsafe { JObject::from_raw(activity as jni::sys::jobject) };
-    let mut env = vm.attach_current_thread()?;
-    // The thread stays attached for the activity's life, so locals made here would
-    // never be freed: a frame frees them on the way out.
-    env.with_local_frame(32, |env| {
+    with_env(|env| {
+        // SAFETY: the activity is the global reference android-activity holds for as long
+        // as the activity lives, which outlasts the window that asks.
+        let activity = unsafe { JObject::from_raw(env, activity as jni::sys::jobject) };
         let window = env
-            .call_method(&activity, "getWindow", "()Landroid/view/Window;", &[])?
+            .call_method(
+                &activity,
+                jni_str!("getWindow"),
+                jni_sig!("()Landroid/view/Window;"),
+                &[],
+            )?
             .l()?;
         let decor = env
-            .call_method(&window, "getDecorView", "()Landroid/view/View;", &[])?
+            .call_method(
+                &window,
+                jni_str!("getDecorView"),
+                jni_sig!("()Landroid/view/View;"),
+                &[],
+            )?
             .l()?;
         let insets = env
             .call_method(
                 &decor,
-                "getRootWindowInsets",
-                "()Landroid/view/WindowInsets;",
+                jni_str!("getRootWindowInsets"),
+                jni_sig!("()Landroid/view/WindowInsets;"),
                 &[],
             )?
             .l()?;
@@ -147,49 +153,54 @@ fn read_insets() -> jni::errors::Result<Option<[i32; 4]>> {
             return Ok(None);
         }
         let sdk = env
-            .get_static_field("android/os/Build$VERSION", "SDK_INT", "I")?
+            .get_static_field(
+                jni_str!("android/os/Build$VERSION"),
+                jni_str!("SDK_INT"),
+                jni_sig!("I"),
+            )?
             .i()?;
         if sdk >= 30 {
             // WindowInsets.Type.systemBars() | ime() | displayCutout()
-            let bars = env
-                .call_static_method("android/view/WindowInsets$Type", "systemBars", "()I", &[])?
-                .i()?;
-            let ime = env
-                .call_static_method("android/view/WindowInsets$Type", "ime", "()I", &[])?
-                .i()?;
-            let cutout = env
-                .call_static_method(
-                    "android/view/WindowInsets$Type",
-                    "displayCutout",
-                    "()I",
+            let mut kind = |name| {
+                env.call_static_method(
+                    jni_str!("android/view/WindowInsets$Type"),
+                    name,
+                    jni_sig!("()I"),
                     &[],
-                )?
-                .i()?;
+                )
+                .and_then(|v| v.i())
+            };
+            let kinds = kind(jni_str!("systemBars"))?
+                | kind(jni_str!("ime"))?
+                | kind(jni_str!("displayCutout"))?;
             let rect = env
                 .call_method(
                     &insets,
-                    "getInsets",
-                    "(I)Landroid/graphics/Insets;",
-                    &[(bars | ime | cutout).into()],
+                    jni_str!("getInsets"),
+                    jni_sig!("(I)Landroid/graphics/Insets;"),
+                    &[kinds.into()],
                 )?
                 .l()?;
-            let mut side = |name: &str| env.get_field(&rect, name, "I").and_then(|v| v.i());
-            Ok(Some([
-                side("left")?,
-                side("top")?,
-                side("right")?,
-                side("bottom")?,
-            ]))
-        } else {
-            let mut side = |name: &str| {
-                env.call_method(&insets, name, "()I", &[])
+            let mut side = |name| {
+                env.get_field(&rect, name, jni_sig!("I"))
                     .and_then(|v| v.i())
             };
             Ok(Some([
-                side("getSystemWindowInsetLeft")?,
-                side("getSystemWindowInsetTop")?,
-                side("getSystemWindowInsetRight")?,
-                side("getSystemWindowInsetBottom")?,
+                side(jni_str!("left"))?,
+                side(jni_str!("top"))?,
+                side(jni_str!("right"))?,
+                side(jni_str!("bottom"))?,
+            ]))
+        } else {
+            let mut side = |name| {
+                env.call_method(&insets, name, jni_sig!("()I"), &[])
+                    .and_then(|v| v.i())
+            };
+            Ok(Some([
+                side(jni_str!("getSystemWindowInsetLeft"))?,
+                side(jni_str!("getSystemWindowInsetTop"))?,
+                side(jni_str!("getSystemWindowInsetRight"))?,
+                side(jni_str!("getSystemWindowInsetBottom"))?,
             ]))
         }
     })
