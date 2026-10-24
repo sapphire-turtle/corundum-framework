@@ -24,6 +24,8 @@ release.
   `corundum-framework-platform`; the gui crate no longer depends on jni, ndk-context or
   sys-locale itself. `platform::clipboard_text` now reads the clipboard on Android without
   the `android` feature too.
+- `corundum-framework-gui`: egui, eframe and egui_extras 0.37 (were 0.36). Apps must use
+  egui 0.37 as well. On iOS, eframe is built without its `wayland` feature.
 
 ### Added
 

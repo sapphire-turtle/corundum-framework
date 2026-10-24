@@ -91,11 +91,11 @@ struct Installed {
 }
 
 fn registered_key() -> egui::Id {
-    egui::Id::new("corundum_i18n_resources")
+    egui::Id::unique("corundum_i18n_resources")
 }
 
 fn installed_key() -> egui::Id {
-    egui::Id::new("corundum_i18n")
+    egui::Id::unique("corundum_i18n")
 }
 
 fn english() -> LanguageIdentifier {

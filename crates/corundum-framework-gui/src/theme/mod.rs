@@ -66,7 +66,7 @@ struct Installed {
 }
 
 fn key() -> egui::Id {
-    egui::Id::new("corundum_theme")
+    egui::Id::unique("corundum_theme")
 }
 
 /// Use `settings` in `ctx`: build the light and the dark theme, give egui both looks, and

@@ -36,10 +36,20 @@ serde = ["dep:serde", "egui/serde"]
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
 corundum-framework-platform = { version = "0.1.0", path = "../corundum-framework-platform" }
-eframe = { version = "0.36", optional = true }
-egui = "0.36"
+# eframe's default features, less `wayland`: since 0.37 it turns on arboard's Wayland
+# clipboard, which arboard pulls in on iOS too and which does not build there. The other
+# targets get the full default from the entry below.
+eframe = { version = "0.37", optional = true, default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "default_fonts",
+    "links",
+    "system_fonts",
+    "wgpu",
+] }
+egui = "0.37"
 # The SVG loader for the bundled Lucide icons (assets/icons), and for the apps' own.
-egui_extras = { version = "0.36", default-features = false, features = ["svg"] }
+egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 # The translations (i18n): Fluent messages, and matching the user's languages to them.
 fluent-bundle = "0.16"
 fluent-langneg = "0.14"
@@ -53,6 +63,10 @@ unic-langid = "0.9"
 
 [dev-dependencies]
 serde_json.workspace = true
+
+# eframe's full default (with `wayland`) everywhere but iOS; see the entry above.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+eframe = { version = "0.37", optional = true }
 
 # iOS's sandbox refuses to list the system font directories, so the font files are found
 # through CoreText instead (fonts::apple).
