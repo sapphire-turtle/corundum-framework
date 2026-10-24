@@ -1,4 +1,4 @@
-//! The system's preferred languages.
+//! The system's preferred languages, for an app to pick its translation by.
 
 /// The system's preferred languages, as BCP 47 tags, most preferred first.
 ///
@@ -26,13 +26,12 @@ fn normalise(raw: impl IntoIterator<Item = String>) -> Vec<String> {
 }
 
 /// `LocaleList.getDefault().toLanguageTags()`, split into tags; `None` when the JVM
-/// cannot be reached.
+/// cannot be reached (a process android-activity did not start, say): sys-locale then.
 #[cfg(target_os = "android")]
 fn android_languages() -> Option<Vec<String>> {
-    // `android_context` panics when nothing has initialised it (an app not started by
-    // android-activity, say): fall back to sys-locale then.
-    let ctx = std::panic::catch_unwind(ndk_context::android_context).ok()?;
-    let tags = read_locale_list(&ctx).ok()?;
+    let tags = read_locale_list()
+        .inspect_err(|err| tracing::debug!("could not read the locale list: {err}"))
+        .ok()?;
     Some(
         tags.split(',')
             .map(str::trim)
@@ -43,17 +42,11 @@ fn android_languages() -> Option<Vec<String>> {
 }
 
 #[cfg(target_os = "android")]
-fn read_locale_list(ctx: &ndk_context::AndroidContext) -> jni::errors::Result<String> {
+fn read_locale_list() -> jni::errors::Result<String> {
     use jni::objects::JString;
-    use jni::{JavaVM, jni_sig, jni_str};
+    use jni::{jni_sig, jni_str};
 
-    // SAFETY: `ndk_context` holds the process's JavaVM, set by android-activity before
-    // `android_main` runs and valid for the process's lifetime.
-    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) };
-    // The attachment runs the closure in a local frame of its own, so the locals made here
-    // are freed even if the thread stays attached; and it catches (and clears) a Java
-    // exception a call throws, so none is left pending: the caller falls back.
-    vm.attach_current_thread(|env| {
+    crate::android::with_env(|env| {
         let list = env
             .call_static_method(
                 jni_str!("android/os/LocaleList"),

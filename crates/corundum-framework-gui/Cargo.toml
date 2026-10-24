@@ -34,6 +34,8 @@ android = [
 serde = ["dep:serde", "egui/serde"]
 
 [dependencies]
+# The system's languages, and the clipboard and insets on Android: the JNI lives there.
+corundum-framework-platform = { version = "0.1.0", path = "../corundum-framework-platform" }
 eframe = { version = "0.36", optional = true }
 egui = "0.36"
 # The SVG loader for the bundled Lucide icons (assets/icons), and for the apps' own.
@@ -44,7 +46,6 @@ fluent-langneg = "0.14"
 # The parsed files' entries, for i18n::check (already a dependency of fluent-bundle).
 fluent-syntax = "0.12"
 fontdb = "0.24"
-sys-locale = "0.3"
 ttf-parser = "0.25"
 tracing.workspace = true
 serde = { workspace = true, optional = true }
@@ -59,12 +60,9 @@ serde_json.workspace = true
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFDictionary", "CFSet", "CFString", "CFURL"] }
 objc2-core-text = { version = "0.3.2", default-features = false, features = ["std", "CTFontDescriptor", "CTFontCollection"] }
 
-# The `android` feature's: the activity and logcat. JNI is always there: the language list
-# is read from the JVM (i18n::system; sys-locale gives only one), and the `android` feature
-# uses it for the clipboard and the insets.
+# The `android` feature's: the activity and logcat. The JNI calls are
+# corundum-framework-platform's.
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6", optional = true }
 android_log-sys = { version = "0.3", optional = true }
-jni = "0.22"
-ndk-context = "0.1"
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"], optional = true }
