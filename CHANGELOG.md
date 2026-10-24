@@ -49,6 +49,13 @@ release.
   when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
   accent.
 
+### Fixed
+
+- `Shell`: keeps clear of egui's safe area (the status bar, the notch and the home
+  indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
+  bottom bar's fill runs on under the home indicator. A margin the app already keeps is not
+  added again, so apps can drop their own.
+
 `corundum-framework-gui`, as it came from sapphire-framework:
 
 - `Shell`: the app's screens on a rail, a bottom bar when narrower than `COMPACT_WIDTH`,
