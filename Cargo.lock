@@ -714,6 +714,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "corundum-framework-demo"
+version = "0.0.0"
+dependencies = [
+ "corundum-framework",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "corundum-framework-gui"
 version = "0.1.0"
 dependencies = [

@@ -48,6 +48,11 @@ release.
   takes the colour of its state: stronger when hovered, the accent when selected, faded
   when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
   accent.
+- `corundum-framework-demo` (#7, not published), in `demo/`: an app showing the shell, the
+  theme, the fonts, the icons, the translations and the platform calls, for the desktops
+  (`cargo run -p corundum-framework-demo`), the iOS simulator (an XcodeGen project) and
+  the Android emulator (a Gradle project, GameActivity). Mobile CI builds it, starts it on
+  the simulator and the emulator, and uploads a screenshot.
 
 `corundum-framework-gui`, as it came from sapphire-framework:
 
@@ -69,3 +74,9 @@ release.
 - `window::run_android` (feature `android`): the window on Android (GameActivity), with
   logcat, the clipboard and the window insets.
 - Feature `serde`: `Serialize` / `Deserialize` on the theme and language settings.
+
+### Fixed
+
+- `corundum-framework-gui`: `gpu::wgpu_options` asks for wgpu's default limits only as far
+  as the adapter has them. The iOS simulator's GPU falls short of the defaults, and the
+  window failed to open there.

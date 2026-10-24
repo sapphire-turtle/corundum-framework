@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+# Libraries under crates/; the demo app at the root, under its short name.
+members = ["crates/*", "demo"]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
