@@ -19,15 +19,32 @@ release.
 - `corundum-framework-gui`: renamed from `corundum-gui` (lib `corundum_framework_gui`);
   its translations' bundle name is `corundum-framework-gui`. Message ids keep their
   `corundum-` prefix.
+- `corundum-framework-gui`: the system's languages (`i18n::system_languages`, re-exported)
+  and the Android clipboard and insets (`platform`) are read through
+  `corundum-framework-platform`; the gui crate no longer depends on jni, ndk-context or
+  sys-locale itself. `platform::clipboard_text` now reads the clipboard on Android without
+  the `android` feature too.
 - `corundum-framework-gui`: egui, eframe and egui_extras 0.37 (were 0.36). Apps must use
   egui 0.37 as well. On iOS, eframe is built without its `wayland` feature.
 
 ### Added
 
+- `corundum-framework-platform` (#9), a crate without egui for what an app asks of the OS:
+  `dirs` (config, data and cache roots, the `dirs` crate's on the desktops and the
+  sandbox's on iOS and Android, and an app's own `AppDirs` under them), `locale`
+  (`system_languages`, moved from the gui crate), `clipboard` and `insets` (Android, moved
+  from the gui crate's `platform`), and `android` (`with_env`, the application context and
+  the window's activity, for an app's own JNI calls).
+
 - `icons`: Lucide icons for media apps such as asteria (#6): `picture` (Lucide's `image`),
   `images`, `music`, `list_music`, `smartphone`, `monitor_smartphone`, `play`, `pause`,
   `skip_back`, `skip_forward`, `volume_2`, `volume_x`, `star`, `tag`, `search`,
   `clipboard_copy`, `upload`, `download` and `cloud_off`.
+- `icons`: icons in theme colours (#12). `image_as` draws in a `Tone` of a `Swatch`,
+  `image_in` and `paint` in a given colour, and `button` makes an icon button whose icon
+  takes the colour of its state: stronger when hovered, the accent when selected, faded
+  when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
+  accent.
 
 ### Fixed
 
