@@ -54,6 +54,13 @@ release.
   the Android emulator (a Gradle project, GameActivity). Mobile CI builds it, starts it on
   the simulator and the emulator, and uploads a screenshot.
 
+### Fixed
+
+- `Shell`: keeps clear of egui's safe area (the status bar, the notch and the home
+  indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
+  bottom bar's fill runs on under the home indicator. A margin the app already keeps is not
+  added again, so apps can drop their own.
+
 `corundum-framework-gui`, as it came from sapphire-framework:
 
 - `Shell`: the app's screens on a rail, a bottom bar when narrower than `COMPACT_WIDTH`,
