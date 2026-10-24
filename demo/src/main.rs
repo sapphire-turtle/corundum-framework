@@ -1,7 +1,7 @@
 //! The demo on a desktop.
 
 #[cfg(not(target_os = "android"))]
-fn main() -> corundum_framework::gui::eframe::Result<()> {
+fn main() -> corundum_framework::eframe::Result<()> {
     corundum_demo::run()
 }
 

@@ -19,8 +19,8 @@
 //! |---|---|---|
 //! | `platform` (default) | [`platform`] | `corundum-framework-platform`: the app's directories, the system's languages, the JNI / Objective-C bridging |
 //! | `gui` | [`gui`] | `corundum-framework-gui`: the shell, theme, fonts, icons and translations (brings `platform`) |
-//! | `eframe` | `gui::window::run` | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
-//! | `android` | `gui::window::run_android` | `corundum-framework-gui` with its `android` feature: the window on an Android phone |
+//! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
+//! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
 //! | `serde` | — | `Serialize` / `Deserialize` on the gui's theme and language settings |
 
 #[cfg(feature = "platform")]
@@ -34,5 +34,6 @@ pub use corundum_framework_gui as gui;
 #[cfg(feature = "gui")]
 pub use corundum_framework_gui::egui;
 
+// The eframe the window runs on, for the app's `eframe::App`; `android` brings `eframe`.
 #[cfg(feature = "eframe")]
 pub use corundum_framework_gui::eframe;
