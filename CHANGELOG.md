@@ -43,6 +43,11 @@ release.
   `images`, `music`, `list_music`, `smartphone`, `monitor_smartphone`, `play`, `pause`,
   `skip_back`, `skip_forward`, `volume_2`, `volume_x`, `star`, `tag`, `search`,
   `clipboard_copy`, `upload`, `download` and `cloud_off`.
+- `icons`: icons in theme colours (#12). `image_as` draws in a `Tone` of a `Swatch`,
+  `image_in` and `paint` in a given colour, and `button` makes an icon button whose icon
+  takes the colour of its state: stronger when hovered, the accent when selected, faded
+  when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
+  accent.
 
 `corundum-framework-gui`, as it came from sapphire-framework:
 

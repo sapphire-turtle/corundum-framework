@@ -2,8 +2,18 @@
 //!
 //! Embedded with [`egui::include_image!`] and decoded by `egui_extras`'s SVG loader,
 //! which [`install_loaders`] puts in place. The SVGs stroke in white, so
-//! [`egui::Image::tint`] colours them — the text colour, through [`image`]. An app's own
-//! Lucide icons (stroked in white the same way) are drawn with [`image`] too.
+//! [`egui::Image::tint`] colours them, in the installed [`theme`](crate::theme)'s colours:
+//!
+//! - [`image`]: the text colour, the default.
+//! - [`image_as`]: a [`Tone`] of a [`Swatch`] — the accent, a warning, weak text.
+//! - [`image_in`] and [`paint`]: a colour of the caller's.
+//! - [`button`]: the colour of the button's state, as its text would be — stronger when
+//!   hovered, the accent when selected, faded when disabled.
+//!
+//! An app's own icons take the colours the same way, as long as they stroke (or fill) in
+//! white: hand their [`egui::ImageSource`] to any of the above.
+
+use crate::theme::{Swatch, Tone};
 
 macro_rules! icon {
     ($name:literal) => {
@@ -19,9 +29,51 @@ pub fn install_loaders(ctx: &egui::Context) {
 
 /// `src` as a `size`-point square in the text colour.
 pub fn image(ui: &egui::Ui, src: egui::ImageSource<'static>, size: f32) -> egui::Image<'static> {
-    egui::Image::new(src)
-        .fit_to_exact_size(egui::vec2(size, size))
-        .tint(ui.visuals().text_color())
+    image_in(src, size, ui.visuals().text_color())
+}
+
+/// `src` as a `size`-point square in the current theme's `swatch` at `tone`.
+pub fn image_as(
+    ui: &egui::Ui,
+    src: egui::ImageSource<'static>,
+    size: f32,
+    tone: Tone,
+    swatch: Swatch,
+) -> egui::Image<'static> {
+    image_in(
+        src,
+        size,
+        crate::theme::current(ui.ctx()).color(tone, swatch),
+    )
+}
+
+/// `src` as a `size`-point square in `colour`.
+pub fn image_in(
+    src: egui::ImageSource<'static>,
+    size: f32,
+    colour: egui::Color32,
+) -> egui::Image<'static> {
+    square(src, size).tint(colour)
+}
+
+/// `src` in `colour`, filling `rect`: for a widget that paints its own icon.
+pub fn paint(
+    ui: &egui::Ui,
+    rect: egui::Rect,
+    src: egui::ImageSource<'static>,
+    colour: egui::Color32,
+) {
+    egui::Image::new(src).tint(colour).paint_at(ui, rect);
+}
+
+/// A button showing `src` as a `size`-point square in the colour of its state.
+pub fn button(src: egui::ImageSource<'static>, size: f32) -> egui::Button<'static> {
+    // Left white, the image takes the button's text colour.
+    egui::Button::image(square(src, size)).image_tint_follows_text_color(true)
+}
+
+fn square(src: egui::ImageSource<'static>, size: f32) -> egui::Image<'static> {
+    egui::Image::new(src).fit_to_exact_size(egui::vec2(size, size))
 }
 
 /// Settings: where an app's preferences are.
@@ -272,5 +324,91 @@ mod tests {
                 Err(e) => panic!("{name}: {e}"),
             }
         }
+    }
+
+    /// The tint of each image `ui` draws, in order, over two frames of a dark or light
+    /// theme.
+    fn drawn_tints(dark: bool, mut ui: impl FnMut(&mut egui::Ui)) -> Vec<egui::Color32> {
+        let ctx = egui::Context::default();
+        install_loaders(&ctx);
+        crate::theme::install(
+            &ctx,
+            &crate::theme::ThemeSettings {
+                preference: if dark {
+                    egui::ThemePreference::Dark
+                } else {
+                    egui::ThemePreference::Light
+                },
+                ..Default::default()
+            },
+        );
+        let mut tints = Vec::new();
+        for _ in 0..2 {
+            let mut output = ctx.run_ui(egui::RawInput::default(), &mut ui);
+            output.textures_delta.clear();
+            tints = output
+                .shapes
+                .iter()
+                .filter_map(|clipped| match &clipped.shape {
+                    // An image is a rectangle filled with its texture, in its tint.
+                    egui::Shape::Rect(rect) if rect.brush.is_some() => Some(rect.fill),
+                    _ => None,
+                })
+                .collect();
+        }
+        tints
+    }
+
+    #[test]
+    fn images_follow_the_theme() {
+        let draw = |ui: &mut egui::Ui| {
+            ui.add(image(ui, settings(), 20.0));
+            ui.add(image_as(ui, settings(), 20.0, Tone::Text, Swatch::Accent));
+        };
+        let [dark, light] = [true, false].map(|dark| {
+            let theme = crate::theme::Theme::new(
+                dark,
+                crate::theme::Contrast::default(),
+                crate::theme::Tint::Swatch(Swatch::Blue),
+            );
+            let tints = drawn_tints(dark, draw);
+            assert_eq!(
+                tints,
+                [theme.text(Swatch::Neutral), theme.text(Swatch::Accent)],
+                "dark {dark}"
+            );
+            tints
+        });
+        assert_ne!(dark, light);
+    }
+
+    #[test]
+    fn a_button_takes_the_colour_of_its_state() {
+        for dark in [true, false] {
+            let tints = drawn_tints(dark, |ui| {
+                ui.add(button(settings(), 20.0));
+                ui.add(button(settings(), 20.0).selected(true));
+                ui.add_enabled(false, button(settings(), 20.0));
+            });
+            let [normal, selected, disabled] = tints[..] else {
+                panic!("dark {dark}: {tints:?}");
+            };
+            let (text, accent) = selected_visuals(dark);
+            assert_eq!(normal, text, "dark {dark}");
+            assert_eq!(selected, accent, "dark {dark}");
+            assert_ne!(normal, selected, "dark {dark}");
+            assert_ne!(disabled, normal, "dark {dark}");
+        }
+    }
+
+    /// The text colour and the selected text colour (the accent) of the default theme.
+    fn selected_visuals(dark: bool) -> (egui::Color32, egui::Color32) {
+        let v = crate::theme::Theme::new(
+            dark,
+            crate::theme::Contrast::default(),
+            crate::theme::Tint::Swatch(Swatch::Blue),
+        )
+        .visuals();
+        (v.widgets.inactive.fg_stroke.color, v.selection.stroke.color)
     }
 }

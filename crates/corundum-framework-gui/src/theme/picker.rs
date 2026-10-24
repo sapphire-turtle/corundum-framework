@@ -262,7 +262,7 @@ fn paint_icon(
     colour: Color32,
 ) -> Rect {
     let rect = rect.shrink(4.0);
-    egui::Image::new(icon).tint(colour).paint_at(ui, rect);
+    crate::icons::paint(ui, rect, icon, colour);
     rect
 }
 
