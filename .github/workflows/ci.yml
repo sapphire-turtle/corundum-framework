@@ -1,0 +1,17 @@
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  ci:
+    uses: sapphire-turtle/sapphire-framework/.github/workflows/shared-rust-ci.yml@main
+    with:
+      # eframe's windowing needs these to build on Linux.
+      linux-packages: libwayland-dev libxkbcommon-dev
+      # The test job builds with --all-features; also build the gui crate without eframe,
+      # as an app that renders egui on its own does, so the components never come to need
+      # the window.
+      post-test: |
+        cargo clippy -p corundum-framework-gui --all-targets --no-default-features --locked -- -D warnings
+        cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features serde --locked -- -D warnings

@@ -2,7 +2,7 @@
 //! chose.
 //!
 //! The strings are [Fluent](https://projectfluent.org) messages, in one `.ftl` file per
-//! language per crate, embedded as [`Resources`]. corundum-gui's own ([`CORUNDUM`]) are
+//! language per crate, embedded as [`Resources`]. corundum-framework-gui's own ([`CORUNDUM`]) are
 //! always there; an app adds its own with [`register`], and a key in them replaces the
 //! same key from those registered before.
 //!
@@ -60,9 +60,9 @@ pub struct Resources {
     pub files: &'static [(&'static str, &'static str)],
 }
 
-/// corundum-gui's own; always registered first.
+/// corundum-framework-gui's own; always registered first.
 pub const CORUNDUM: Resources = Resources {
-    name: "corundum-gui",
+    name: "corundum-framework-gui",
     files: &[
         ("en", include_str!("../../locales/en/corundum.ftl")),
         ("ja", include_str!("../../locales/ja/corundum.ftl")),
@@ -503,7 +503,7 @@ mod tests {
         register(&ctx, TEST);
         register(&ctx, TEST);
         let names: Vec<_> = registered(&ctx).iter().map(|r| r.name).collect();
-        assert_eq!(names, ["corundum-gui", "test"]);
+        assert_eq!(names, ["corundum-framework-gui", "test"]);
     }
 
     #[test]

@@ -1,12 +1,12 @@
 //! `tracing` to logcat: on Android a process's stderr goes nowhere.
 
 /// The filter a phone logs with when `RUST_LOG` says nothing: the app's own `app_filter`,
-/// corundum-gui's start-up lines (the renderer, the font), every other target's warnings —
+/// corundum-framework-gui's start-up lines (the renderer, the font), every other target's warnings —
 /// and winit's Android backend at errors only, because its warning for each keyboard event
 /// it drops carries the whole text typed (an invite ticket, say) into a log any debugging
 /// tool can read.
 pub fn phone_log_filter(app_filter: &str) -> String {
-    format!("warn,{app_filter},corundum_gui=info,winit::platform_impl::android=error")
+    format!("warn,{app_filter},corundum_framework_gui=info,winit::platform_impl::android=error")
 }
 
 #[cfg(all(target_os = "android", feature = "android"))]
@@ -100,7 +100,7 @@ mod tests {
     fn the_phone_filter_wraps_the_apps_and_keeps_typed_text_out() {
         let filter = phone_log_filter("my_app=info");
         assert!(filter.starts_with("warn,my_app=info,"));
-        assert!(filter.contains(",corundum_gui=info,"));
+        assert!(filter.contains(",corundum_framework_gui=info,"));
         assert!(filter.ends_with(",winit::platform_impl::android=error"));
     }
 }

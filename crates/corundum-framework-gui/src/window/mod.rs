@@ -7,7 +7,7 @@
 //! and asteria open their windows through here, so a renderer fix reaches all of them.
 //!
 //! ```no_run
-//! use corundum_gui::{eframe, egui, window};
+//! use corundum_framework_gui::{eframe, egui, window};
 //!
 //! struct Example;
 //!

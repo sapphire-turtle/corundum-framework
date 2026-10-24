@@ -33,7 +33,7 @@ const PALETTE: [Swatch; 8] = [
 /// [`Tint::from_bytes`] of its name, say — and the Default chip sets it back.
 ///
 /// ```no_run
-/// # use corundum_gui::theme::{Tint, TintPicker, Tone};
+/// # use corundum_framework_gui::theme::{Tint, TintPicker, Tone};
 /// # fn example(ui: &mut egui::Ui, colour: &mut Option<Tint>) {
 /// let default = Tint::from_bytes(b"bug");
 /// if TintPicker::new(colour, default).tone(Tone::Raised).show(ui) {

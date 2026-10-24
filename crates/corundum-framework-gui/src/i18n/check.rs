@@ -154,7 +154,13 @@ mod tests {
     fn corundum_ids_exist() {
         let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         assert_eq!(
-            unknown_ids(&CORUNDUM, "en", &src, "corundum-", &["corundum-gui"]),
+            unknown_ids(
+                &CORUNDUM,
+                "en",
+                &src,
+                "corundum-",
+                &["corundum-framework-gui"]
+            ),
             Vec::<String>::new()
         );
     }
@@ -178,7 +184,7 @@ mod tests {
             name: "t",
             files: &[("en", "corundum-language = L\n")],
         };
-        let found = unknown_ids(&r, "en", &src, "corundum-", &["corundum-gui"]);
+        let found = unknown_ids(&r, "en", &src, "corundum-", &["corundum-framework-gui"]);
         assert!(
             found
                 .iter()

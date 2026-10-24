@@ -57,7 +57,7 @@ impl Action {
 /// installed (see [`i18n`](crate::i18n)), so a language switch shows on the next frame.
 ///
 /// ```no_run
-/// # use corundum_gui::{Destination, Shell, icons};
+/// # use corundum_framework_gui::{Destination, Shell, icons};
 /// # fn example(ui: &mut egui::Ui) {
 /// #[derive(Clone, Copy, PartialEq)]
 /// enum Screen { Gallery, Albums, Settings }
