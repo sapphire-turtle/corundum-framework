@@ -56,6 +56,15 @@ impl Action {
 /// Labels are message ids: each frame the hover text is looked up in the language
 /// installed (see [`i18n`](crate::i18n)), so a language switch shows on the next frame.
 ///
+/// The shell keeps clear of the system's bars and notches (egui's
+/// [safe area](egui::InputState::safe_area_insets), which iOS fills): the rail, the bar's
+/// buttons and the screens stay inside it, and the bottom bar's fill runs on under the home
+/// indicator, as a phone's tab bar does. Give it the window's whole root `ui`; the app adds
+/// no margin of its own. If the app does keep `ui` clear of them itself, the shell sees
+/// that and adds nothing, so the margin is never doubled. On Android,
+/// `window::run_android` keeps the app's `ui` clear of the bars and the
+/// keyboard already.
+///
 /// ```no_run
 /// # use corundum_framework_gui::{Destination, Shell, icons};
 /// # fn example(ui: &mut egui::Ui) {
@@ -168,23 +177,48 @@ impl<D: Copy + PartialEq> Shell<D> {
                 crate::i18n::install(ui.ctx(), &crate::i18n::LanguageSettings::default());
             }
         }
-        let opened = if ui.available_width() < COMPACT_WIDTH {
-            egui::Panel::bottom("shell_bar")
-                .show(ui, |ui| self.bar_ui(ui, foot))
-                .inner
+        let safe = unsafe_margin(ui);
+        let full = ui.max_rect();
+        let compact = full.width() - safe.sum().x < COMPACT_WIDTH;
+        // Narrow, the bar's fill runs on under the home indicator, its buttons above it;
+        // wide, the rail stops above it too.
+        let inner = if compact {
+            full - egui::epaint::MarginF32 {
+                bottom: 0.0,
+                ..safe
+            }
         } else {
-            egui::Panel::left("shell_rail")
-                .resizable(false)
-                .exact_size(RAIL_WIDTH)
-                .show(ui, |ui| self.rail_ui(ui, foot))
-                .inner
+            full - safe
         };
-        if let Some(id) = opened {
-            self.open = Some(id);
+        // The strips under the status bar and the notch take the panels' colour.
+        if safe != egui::epaint::MarginF32::ZERO {
+            ui.painter().rect_filled(full, 0.0, ui.visuals().panel_fill);
         }
-        if let Some(id) = self.open {
-            content(ui, id);
-        }
+        ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+            let opened = if compact {
+                let mut frame = egui::Frame::side_top_panel(ui.style());
+                frame.inner_margin.bottom = frame
+                    .inner_margin
+                    .bottom
+                    .saturating_add(safe.bottom.round().min(127.0) as i8);
+                egui::Panel::bottom("shell_bar")
+                    .frame(frame)
+                    .show(ui, |ui| self.bar_ui(ui, foot))
+                    .inner
+            } else {
+                egui::Panel::left("shell_rail")
+                    .resizable(false)
+                    .exact_size(RAIL_WIDTH)
+                    .show(ui, |ui| self.rail_ui(ui, foot))
+                    .inner
+            };
+            if let Some(id) = opened {
+                self.open = Some(id);
+            }
+            if let Some(id) = self.open {
+                content(ui, id);
+            }
+        });
     }
 
     fn rail_ui(
@@ -300,6 +334,19 @@ impl<D: Copy + PartialEq> Shell<D> {
         if response.clicked() {
             self.clicked = Some(a.id);
         }
+    }
+}
+
+/// How far the system's bars and notches (egui's safe area insets) reach into `ui`, side by
+/// side: none where `ui` already keeps clear of them.
+fn unsafe_margin(ui: &egui::Ui) -> egui::epaint::MarginF32 {
+    let safe = ui.ctx().content_rect();
+    let rect = ui.max_rect();
+    egui::epaint::MarginF32 {
+        left: (safe.left() - rect.left()).max(0.0),
+        right: (rect.right() - safe.right()).max(0.0),
+        top: (safe.top() - rect.top()).max(0.0),
+        bottom: (rect.bottom() - safe.bottom()).max(0.0),
     }
 }
 
@@ -551,6 +598,91 @@ mod tests {
         assert_eq!(shell.label_text(&ctx, 0), "Entries");
         set("ja");
         assert_eq!(shell.label_text(&ctx, 0), "項目");
+    }
+
+    /// Lay `shell` out over two frames of a `size` screen whose system bars take `safe`,
+    /// with `ui` clear of them by `own` already; returns the rect the open screen got.
+    fn render_safe(
+        shell: &mut Shell<Screen>,
+        size: [f32; 2],
+        safe: egui::epaint::MarginF32,
+        own: egui::epaint::MarginF32,
+    ) -> egui::Rect {
+        let ctx = egui::Context::default();
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size[0], size[1]));
+        let mut drawn = egui::Rect::NOTHING;
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(rect),
+                safe_area_insets: Some(egui::SafeAreaInsets(safe)),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                let inner = ui.max_rect() - own;
+                ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+                    shell.ui(ui, |ui, _| {
+                        drawn = ui.available_rect_before_wrap();
+                        screen(ui);
+                    })
+                });
+            });
+            output.textures_delta.clear();
+        }
+        drawn
+    }
+
+    fn margin(left: f32, top: f32, right: f32, bottom: f32) -> egui::epaint::MarginF32 {
+        egui::epaint::MarginF32 {
+            left,
+            right,
+            top,
+            bottom,
+        }
+    }
+
+    #[test]
+    fn narrow_it_keeps_clear_of_the_status_bar_and_the_home_indicator() {
+        // An iPhone upright: the status bar and the dynamic island, the home indicator.
+        let mut shell = shell().with_footer(prefs());
+        let drawn = render_safe(
+            &mut shell,
+            [400.0, 800.0],
+            margin(0.0, 62.0, 0.0, 34.0),
+            egui::epaint::MarginF32::ZERO,
+        );
+        assert_eq!(drawn.top(), 62.0);
+        let button = shell.footer_rects[0];
+        assert!(button.bottom() <= 800.0 - 34.0, "{button:?}");
+        // The bar sits right above the indicator: its fill runs on under it.
+        assert!(button.bottom() > 800.0 - 34.0 - 12.0, "{button:?}");
+        assert!(drawn.bottom() <= button.top(), "{drawn:?} {button:?}");
+    }
+
+    #[test]
+    fn wide_it_keeps_clear_of_the_notch_and_the_home_indicator() {
+        // An iPhone on its side: the notch on the left, the home indicator below.
+        let mut shell = shell().with_footer(prefs());
+        let drawn = render_safe(
+            &mut shell,
+            [900.0, 400.0],
+            margin(59.0, 0.0, 59.0, 21.0),
+            egui::epaint::MarginF32::ZERO,
+        );
+        let button = shell.footer_rects[0];
+        assert!(button.left() >= 59.0, "{button:?}");
+        assert!(button.bottom() <= 400.0 - 21.0, "{button:?}");
+        assert!(drawn.right() <= 900.0 - 59.0, "{drawn:?}");
+        assert!(drawn.bottom() <= 400.0 - 21.0, "{drawn:?}");
+    }
+
+    #[test]
+    fn a_margin_the_app_already_keeps_is_not_doubled() {
+        let safe = margin(0.0, 62.0, 0.0, 34.0);
+        let mut shell = shell().with_footer(prefs());
+        let drawn = render_safe(&mut shell, [400.0, 800.0], safe, safe);
+        assert_eq!(drawn.top(), 62.0);
+        let button = shell.footer_rects[0];
+        assert!(button.bottom() > 800.0 - 34.0 - 12.0, "{button:?}");
     }
 
     #[test]
