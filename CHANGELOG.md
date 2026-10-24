@@ -56,6 +56,9 @@ release.
 
 ### Fixed
 
+- `Shell`: a crowded bottom bar keeps the footer and the foot on the screen (#21). They
+  keep the width they need at the bar's end; the screens and the actions share the rest,
+  their buttons narrowing (a smaller icon, then less padding) when the cells do.
 - `Shell`: keeps clear of egui's safe area (the status bar, the notch and the home
   indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
   bottom bar's fill runs on under the home indicator. A margin the app already keeps is not

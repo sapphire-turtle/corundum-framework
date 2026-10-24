@@ -95,7 +95,13 @@ pub struct Shell<D> {
     action_rects: Vec<egui::Rect>,
     #[cfg(test)]
     footer_rects: Vec<egui::Rect>,
+    /// The destinations' and the actions' rects on the bar, for the tests.
+    #[cfg(test)]
+    cell_rects: Vec<egui::Rect>,
     open: Option<D>,
+    /// How wide the footer and the foot were on the bar last frame: their end of the bar
+    /// is kept this wide, and the cells share the rest.
+    foot_width: f32,
     /// Whether the SVG loader, the theme and the language have been put in place.
     loaders: bool,
 }
@@ -113,7 +119,10 @@ impl<D: Copy + PartialEq> Shell<D> {
             action_rects: Vec::new(),
             #[cfg(test)]
             footer_rects: Vec::new(),
+            #[cfg(test)]
+            cell_rects: Vec::new(),
             open,
+            foot_width: 0.0,
             loaders: false,
         }
     }
@@ -229,21 +238,21 @@ impl<D: Copy + PartialEq> Shell<D> {
         ui.vertical_centered(|ui| {
             ui.add_space(4.0);
             for i in 0..self.destinations.len() {
-                self.destination_ui(ui, i);
+                self.destination_ui(ui, i, BUTTON);
             }
             if !self.actions.is_empty() {
                 ui.add_space(4.0);
                 ui.separator();
                 ui.add_space(4.0);
                 for i in 0..self.actions.len() {
-                    self.action_ui(ui, i);
+                    self.action_ui(ui, i, BUTTON);
                 }
             }
         });
         ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
             ui.add_space(4.0);
             for i in 0..self.footer.len() {
-                self.footer_ui(ui, i);
+                self.footer_ui(ui, i, BUTTON);
             }
             foot(ui)
         })
@@ -253,6 +262,10 @@ impl<D: Copy + PartialEq> Shell<D> {
     /// The phone layout: one cell per screen, then one per action, the footer and the
     /// foot last.
     ///
+    /// The footer and the foot keep the width they need at the bar's end; the screens and
+    /// the actions share what is left, their buttons narrowing below [`BUTTON`] when the
+    /// cells do. So the foot never leaves the screen, however many screens there are.
+    ///
     /// Every screen gets a cell for now. When an app has more than a bar can hold, the ones
     /// that do not fit move to a separate list of all of them (with a choice of which stay
     /// on the bar) — not into Settings (#275).
@@ -261,42 +274,66 @@ impl<D: Copy + PartialEq> Shell<D> {
         ui: &mut egui::Ui,
         foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
     ) -> Option<D> {
+        let rect = ui.available_rect_before_wrap();
+        let gap = ui.spacing().item_spacing.x;
+        let end = rect.right() - self.foot_width.min(rect.width());
         let screens = self.destinations.len();
-        let cells = screens + self.actions.len() + 1;
-        let mut foot = Some(foot);
-        let mut opened = None;
-        ui.columns(cells, |columns| {
-            for (i, column) in columns.iter_mut().enumerate() {
-                column.vertical_centered(|ui| {
-                    if i < screens {
-                        self.destination_ui(ui, i);
-                    } else if i < cells - 1 {
-                        self.action_ui(ui, i - screens);
-                    } else {
-                        ui.horizontal(|ui| {
-                            for i in 0..self.footer.len() {
-                                self.footer_ui(ui, i);
+        let cells = screens + self.actions.len();
+        if cells > 0 {
+            let row = egui::Rect::from_min_max(rect.min, egui::pos2(end - gap, rect.bottom()));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(row), |ui| {
+                ui.columns(cells, |columns| {
+                    for (i, column) in columns.iter_mut().enumerate() {
+                        column.vertical_centered(|ui| {
+                            let side = ui.available_width().min(BUTTON);
+                            let response = if i < screens {
+                                self.destination_ui(ui, i, side)
+                            } else {
+                                self.action_ui(ui, i - screens, side)
+                            };
+                            #[cfg(test)]
+                            {
+                                self.cell_rects.resize(cells, egui::Rect::NOTHING);
+                                self.cell_rects[i] = response.rect;
                             }
-                            if let Some(foot) = foot.take() {
-                                opened = foot(ui);
-                            }
+                            #[cfg(not(test))]
+                            let _ = response;
                         });
                     }
                 });
-            }
-        });
+            });
+        }
+        let at_end = egui::Rect::from_min_max(egui::pos2(end, rect.top()), rect.max);
+        let end_row = ui
+            .scope_builder(egui::UiBuilder::new().max_rect(at_end), |ui| {
+                ui.horizontal(|ui| {
+                    for i in 0..self.footer.len() {
+                        self.footer_ui(ui, i, BUTTON);
+                    }
+                    foot(ui)
+                })
+            })
+            .inner;
+        let opened = end_row.inner;
+        // The end's width is known only once drawn: lay the frame out again with it.
+        let width = end_row.response.rect.width();
+        if (width - self.foot_width).abs() > 0.5 {
+            self.foot_width = width;
+            ui.ctx()
+                .request_discard("the shell's bar foot changed width");
+        }
         opened
     }
 
-    fn destination_ui(&mut self, ui: &mut egui::Ui, i: usize) {
+    fn destination_ui(&mut self, ui: &mut egui::Ui, i: usize, side: f32) -> egui::Response {
         let d = &self.destinations[i];
         let open = self.open == Some(d.id);
-        if icon_button(ui, open, d.icon.clone())
-            .on_hover_text(crate::i18n::tr(ui.ctx(), d.label))
-            .clicked()
-        {
+        let response = icon_button(ui, open, d.icon.clone(), side)
+            .on_hover_text(crate::i18n::tr(ui.ctx(), d.label));
+        if response.clicked() {
             self.open = Some(d.id);
         }
+        response
     }
 
     /// What the hover text of destination `i` says now.
@@ -305,11 +342,11 @@ impl<D: Copy + PartialEq> Shell<D> {
         crate::i18n::tr(ctx, self.destinations[i].label)
     }
 
-    fn footer_ui(&mut self, ui: &mut egui::Ui, i: usize) {
+    fn footer_ui(&mut self, ui: &mut egui::Ui, i: usize, side: f32) {
         let d = &self.footer[i];
         let open = self.open == Some(d.id);
-        let response =
-            icon_button(ui, open, d.icon.clone()).on_hover_text(crate::i18n::tr(ui.ctx(), d.label));
+        let response = icon_button(ui, open, d.icon.clone(), side)
+            .on_hover_text(crate::i18n::tr(ui.ctx(), d.label));
         #[cfg(test)]
         {
             self.footer_rects
@@ -321,9 +358,9 @@ impl<D: Copy + PartialEq> Shell<D> {
         }
     }
 
-    fn action_ui(&mut self, ui: &mut egui::Ui, i: usize) {
+    fn action_ui(&mut self, ui: &mut egui::Ui, i: usize, side: f32) -> egui::Response {
         let a = &self.actions[i];
-        let response = icon_button(ui, false, a.icon.clone())
+        let response = icon_button(ui, false, a.icon.clone(), side)
             .on_hover_text(crate::i18n::tr(ui.ctx(), a.label));
         #[cfg(test)]
         {
@@ -334,6 +371,7 @@ impl<D: Copy + PartialEq> Shell<D> {
         if response.clicked() {
             self.clicked = Some(a.id);
         }
+        response
     }
 }
 
@@ -350,14 +388,32 @@ fn unsafe_margin(ui: &egui::Ui) -> egui::epaint::MarginF32 {
     }
 }
 
-fn icon_button(ui: &mut egui::Ui, open: bool, icon: egui::ImageSource<'static>) -> egui::Response {
-    // The open destination's icon takes the accent, as egui's selected text does.
-    ui.add(
-        crate::icons::button(icon, 20.0)
-            .selected(open)
-            .frame_when_inactive(open)
-            .min_size(egui::vec2(36.0, 36.0)),
-    )
+/// A rail or bar button's side, where there is room for it.
+const BUTTON: f32 = 36.0;
+
+/// A `side`-point square button with `icon` in it ([`BUTTON`], or less on a crowded bar).
+fn icon_button(
+    ui: &mut egui::Ui,
+    open: bool,
+    icon: egui::ImageSource<'static>,
+    side: f32,
+) -> egui::Response {
+    // A narrow button takes a smaller icon first, then less padding beside it, so it stays
+    // `side` wide.
+    let pad = ui.spacing().button_padding.x;
+    let icon_size = (side - 2.0 * pad).clamp(12.0, 20.0);
+    ui.scope(|ui| {
+        let padding = &mut ui.spacing_mut().button_padding.x;
+        *padding = padding.min(((side - icon_size) / 2.0).max(0.0));
+        // The open destination's icon takes the accent, as egui's selected text does.
+        ui.add(
+            crate::icons::button(icon, icon_size)
+                .selected(open)
+                .frame_when_inactive(open)
+                .min_size(egui::vec2(side, side)),
+        )
+    })
+    .inner
 }
 
 #[cfg(test)]
@@ -689,6 +745,64 @@ mod tests {
     fn with_only_a_footer_it_opens_on_the_footer() {
         let shell = Shell::new(vec![]).with_footer(prefs());
         assert_eq!(shell.current(), Some(Screen::Prefs));
+    }
+
+    /// A crowded bar on a `width`-point phone: eight screens, an action, the footer and a
+    /// 12-point foot. Returns the cells', the footer's and the foot's rects.
+    fn crowded(width: f32) -> (Vec<egui::Rect>, egui::Rect, egui::Rect) {
+        let screens = (0..8)
+            .map(|_| Destination::new(Screen::Entries, crate::icons::settings(), "entries"))
+            .collect();
+        let mut shell = Shell::new(screens)
+            .with_actions(vec![Action::new("new", crate::icons::plus(), "new-entry")])
+            .with_footer(prefs());
+        let mut foot = egui::Rect::NOTHING;
+        render([width, 700.0], |ui| {
+            shell.ui_with_foot(
+                ui,
+                |ui| {
+                    foot = ui
+                        .allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::click())
+                        .0;
+                    None
+                },
+                |ui, _| screen(ui),
+            )
+        });
+        (shell.cell_rects, shell.footer_rects[0], foot)
+    }
+
+    #[test]
+    fn a_crowded_bar_keeps_the_footer_and_the_foot_on_the_screen() {
+        for width in [320.0, 360.0, 411.0] {
+            let (cells, footer, foot) = crowded(width);
+            assert_eq!(cells.len(), 9, "{width}");
+            for rect in cells.iter().chain([&footer, &foot]) {
+                assert!(rect.is_positive(), "{width}: {rect:?}");
+                assert!(
+                    rect.left() >= 0.0 && rect.right() <= width,
+                    "{width}: {rect:?}"
+                );
+            }
+            // In order, and none on top of the next.
+            for pair in cells.windows(2) {
+                assert!(pair[0].right() <= pair[1].left(), "{width}: {pair:?}");
+            }
+            assert!(cells[8].right() <= footer.left(), "{width}");
+            assert!(footer.right() <= foot.left(), "{width}");
+            // The footer keeps its full size; the cells give way.
+            assert_eq!(footer.width(), BUTTON, "{width}");
+        }
+    }
+
+    #[test]
+    fn a_roomy_bar_keeps_full_size_buttons() {
+        let mut shell = shell().with_footer(prefs());
+        render(SIZES[1], |ui| shell.ui(ui, |ui, _| screen(ui)));
+        assert_eq!(shell.cell_rects.len(), 2);
+        for rect in &shell.cell_rects {
+            assert_eq!(rect.size(), egui::vec2(BUTTON, BUTTON), "{rect:?}");
+        }
     }
 
     #[test]
