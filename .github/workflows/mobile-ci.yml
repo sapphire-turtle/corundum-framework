@@ -6,7 +6,9 @@ name: Mobile CI
 #
 # Clippy for the phones, then the crates' tests on an iOS simulator and an Android emulator:
 # the system font lookup (sapphire-turtle/sapphire-framework#321) and the app directories
-# differ on each, and only there can they be seen to work.
+# differ on each, and only there can they be seen to work. Then the demo app (demo/) is
+# built, started on the same simulator and emulator, and left running for 20 seconds; its
+# screenshot is uploaded for a look.
 #
 # Not a required check: with the path filter it does not run on pull requests that touch
 # only the docs, and a required check that never runs would leave them pending.
@@ -15,11 +17,12 @@ on:
     # Cargo.lock too: a dependency bump (egui, resvg, fontdb) can break a mobile build.
     paths:
       - crates/**
+      - demo/**
       - Cargo.toml
       - Cargo.lock
       - rust-toolchain.toml
       - .github/workflows/mobile-ci.yml
-      - .github/scripts/android-test-runner.sh
+      - .github/scripts/**
 
 defaults:
   run:
@@ -46,6 +49,7 @@ jobs:
           for t in aarch64-apple-ios aarch64-apple-ios-sim; do
             cargo clippy -p corundum-framework-platform -p corundum-framework-gui --target "$t" --all-targets --locked -- -D warnings || exit 1
             cargo clippy -p corundum-framework --target "$t" --all-targets --locked --features eframe,serde -- -D warnings || exit 1
+            cargo clippy -p corundum-framework-demo --target "$t" --all-targets --locked -- -D warnings || exit 1
           done
 
       # The simulator's CoreText lists the simulator's own fonts, not the Mac's, so this runs
@@ -55,8 +59,38 @@ jobs:
           udid=$(xcrun simctl list devices available --json \
             | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
           xcrun simctl bootstatus "$udid" -b
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
           export CARGO_TARGET_AARCH64_APPLE_IOS_SIM_RUNNER="xcrun simctl spawn $udid"
           cargo test -p corundum-framework-platform -p corundum-framework-gui --lib --target aarch64-apple-ios-sim --locked
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The Xcode project's pre-build script builds the demo's staticlib (demo/ios).
+      - name: Build the demo for the simulator
+        working-directory: demo/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project CorundumDemo.xcodeproj -scheme CorundumDemo \
+            -sdk iphonesimulator -configuration Debug -derivedDataPath build \
+            CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO build 2>&1 \
+            | tee xcodebuild.log | tail -n 100
+
+      - name: Run the demo on the simulator
+        run: .github/scripts/ios-demo-run.sh
+
+      - name: Upload the demo's screenshot and console
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-ios
+          path: |
+            demo/ios/screenshot.png
+            demo/ios/console.log
+            demo/ios/console-stderr.log
+            demo/ios/xcodebuild.log
+          if-no-files-found: warn
 
   android:
     runs-on: ubuntu-latest
@@ -85,12 +119,31 @@ jobs:
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --no-default-features -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --features android -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework --all-targets --locked --features android,serde -- -D warnings
+          cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-demo --all-targets --locked -- -D warnings
 
       # Built before the emulator starts, so the emulator step only runs it.
       - name: Build the tests
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           cargo ndk -t x86_64 test -p corundum-framework-platform -p corundum-framework-gui --lib --no-run --locked --features corundum-framework-gui/android
+
+      # The demo's APK: its cdylib for the x86_64 emulator, packed by Gradle with GameActivity.
+      - name: Build the demo's library
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          ABIS=x86_64 demo/android/build-rust.sh --locked
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Build the demo's APK
+        run: gradle -p demo/android assembleDebug
 
       # The emulator needs hardware acceleration, which the runner allows once /dev/kvm is
       # opened up to its user.
@@ -111,4 +164,16 @@ jobs:
           target: default
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           disable-animations: true
-          script: ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME cargo ndk -t x86_64 test -p corundum-framework-platform -p corundum-framework-gui --lib --locked --features corundum-framework-gui/android
+          script: |
+            ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME cargo ndk -t x86_64 test -p corundum-framework-platform -p corundum-framework-gui --lib --locked --features corundum-framework-gui/android
+            .github/scripts/android-demo-run.sh
+
+      - name: Upload the demo's screenshot and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-android
+          path: |
+            demo/android/screenshot.png
+            demo/android/logcat.txt
+          if-no-files-found: warn

@@ -1,0 +1,71 @@
+# The demo's iOS app, for XcodeGen (`xcodegen generate` here writes CorundumDemo.xcodeproj).
+# The app is a shell around the Rust staticlib: main.m hands the main thread to
+# `corundum_demo_main`, which runs eframe's event loop. build-rust.sh builds the staticlib
+# for the SDK Xcode targets before each build.
+name: CorundumDemo
+options:
+  deploymentTarget:
+    iOS: "16.0"
+configFiles:
+  Debug: Config.xcconfig
+  Release: Config.xcconfig
+targets:
+  CorundumDemo:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    # On the target as well: bundleIdPrefix is not used, since it writes
+    # PRODUCT_BUNDLE_IDENTIFIER into the target and would override the xcconfig.
+    configFiles:
+      Debug: Config.xcconfig
+      Release: Config.xcconfig
+    sources:
+      - Sources
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ARCHS: arm64
+        EXCLUDED_ARCHS: x86_64
+        LIBRARY_SEARCH_PATHS: "$(BUILT_PRODUCTS_DIR)/rust"
+        OTHER_LDFLAGS: "-lcorundum_demo"
+        GENERATE_INFOPLIST_FILE: NO
+        # arm64 simulator binaries must be at least ad-hoc signed to launch.
+        "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Corundum Demo
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSupportsIndirectInputEvents: true
+    preBuildScripts:
+      - name: Build the Rust staticlib
+        script: ./build-rust.sh
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/rust/libcorundum_demo.a
+    dependencies:
+      - sdk: UIKit.framework
+      - sdk: Foundation.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: CoreFoundation.framework
+schemes:
+  CorundumDemo:
+    build:
+      targets:
+        CorundumDemo: all
+    run:
+      config: Debug
+    archive:
+      config: Release

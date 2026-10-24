@@ -71,6 +71,13 @@ through to the gui crate.
 The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
 Android app `android`.
 
+## Demo
+
+[`demo/`](demo/README.md) is an app that shows every shared piece — the shell, the theme,
+the fonts, the icons, the translations and the platform calls — to try them on each OS
+apart from the apps: `cargo run -p corundum-framework-demo` on a desktop, and an Xcode and
+a Gradle project for the iOS simulator and the Android emulator. It is not published.
+
 ## Status
 
 Unreleased. The first release, 0.1.0, waits for the demo app and a manual check on each

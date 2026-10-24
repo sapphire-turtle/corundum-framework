@@ -17,6 +17,15 @@ use crate::gpu;
 /// app with `create` once the window exists, inside the phone's frame: kept clear of the
 /// system's bars and the keyboard, and fed the keyboard's text, which winit does not
 /// deliver. Of `options`, the title and the fonts apply; a phone's window has no size.
+///
+/// A debug build aborts on the first frame unless android-activity is built without debug
+/// assertions: android-activity 0.6 makes a slice of the keyboard's text before there is
+/// any, from a null pointer. In the app's workspace `Cargo.toml`:
+///
+/// ```toml
+/// [profile.dev.package.android-activity]
+/// debug-assertions = false
+/// ```
 pub fn run_android(
     android_app: AndroidApp,
     options: WindowOptions,
@@ -83,7 +92,8 @@ impl eframe::App for PhoneWindow {
         // Another field took focus: start its typing from an empty buffer, so the old
         // field's text is neither re-sent nor deleted from the new one.
         let focused = ctx.memory(|m| m.focused());
-        if focused != self.focused {
+        let refocused = focused != self.focused;
+        if refocused {
             self.focused = focused;
             self.text.refocus();
             self.android.set_text_input_state(TextInputState {
@@ -92,12 +102,20 @@ impl eframe::App for PhoneWindow {
                 compose_region: None,
             });
         }
-        let state = self.android.text_input_state();
-        let buffer = Buffer {
-            text: state.text,
-            compose: state.compose_region.map(|span| (span.start, span.end)),
-        };
-        raw_input.events.extend(self.text.translate(&buffer));
+        // Only a focused field reads the keyboard's text, and not on the frame it took focus.
+        // Until something sets it, GameTextInput's text is a null pointer that
+        // android-activity 0.6 slices anyway (undefined behaviour, release builds included;
+        // #19). The reset above reaches GameTextInput only later,
+        // through GameActivity's main thread, and the field starts empty anyway; a window
+        // with no field in focus never asks at all.
+        if self.focused.is_some() && !refocused {
+            let state = self.android.text_input_state();
+            let buffer = Buffer {
+                text: state.text,
+                compose: state.compose_region.map(|span| (span.start, span.end)),
+            };
+            raw_input.events.extend(self.text.translate(&buffer));
+        }
         // The keyboard's edits arrive as nothing winit wakes the loop for: look again soon
         // while a field has the keyboard.
         if ctx.egui_wants_keyboard_input() {

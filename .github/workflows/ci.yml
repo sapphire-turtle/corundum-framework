@@ -18,3 +18,5 @@ jobs:
         # The facade's default (no egui) and its gui alone (no eframe).
         cargo clippy -p corundum-framework --all-targets --locked -- -D warnings
         cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings
+        # The demo's binary links on each desktop (the tests link only its lib).
+        cargo build -p corundum-framework-demo --bin corundum-framework-demo --locked

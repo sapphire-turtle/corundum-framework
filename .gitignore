@@ -23,3 +23,17 @@ target
 .DS_Store
 
 # --- repository specific ---
+
+# The demo's mobile builds (demo/README.md): the generated Xcode project and its build
+# output, the developer's own signing settings, the Gradle build and the Rust libraries
+# copied into it.
+/demo/ios/CorundumDemo.xcodeproj
+/demo/ios/Info.plist
+/demo/ios/build
+/demo/ios/Local.xcconfig
+/demo/ios/*.log
+/demo/android/.gradle
+/demo/android/local.properties
+/demo/android/app/build
+/demo/android/build
+/demo/android/app/src/main/jniLibs

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+# Libraries under crates/; the demo app at the root, under its short name.
+members = ["crates/*", "demo"]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
@@ -13,3 +14,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+
+# android-activity 0.6 makes a slice of GameTextInput's text before any text is set, from a
+# null pointer; a debug build's precondition check aborts there on the window's first frame
+# (demo/README.md). Without debug assertions in that crate alone the empty slice is read as
+# empty, as in a release build. An app built in debug for Android needs the same lines.
+# Drop this once android-activity no longer slices the null text (#19).
+[profile.dev.package.android-activity]
+debug-assertions = false
