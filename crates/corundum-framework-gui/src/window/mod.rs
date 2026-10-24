@@ -29,6 +29,8 @@ use crate::gpu;
 
 #[cfg(all(target_os = "android", feature = "android"))]
 mod android;
+#[cfg(target_os = "ios")]
+mod ios;
 // Used by the Android window; kept platform-free so its tests run on a desktop.
 #[cfg_attr(not(all(target_os = "android", feature = "android")), allow(dead_code))]
 mod text_input;
@@ -124,7 +126,11 @@ pub fn open(
                     crate::fonts::install_system_cjk_fallback(&cc.egui_ctx);
                 }
             }
-            Ok(create(cc))
+            let app = create(cc);
+            // eframe stretches its surface over an iPhone's screen (#20): see `ios`.
+            #[cfg(target_os = "ios")]
+            let app = ios::full_screen(cc, app);
+            Ok(app)
         }),
     )
 }

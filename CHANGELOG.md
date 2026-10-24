@@ -60,6 +60,10 @@ release.
   indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
   bottom bar's fill runs on under the home indicator. A margin the app already keeps is not
   added again, so apps can drop their own.
+- `window::run` on iOS: the picture is no longer stretched taller with its bottom (the
+  Shell's bar) cut off (#20). eframe 0.37 made the wgpu surface the size of the safe area
+  but laid egui out over the whole screen; the window now makes the surface the whole
+  screen, and gives egui the safe area itself.
 
 `corundum-framework-gui`, as it came from sapphire-framework:
 
