@@ -38,3 +38,21 @@ fn gui_brings_platform_and_egui() {
     let ctx = corundum_framework::egui::Context::default();
     corundum_framework::gui::icons::install_loaders(&ctx);
 }
+
+// The phone's window is eframe's too: an Android app names its `eframe::App` through the
+// facade as a desktop app does (#22).
+#[cfg(feature = "android")]
+#[test]
+fn android_brings_eframe() {
+    fn is_app<A: corundum_framework::eframe::App>() {}
+    struct Nothing;
+    impl corundum_framework::eframe::App for Nothing {
+        fn ui(
+            &mut self,
+            _: &mut corundum_framework::egui::Ui,
+            _: &mut corundum_framework::eframe::Frame,
+        ) {
+        }
+    }
+    is_app::<Nothing>();
+}

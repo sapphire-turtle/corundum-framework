@@ -163,8 +163,8 @@ fn foot_ui(ui: &mut egui::Ui, online: &mut bool) -> Option<Screen> {
     None
 }
 
-impl corundum_framework::gui::eframe::App for Demo {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut corundum_framework::gui::eframe::Frame) {
+impl corundum_framework::eframe::App for Demo {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut corundum_framework::eframe::Frame) {
         Demo::ui(self, ui);
     }
 }
@@ -183,7 +183,7 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
 /// Open the demo in a window and run it until it closes. On iOS this runs on the main
 /// thread and does not return while the app runs.
 #[cfg(not(target_os = "android"))]
-pub fn run() -> corundum_framework::gui::eframe::Result<()> {
+pub fn run() -> corundum_framework::eframe::Result<()> {
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_default_env()
