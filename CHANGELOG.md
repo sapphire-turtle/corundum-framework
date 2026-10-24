@@ -83,3 +83,6 @@ release.
 - `corundum-framework-gui`: on Android, `gpu::wgpu_options` leaves out wgpu's debug labels
   in a debug build. The emulator's Vulkan driver crashed the app when wgpu named its
   objects.
+- `corundum-framework-gui`: `window::run_android` sets the keyboard's text to empty before
+  reading it. GameTextInput starts with no text at all, and a debug build aborted on its
+  first frame reading it (android-activity 0.6).

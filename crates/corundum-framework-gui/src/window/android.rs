@@ -54,6 +54,14 @@ struct PhoneWindow {
 
 impl PhoneWindow {
     fn new(app: Box<dyn eframe::App>, android: AndroidApp) -> PhoneWindow {
+        // GameTextInput starts with no text at all (a null pointer), which android-activity
+        // 0.6 reads into a slice: a debug build aborts on the first `text_input_state`.
+        // Once set, the text lives in GameTextInput's own buffer.
+        android.set_text_input_state(TextInputState {
+            text: String::new(),
+            selection: TextSpan { start: 0, end: 0 },
+            compose_region: None,
+        });
         PhoneWindow {
             app,
             android,
