@@ -80,3 +80,6 @@ release.
 - `corundum-framework-gui`: `gpu::wgpu_options` asks for wgpu's default limits only as far
   as the adapter has them. The iOS simulator's GPU falls short of the defaults, and the
   window failed to open there.
+- `corundum-framework-gui`: on Android, `gpu::wgpu_options` leaves out wgpu's debug labels
+  in a debug build. The emulator's Vulkan driver crashed the app when wgpu named its
+  objects.

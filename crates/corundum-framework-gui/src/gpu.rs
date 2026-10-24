@@ -11,6 +11,9 @@
 //! The device asks for wgpu's default limits only as far as the adapter has them: some
 //! adapters fall short of the defaults (the iOS simulator's Metal one), and asking for
 //! more than the adapter has fails the device's creation, and with it the window.
+//!
+//! On Android a debug build leaves out wgpu's debug labels ([`instance_flags`]): the
+//! emulator's Vulkan driver crashes the app when wgpu names its objects.
 
 use std::sync::Arc;
 
@@ -21,6 +24,7 @@ pub fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
     let mut options = egui_wgpu::WgpuConfiguration::default();
     if let egui_wgpu::WgpuSetup::CreateNew(setup) = &mut options.wgpu_setup {
         setup.instance_descriptor.backends = backends();
+        setup.instance_descriptor.flags = instance_flags(setup.instance_descriptor.flags);
         let egui_default = Arc::clone(&setup.device_descriptor);
         setup.device_descriptor = Arc::new(move |adapter| {
             let mut descriptor = egui_default(adapter);
@@ -31,6 +35,17 @@ pub fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
         });
     }
     options
+}
+
+/// `flags` (wgpu's, from the build and the `WGPU_*` variables), less the debug labels on
+/// Android: the emulator's Vulkan driver (`vulkan.ranchu`) dies with SIGSEGV in
+/// `vkSetDebugUtilsObjectNameEXT`, which wgpu calls for each label. Validation stays.
+fn instance_flags(flags: wgpu::InstanceFlags) -> wgpu::InstanceFlags {
+    if cfg!(target_os = "android") {
+        flags - wgpu::InstanceFlags::DEBUG
+    } else {
+        flags
+    }
 }
 
 /// [`default_backends`], unless `WGPU_BACKEND` says otherwise.
@@ -185,6 +200,16 @@ mod tests {
     fn defaults_to_the_primary_backends_elsewhere_without_an_env_override() {
         // `backends()` reads WGPU_BACKEND, which is not set in the test harness.
         assert_eq!(backends(), wgpu::Backends::PRIMARY);
+    }
+
+    #[test]
+    fn android_drops_the_debug_labels_and_keeps_validation() {
+        let flags = instance_flags(wgpu::InstanceFlags::debugging());
+        assert_eq!(
+            flags.contains(wgpu::InstanceFlags::DEBUG),
+            !cfg!(target_os = "android")
+        );
+        assert!(flags.contains(wgpu::InstanceFlags::VALIDATION));
     }
 
     #[test]
