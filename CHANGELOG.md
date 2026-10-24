@@ -19,6 +19,8 @@ release.
 - `corundum-framework-gui`: renamed from `corundum-gui` (lib `corundum_framework_gui`);
   its translations' bundle name is `corundum-framework-gui`. Message ids keep their
   `corundum-` prefix.
+- `corundum-framework-gui`: egui, eframe and egui_extras 0.37 (were 0.36). Apps must use
+  egui 0.37 as well. On iOS, eframe is built without its `wayland` feature.
 
 ### Added
 
