@@ -71,6 +71,10 @@ adb logcat -s corundum-demo
 GameActivity as it is (`MainActivity`), loading it and calling its `android_main`. Open
 `demo/android` in Android Studio to run it from there instead.
 
+A debug build runs because the workspace's `Cargo.toml` builds android-activity without
+debug assertions (`[profile.dev.package.android-activity]`): android-activity 0.6 makes a
+slice of the keyboard's text from a null pointer before there is any, and the check aborts.
+
 ## CI
 
 CI builds and tests the demo on the desktops. Mobile CI runs clippy on it for iOS and

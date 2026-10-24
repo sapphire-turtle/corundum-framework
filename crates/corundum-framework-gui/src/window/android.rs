@@ -17,6 +17,15 @@ use crate::gpu;
 /// app with `create` once the window exists, inside the phone's frame: kept clear of the
 /// system's bars and the keyboard, and fed the keyboard's text, which winit does not
 /// deliver. Of `options`, the title and the fonts apply; a phone's window has no size.
+///
+/// A debug build aborts on the first frame unless android-activity is built without debug
+/// assertions: android-activity 0.6 makes a slice of the keyboard's text before there is
+/// any, from a null pointer. In the app's workspace `Cargo.toml`:
+///
+/// ```toml
+/// [profile.dev.package.android-activity]
+/// debug-assertions = false
+/// ```
 pub fn run_android(
     android_app: AndroidApp,
     options: WindowOptions,
@@ -54,14 +63,6 @@ struct PhoneWindow {
 
 impl PhoneWindow {
     fn new(app: Box<dyn eframe::App>, android: AndroidApp) -> PhoneWindow {
-        // GameTextInput starts with no text at all (a null pointer), which android-activity
-        // 0.6 reads into a slice: a debug build aborts on the first `text_input_state`.
-        // Once set, the text lives in GameTextInput's own buffer.
-        android.set_text_input_state(TextInputState {
-            text: String::new(),
-            selection: TextSpan { start: 0, end: 0 },
-            compose_region: None,
-        });
         PhoneWindow {
             app,
             android,
