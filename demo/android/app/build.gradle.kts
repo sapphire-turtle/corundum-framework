@@ -26,6 +26,9 @@ android {
 }
 
 dependencies {
+    // games-activity pulls in kotlin-stdlib-jdk7/-jdk8 1.6, whose classes kotlin-stdlib 1.8
+    // (from appcompat) also has; the BOM brings them to 1.8, where they are empty.
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
     implementation("androidx.appcompat:appcompat:1.7.1")
     // The version android-activity 0.6 is built against. Without prefab: android-activity
     // brings its own native glue, and the upstream C++ one must not be linked.
