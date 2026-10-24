@@ -7,6 +7,12 @@
 //! backends. `WGPU_BACKEND` overrides the choice everywhere, so
 //! `WGPU_BACKEND=dx12` is the escape hatch on Windows when Vulkan misbehaves
 //! (for example, a Vulkan overlay layer that crashes the app).
+//!
+//! The device asks for wgpu's default limits only as far as the adapter has them: some
+//! adapters fall short of the defaults (the iOS simulator's Metal one), and asking for
+//! more than the adapter has fails the device's creation, and with it the window.
+
+use std::sync::Arc;
 
 use eframe::{egui_wgpu, wgpu};
 
@@ -15,6 +21,14 @@ pub fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
     let mut options = egui_wgpu::WgpuConfiguration::default();
     if let egui_wgpu::WgpuSetup::CreateNew(setup) = &mut options.wgpu_setup {
         setup.instance_descriptor.backends = backends();
+        let egui_default = Arc::clone(&setup.device_descriptor);
+        setup.device_descriptor = Arc::new(move |adapter| {
+            let mut descriptor = egui_default(adapter);
+            descriptor.required_limits = descriptor
+                .required_limits
+                .or_worse_values_from(&adapter.limits());
+            descriptor
+        });
     }
     options
 }
