@@ -1,14 +1,19 @@
-//! [`Shell`]: an app's window frame — its screens on a rail, its actions under them, and
-//! at the rail's foot the screens that belong there (Settings) and a slot of the app's own
-//! (a status dot).
+//! [`Shell`]: an app's window frame — its screens and actions on a rail, and at the rail's
+//! foot the screens that belong there (Settings) and a slot of the app's own (a status dot).
 //!
-//! The screens and the actions that do not fit on the rail are in a menu at its end, which
-//! lists them all: there the person opens any of them, drags them into another order, and
-//! chooses which the rail shows ([`RailOrder`]). The footer is always on the rail.
+//! The screens and the actions are in the app's order, or the person's ([`RailOrder`], set
+//! on the settings page [`RailPage`](crate::settings::RailPage)). When some are left off
+//! the rail — the window has no room for them, or the person hid them — the footer's place
+//! is taken by a "More" button: its menu holds the footer first, then those left off.
 //!
 //! Wide, the rail runs down the left (as Obsidian's does); narrower than
 //! [`COMPACT_WIDTH`], it becomes a bar along the bottom, as on a phone. The width decides,
 //! not the platform, so a desktop window made narrow shows the phone layout.
+
+mod order;
+
+pub use order::RailOrder;
+pub(crate) use order::{RailEntry, move_to, published, request};
 
 /// Below this width the layout is a phone's: the rail becomes a bottom bar, and screens
 /// with a list and a page show one at a time.
@@ -19,6 +24,9 @@ const RAIL_WIDTH: f32 = 48.0;
 
 /// The space above and below the status bar's row.
 const STATUS_MARGIN: f32 = 3.0;
+
+/// The space at the rail's ends.
+const RAIL_END: f32 = 4.0;
 
 /// One of the app's screens on the rail.
 pub struct Destination<D> {
@@ -58,6 +66,25 @@ impl Action {
     }
 }
 
+/// A screen or an action on the rail, for [`Shell::from_items`]: the two mix in any order,
+/// so the action used most — a new entry — can come first.
+pub enum RailItem<D> {
+    Screen(Destination<D>),
+    Action(Action),
+}
+
+impl<D> From<Destination<D>> for RailItem<D> {
+    fn from(d: Destination<D>) -> RailItem<D> {
+        RailItem::Screen(d)
+    }
+}
+
+impl<D> From<Action> for RailItem<D> {
+    fn from(a: Action) -> RailItem<D> {
+        RailItem::Action(a)
+    }
+}
+
 /// The window frame. Hold one as the app's root; call [`ui`](Self::ui) every frame.
 ///
 /// Labels are message ids: each frame the hover text is looked up in the language
@@ -73,15 +100,16 @@ impl Action {
 /// keyboard already.
 ///
 /// ```no_run
-/// # use corundum_framework_gui::{Destination, Shell, icons};
+/// # use corundum_framework_gui::{Action, Destination, Shell, icons};
 /// # fn example(ui: &mut egui::Ui) {
 /// #[derive(Clone, Copy, PartialEq)]
 /// enum Screen { Gallery, Albums, Settings }
 ///
-/// let mut shell = Shell::new(vec![
+/// let mut shell = Shell::from_items(vec![
+///     Action::new("import", icons::plus(), "import").into(),
 ///     // The app's own Lucide SVGs: `egui::include_image!("../assets/icons/images.svg")`.
-///     Destination::new(Screen::Gallery, icons::folder(), "gallery"),
-///     Destination::new(Screen::Albums, icons::folder(), "albums"),
+///     Destination::new(Screen::Gallery, icons::folder(), "gallery").into(),
+///     Destination::new(Screen::Albums, icons::folder(), "albums").into(),
 /// ])
 /// .with_footer(vec![Destination::new(Screen::Settings, icons::settings(), "settings")]);
 /// shell.ui(ui, |ui, screen| match screen {
@@ -89,17 +117,24 @@ impl Action {
 ///     Screen::Albums => { egui::CentralPanel::default().show(ui, |ui| ui.label("…")); }
 ///     Screen::Settings => { egui::CentralPanel::default().show(ui, |ui| ui.label("…")); }
 /// });
+/// if shell.take_action() == Some("import") {
+///     // …
+/// }
 /// # }
 /// ```
 pub struct Shell<D> {
     destinations: Vec<Destination<D>>,
     actions: Vec<Action>,
     footer: Vec<Destination<D>>,
-    /// The screens and the actions in the order the rail shows them, the screens first, and
-    /// whether each is shown there or only in the menu.
+    /// The screens and the actions in the app's order.
+    defaults: Vec<Item>,
+    /// The screens and the actions in the order the rail shows them, and whether each is
+    /// shown there or left to the menu.
     slots: Vec<Slot>,
-    /// The slots on the rail or the bar this frame; the rest are in the menu alone.
+    /// The slots on the rail or the bar this frame; the rest are in the menu.
     on_rail: Vec<usize>,
+    /// Whether the footer is in the menu this frame, the More button in its place.
+    footer_in_menu: bool,
     /// The action clicked and not yet taken.
     clicked: Option<&'static str>,
     /// Where each action and footer destination was last drawn, for the tests to click.
@@ -110,34 +145,16 @@ pub struct Shell<D> {
     /// The rects of the slots on the rail or the bar, in order, for the tests.
     #[cfg(test)]
     cell_rects: Vec<egui::Rect>,
-    /// The menu's button, and its rows' (by slot), for the tests.
+    /// The More button, and its menu's rows, for the tests.
     #[cfg(test)]
     more_rect: egui::Rect,
     #[cfg(test)]
     menu_rects: Vec<egui::Rect>,
     open: Option<D>,
-    /// How wide the footer and the foot were on the bar last frame: their end of the bar
-    /// is kept this wide, and the cells share the rest.
-    foot_width: f32,
+    /// How big the foot was last frame: the rail or the bar keeps room for it.
+    foot_size: egui::Vec2,
     /// Whether the SVG loader, the theme and the language have been put in place.
     loaders: bool,
-}
-
-/// The order of the rail's screens and actions, and which of them it leaves to the menu at
-/// its end: what the person set in that menu, kept by the app or, with the `serde` feature,
-/// on the device by [`store`](crate::store).
-///
-/// A screen is named by its label's message id, an action by its id. An item the order does
-/// not name — one the app added since — comes after those it names; a name no item has is
-/// passed over. The screens always come before the actions.
-#[derive(Clone, Default, PartialEq, Eq, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(default))]
-pub struct RailOrder {
-    /// The items, first to last.
-    pub order: Vec<String>,
-    /// The items shown in the menu alone.
-    pub hidden: Vec<String>,
 }
 
 /// A screen or an action, by its index in the shell's.
@@ -147,12 +164,6 @@ enum Item {
     Action(usize),
 }
 
-impl Item {
-    fn is_action(self) -> bool {
-        matches!(self, Item::Action(_))
-    }
-}
-
 /// An item in its place on the rail, and whether the rail shows it.
 #[derive(Clone, Copy, PartialEq, Debug)]
 struct Slot {
@@ -160,22 +171,30 @@ struct Slot {
     shown: bool,
 }
 
-/// What the menu's rows carry when dragged: the slot.
-struct SlotDrag(usize);
-
-/// A rail's separator between the screens and the actions, with the space around it, at most.
-const SEPARATOR: f32 = 20.0;
+/// A row of the More menu.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Row {
+    Footer(usize),
+    Slot(usize),
+}
 
 impl<D: Copy + PartialEq> Shell<D> {
     /// A frame with `destinations` on the rail, the first one open.
     pub fn new(destinations: Vec<Destination<D>>) -> Shell<D> {
-        let open = destinations.first().map(|d| d.id);
+        Shell::from_items(destinations.into_iter().map(RailItem::from).collect())
+    }
+
+    /// A frame with `items` — screens and actions — on the rail in this order, the first
+    /// screen open.
+    pub fn from_items(items: Vec<RailItem<D>>) -> Shell<D> {
         let mut shell = Shell {
-            destinations,
+            destinations: Vec::new(),
             actions: Vec::new(),
             footer: Vec::new(),
+            defaults: Vec::new(),
             slots: Vec::new(),
             on_rail: Vec::new(),
+            footer_in_menu: false,
             clicked: None,
             #[cfg(test)]
             action_rects: Vec::new(),
@@ -187,25 +206,45 @@ impl<D: Copy + PartialEq> Shell<D> {
             more_rect: egui::Rect::NOTHING,
             #[cfg(test)]
             menu_rects: Vec::new(),
-            open,
-            foot_width: 0.0,
+            open: None,
+            foot_size: egui::Vec2::ZERO,
             loaders: false,
         };
+        for item in items {
+            shell.push(item);
+        }
+        shell.open = shell.destinations.first().map(|d| d.id);
         shell.slots = shell.default_slots();
         shell
     }
 
-    /// Put `actions` on the rail, under the screens (on the bottom bar, after them).
+    fn push(&mut self, item: RailItem<D>) {
+        match item {
+            RailItem::Screen(d) => {
+                self.defaults.push(Item::Screen(self.destinations.len()));
+                self.destinations.push(d);
+            }
+            RailItem::Action(a) => {
+                self.defaults.push(Item::Action(self.actions.len()));
+                self.actions.push(a);
+            }
+        }
+    }
+
+    /// Put `actions` on the rail after the items already there. To put one first, give the
+    /// items to [`from_items`](Self::from_items) instead.
     pub fn with_actions(mut self, actions: Vec<Action>) -> Shell<D> {
         let order = self.rail_order();
-        self.actions = actions;
+        for action in actions {
+            self.push(action.into());
+        }
         self.set_rail_order(&order);
         self
     }
 
     /// Put `footer` at the rail's foot (at the bottom bar's end): where an app puts
-    /// Settings. With no other destinations, the first of these is open. The footer is
-    /// always on the rail, never in the menu.
+    /// Settings. With no other destinations, the first of these is open. When some items
+    /// are left off the rail, the footer moves into the More menu, which takes its place.
     pub fn with_footer(mut self, footer: Vec<Destination<D>>) -> Shell<D> {
         self.footer = footer;
         if self.open.is_none() {
@@ -246,7 +285,7 @@ impl<D: Copy + PartialEq> Shell<D> {
         };
         let mut slots = self.default_slots();
         // Stable: items of one name, and those the order does not name, keep the app's order.
-        slots.sort_by_key(|s| (s.item.is_action(), place(self.key(s.item))));
+        slots.sort_by_key(|s| place(self.key(s.item)));
         for slot in &mut slots {
             slot.shown = !order.hidden.iter().any(|k| k == self.key(slot.item));
         }
@@ -254,11 +293,9 @@ impl<D: Copy + PartialEq> Shell<D> {
     }
 
     fn default_slots(&self) -> Vec<Slot> {
-        let screens = (0..self.destinations.len()).map(Item::Screen);
-        let actions = (0..self.actions.len()).map(Item::Action);
-        screens
-            .chain(actions)
-            .map(|item| Slot { item, shown: true })
+        self.defaults
+            .iter()
+            .map(|&item| Slot { item, shown: true })
             .collect()
     }
 
@@ -270,30 +307,38 @@ impl<D: Copy + PartialEq> Shell<D> {
         }
     }
 
-    /// Move the slot at `from` to before (or, `after`, after) the one at `to`, if they are of
-    /// a kind: a screen stays among the screens. `true` when the order changed.
-    fn move_slot(&mut self, from: usize, to: usize, after: bool) -> bool {
-        if self.slots[from].item.is_action() != self.slots[to].item.is_action() {
-            return false;
+    fn icon_and_label(&self, item: Item) -> (egui::ImageSource<'static>, &'static str) {
+        match item {
+            Item::Screen(i) => (
+                self.destinations[i].icon.clone(),
+                self.destinations[i].label,
+            ),
+            Item::Action(i) => (self.actions[i].icon.clone(), self.actions[i].label),
         }
-        let mut at = to + usize::from(after);
-        if from < at {
-            at -= 1;
-        }
-        if at == from {
-            return false;
-        }
-        let slot = self.slots.remove(from);
-        self.slots.insert(at, slot);
-        true
     }
 
-    /// The rail's order changed in the menu: keep it in the store, when there is one.
-    fn order_changed(&self, ctx: &egui::Context) {
-        #[cfg(feature = "serde")]
-        crate::store::update(ctx, |state| state.rail = Some(self.rail_order()));
-        #[cfg(not(feature = "serde"))]
-        let _ = ctx;
+    /// Take the order the [rail's page](crate::settings::RailPage) set, and keep it in the
+    /// store; then list the items for the page.
+    fn sync_order(&mut self, ctx: &egui::Context) {
+        if let Some(order) = order::take_request(ctx) {
+            self.set_rail_order(&order);
+            #[cfg(feature = "serde")]
+            crate::store::update(ctx, |state| state.rail = Some(self.rail_order()));
+        }
+        let entries = self
+            .slots
+            .iter()
+            .map(|s| {
+                let (icon, label) = self.icon_and_label(s.item);
+                RailEntry {
+                    key: self.key(s.item),
+                    icon,
+                    label,
+                    shown: s.shown,
+                }
+            })
+            .collect();
+        order::publish(ctx, entries);
     }
 
     /// The [`Action`] clicked in the last [`ui`](Self::ui), once: call it after `ui`
@@ -370,6 +415,7 @@ impl<D: Copy + PartialEq> Shell<D> {
                 self.set_rail_order(&order);
             }
         }
+        self.sync_order(ui.ctx());
         let safe = unsafe_margin(ui);
         let full = ui.max_rect();
         let compact = full.width() - safe.sum().x < COMPACT_WIDTH;
@@ -439,121 +485,143 @@ impl<D: Copy + PartialEq> Shell<D> {
         });
     }
 
-    /// The wide layout: the footer and the foot from the bottom, then the screens and the
-    /// actions from the top, as many as fit above them, and the menu's button under those.
+    /// How many of the `shown` items the rail or bar holds in `room` (its length less the
+    /// foot's), at `step` per button, and whether the More button takes the footer's place.
+    /// When every shown item fits beside the footer and none is hidden, there is no menu;
+    /// else the More button stands where the footer was and the items share the rest.
+    fn fit(&self, shown: usize, room: f32, step: f32) -> (usize, bool) {
+        let hidden = shown < self.slots.len();
+        let footer = self.footer.len() as f32 * step;
+        if !hidden && shown as f32 * step + footer <= room {
+            return (shown, false);
+        }
+        let held = ((room - step) / step).floor().max(0.0) as usize;
+        (held.min(shown), true)
+    }
+
+    /// Keep `size` as the foot's, laying the frame out again when it changed.
+    fn foot_measured(&mut self, ctx: &egui::Context, size: egui::Vec2) {
+        if (size - self.foot_size).length() > 0.5 {
+            self.foot_size = size;
+            ctx.request_discard("the shell's foot changed size");
+        }
+    }
+
+    /// The wide layout: the footer (or the More button) and the foot from the bottom, then
+    /// the screens and the actions from the top, as many as fit above them.
     fn rail_ui(
         &mut self,
         ui: &mut egui::Ui,
         foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
     ) -> Option<D> {
-        self.on_rail.clear();
-        #[cfg(test)]
-        self.cell_rects.clear();
         let full = ui.available_rect_before_wrap();
+        let step = BUTTON + ui.spacing().item_spacing.y;
+        let shown = self.shown();
+        let room = full.height() - 2.0 * RAIL_END - self.foot_size.y;
+        let (held, more) = self.fit(shown.len(), room, step);
+        self.lay_out(&shown[..held], more);
         let bottom = ui.scope_builder(
             egui::UiBuilder::new()
                 .max_rect(full)
                 .layout(egui::Layout::bottom_up(egui::Align::Center)),
             |ui| {
-                ui.add_space(4.0);
-                for i in 0..self.footer.len() {
-                    self.footer_ui(ui, i, BUTTON);
-                }
-                foot(ui)
+                ui.add_space(RAIL_END);
+                self.end_ui(ui, more, false);
+                let foot = ui.scope(foot);
+                (foot.inner, foot.response.rect.size())
             },
         );
-        let gap = ui.spacing().item_spacing.y;
-        let top = full.with_max_y((bottom.response.rect.top() - gap).max(full.top()));
+        let (opened, foot_size) = bottom.inner;
+        self.foot_measured(ui.ctx(), foot_size);
+        let top = full.with_max_y(bottom.response.rect.top());
         ui.scope_builder(
             egui::UiBuilder::new()
                 .max_rect(top)
                 .layout(egui::Layout::top_down(egui::Align::Center)),
             |ui| {
-                ui.set_clip_rect(top.intersect(ui.clip_rect()));
-                ui.add_space(4.0);
-                let step = BUTTON + gap;
-                let mut after_screen = false;
-                for s in self.shown() {
-                    let action = self.slots[s].item.is_action();
-                    let separator = action && after_screen;
-                    // Room for this one and the menu's button under it.
-                    let need = 2.0 * step + if separator { SEPARATOR } else { 0.0 };
-                    if ui.available_height() < need {
-                        break;
-                    }
-                    if separator {
-                        ui.add_space(4.0);
-                        ui.separator();
-                        ui.add_space(4.0);
-                    }
+                ui.add_space(RAIL_END);
+                for &s in &shown[..held] {
                     self.slot_ui(ui, s, BUTTON);
-                    after_screen = !action;
-                }
-                if !self.slots.is_empty() {
-                    self.more_ui(ui, BUTTON);
                 }
             },
         );
-        bottom.inner
+        opened
     }
 
-    /// The phone layout: a cell per screen, then per action, as many as fit, the menu's
-    /// button after them, and the footer and the foot last.
+    /// The phone layout: a cell per screen or action, as many as fit, then the footer (or
+    /// the More button) and the foot at the bar's end.
     ///
-    /// The footer and the foot keep the width they need at the bar's end; the screens and
-    /// the actions share what is left, a full-size button each, and those that do not fit
-    /// are in the menu. So the foot never leaves the screen, however many screens there are.
+    /// The end keeps the width it needs; the items share what is left, a full-size button
+    /// each, and those that do not fit are in the More menu. So the foot never leaves the
+    /// screen, however many items there are.
     fn bar_ui(
         &mut self,
         ui: &mut egui::Ui,
         foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
     ) -> Option<D> {
-        self.on_rail.clear();
-        #[cfg(test)]
-        self.cell_rects.clear();
         let rect = ui.available_rect_before_wrap();
         let gap = ui.spacing().item_spacing.x;
-        let end = rect.right() - self.foot_width.min(rect.width());
-        let row = egui::Rect::from_min_max(rect.min, egui::pos2(end - gap, rect.bottom()));
-        if !self.slots.is_empty() {
-            let fit = ((row.width() + gap) / (BUTTON + gap)).floor().max(1.0) as usize;
-            let mut shown = self.shown();
-            shown.truncate(fit - 1);
-            let cells = shown.len() + 1;
+        let step = BUTTON + gap;
+        let shown = self.shown();
+        let room = rect.width() - self.foot_size.x - gap;
+        let (held, more) = self.fit(shown.len(), room, step);
+        self.lay_out(&shown[..held], more);
+        // The end first, from the right: the cells get what it leaves.
+        let end = ui.scope_builder(
+            egui::UiBuilder::new()
+                .max_rect(rect)
+                .layout(egui::Layout::right_to_left(egui::Align::Center)),
+            |ui| {
+                let foot = ui.scope(foot);
+                self.end_ui(ui, more, true);
+                (foot.inner, foot.response.rect.size())
+            },
+        );
+        let (opened, foot_size) = end.inner;
+        self.foot_measured(ui.ctx(), foot_size);
+        let cells = held;
+        if cells > 0 {
+            let row = rect.with_max_x(end.response.rect.left() - gap);
             ui.scope_builder(egui::UiBuilder::new().max_rect(row), |ui| {
                 ui.columns(cells, |columns| {
                     for (i, column) in columns.iter_mut().enumerate() {
                         column.vertical_centered(|ui| {
                             let side = ui.available_width().min(BUTTON);
-                            match shown.get(i) {
-                                Some(&s) => self.slot_ui(ui, s, side),
-                                None => self.more_ui(ui, side),
-                            }
+                            self.slot_ui(ui, shown[i], side);
                         });
                     }
                 });
             });
         }
-        let at_end = egui::Rect::from_min_max(egui::pos2(end, rect.top()), rect.max);
-        let end_row = ui
-            .scope_builder(egui::UiBuilder::new().max_rect(at_end), |ui| {
-                ui.horizontal(|ui| {
-                    for i in 0..self.footer.len() {
-                        self.footer_ui(ui, i, BUTTON);
-                    }
-                    foot(ui)
-                })
-            })
-            .inner;
-        let opened = end_row.inner;
-        // The end's width is known only once drawn: lay the frame out again with it.
-        let width = end_row.response.rect.width();
-        if (width - self.foot_width).abs() > 0.5 {
-            self.foot_width = width;
-            ui.ctx()
-                .request_discard("the shell's bar foot changed width");
-        }
         opened
+    }
+
+    /// Set out this frame's rail: the slots on it, and whether the footer is in the menu.
+    fn lay_out(&mut self, on_rail: &[usize], more: bool) {
+        self.on_rail = on_rail.to_vec();
+        self.footer_in_menu = more;
+        #[cfg(test)]
+        {
+            self.cell_rects.clear();
+            self.footer_rects.clear();
+            self.more_rect = egui::Rect::NOTHING;
+        }
+    }
+
+    /// The footer, or the More button in its place; `backwards` for a layout running right
+    /// to left, so the footer still reads in its order.
+    fn end_ui(&mut self, ui: &mut egui::Ui, more: bool, backwards: bool) {
+        if more {
+            self.more_ui(ui);
+            return;
+        }
+        let mut order: Vec<usize> = (0..self.footer.len()).collect();
+        if backwards {
+            order.reverse();
+        }
+        for i in order {
+            self.footer_ui(ui, i);
+        }
     }
 
     /// The slots the person shows on the rail, in order: the first of them that fit are on it.
@@ -565,7 +633,6 @@ impl<D: Copy + PartialEq> Shell<D> {
 
     /// Slot `s`'s button on the rail or the bar.
     fn slot_ui(&mut self, ui: &mut egui::Ui, s: usize, side: f32) {
-        self.on_rail.push(s);
         let response = match self.slots[s].item {
             Item::Screen(i) => self.destination_ui(ui, i, side),
             Item::Action(i) => self.action_ui(ui, i, side),
@@ -576,123 +643,70 @@ impl<D: Copy + PartialEq> Shell<D> {
         let _ = response;
     }
 
-    /// The menu's button, and the menu it opens: every screen and action, the ones not on the
-    /// rail among them, to open, to reorder, and to show on the rail or leave in the menu.
-    fn more_ui(&mut self, ui: &mut egui::Ui, side: f32) {
-        // Marked, as a screen's button is, when the screen open is in the menu alone.
-        let elsewhere = self.open.is_some_and(|open| {
-            let on_rail = self.on_rail.iter().any(|&s| match self.slots[s].item {
-                Item::Screen(i) => self.destinations[i].id == open,
-                Item::Action(_) => false,
-            });
-            !on_rail && !self.footer.iter().any(|d| d.id == open)
-        });
-        let response = icon_button(ui, elsewhere, crate::icons::ellipsis(), side)
+    /// The More menu's rows: the footer first, then the items left off the rail, in order.
+    fn menu_rows(&self) -> Vec<Row> {
+        let footer = (0..self.footer.len()).map(Row::Footer);
+        let off = (0..self.slots.len())
+            .filter(|s| !self.on_rail.contains(s))
+            .map(Row::Slot);
+        footer.chain(off).collect()
+    }
+
+    /// The More button, in the footer's place, and its menu.
+    fn more_ui(&mut self, ui: &mut egui::Ui) {
+        let rows = self.menu_rows();
+        // Marked, as a screen's button is, when the screen open is in the menu.
+        let open_inside = rows
+            .iter()
+            .any(|&row| self.row_opens(row) == self.open && self.open.is_some());
+        let response = icon_button(ui, open_inside, crate::icons::ellipsis(), BUTTON)
             .on_hover_text(crate::i18n::tr(ui.ctx(), "corundum-shell-more"));
         #[cfg(test)]
         {
             self.more_rect = response.rect;
         }
-        egui::Popup::menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| self.menu_ui(ui));
+        egui::Popup::menu(&response).show(|ui| self.menu_ui(ui, &rows));
     }
 
-    fn menu_ui(&mut self, ui: &mut egui::Ui) {
-        let ctx = ui.ctx().clone();
-        let mut moved = None;
-        let mut toggled = None;
-        let mut chosen = None;
+    /// The screen `row` opens, if it is one.
+    fn row_opens(&self, row: Row) -> Option<D> {
+        match row {
+            Row::Footer(i) => Some(self.footer[i].id),
+            Row::Slot(s) => match self.slots[s].item {
+                Item::Screen(i) => Some(self.destinations[i].id),
+                Item::Action(_) => None,
+            },
+        }
+    }
+
+    fn menu_ui(&mut self, ui: &mut egui::Ui, rows: &[Row]) {
         #[cfg(test)]
         self.menu_rects.clear();
-        for s in 0..self.slots.len() {
-            let slot = self.slots[s];
-            if s > 0 && slot.item.is_action() && !self.slots[s - 1].item.is_action() {
+        for (n, &row) in rows.iter().enumerate() {
+            if n > 0 && matches!(rows[n - 1], Row::Footer(_)) && matches!(row, Row::Slot(_)) {
                 ui.separator();
             }
-            let (icon, label, open) = match slot.item {
-                Item::Screen(i) => {
-                    let d = &self.destinations[i];
-                    (d.icon.clone(), d.label, self.open == Some(d.id))
-                }
-                Item::Action(i) => (self.actions[i].icon.clone(), self.actions[i].label, false),
+            let (icon, label) = match row {
+                Row::Footer(i) => (self.footer[i].icon.clone(), self.footer[i].label),
+                Row::Slot(s) => self.icon_and_label(self.slots[s].item),
             };
-            let row = ui.horizontal(|ui| {
-                ui.dnd_drag_source(
-                    egui::Id::unique(("corundum_shell_slot", s)),
-                    SlotDrag(s),
-                    |ui| {
-                        ui.add(crate::icons::image_as(
-                            ui,
-                            crate::icons::grip_vertical(),
-                            16.0,
-                            crate::theme::Tone::Muted,
-                            crate::theme::Swatch::Neutral,
-                        ))
+            let open = self.open.is_some() && self.row_opens(row) == self.open;
+            let image = crate::icons::image(ui, icon, 16.0);
+            let response = ui.add(
+                egui::Button::image_and_text(image, crate::i18n::tr(ui.ctx(), label))
+                    .selected(open),
+            );
+            #[cfg(test)]
+            self.menu_rects.push(response.rect);
+            if response.clicked() {
+                match row {
+                    Row::Slot(s) => match self.slots[s].item {
+                        Item::Screen(i) => self.open = Some(self.destinations[i].id),
+                        Item::Action(i) => self.clicked = Some(self.actions[i].id),
                     },
-                )
-                .response
-                .on_hover_text(crate::i18n::tr(&ctx, "corundum-shell-drag"));
-                let mut shown = slot.shown;
-                if ui
-                    .checkbox(&mut shown, "")
-                    .on_hover_text(crate::i18n::tr(&ctx, "corundum-shell-show"))
-                    .changed()
-                {
-                    toggled = Some(s);
+                    Row::Footer(i) => self.open = Some(self.footer[i].id),
                 }
-                let image = crate::icons::image(ui, icon, 16.0);
-                let response = ui.add(
-                    egui::Button::image_and_text(image, crate::i18n::tr(&ctx, label))
-                        .selected(open)
-                        .frame_when_inactive(false),
-                );
-                #[cfg(test)]
-                self.menu_rects.push(response.rect);
-                if response.clicked() {
-                    chosen = Some(s);
-                }
-            });
-            let row = row.response;
-            // Dropped on the row's upper half, the dragged one goes before it; else after.
-            let after = |pos: Option<egui::Pos2>| pos.is_some_and(|p| p.y > row.rect.center().y);
-            if let Some(drag) = row.dnd_hover_payload::<SlotDrag>()
-                && self.slots[drag.0].item.is_action() == slot.item.is_action()
-            {
-                let below = after(ctx.pointer_interact_pos());
-                let y = if below {
-                    row.rect.bottom()
-                } else {
-                    row.rect.top()
-                };
-                ui.painter().hline(
-                    row.rect.x_range(),
-                    y,
-                    egui::Stroke::new(2.0, ui.visuals().selection.stroke.color),
-                );
             }
-            if let Some(drag) = row.dnd_release_payload::<SlotDrag>() {
-                moved = Some((drag.0, s, after(ctx.pointer_interact_pos())));
-            }
-        }
-        let mut changed = false;
-        if let Some((from, to, after)) = moved {
-            changed |= self.move_slot(from, to, after);
-        }
-        if let Some(s) = toggled {
-            self.slots[s].shown = !self.slots[s].shown;
-            changed = true;
-        }
-        if changed {
-            self.order_changed(&ctx);
-            ctx.request_repaint();
-        }
-        if let Some(s) = chosen {
-            match self.slots[s].item {
-                Item::Screen(i) => self.open = Some(self.destinations[i].id),
-                Item::Action(i) => self.clicked = Some(self.actions[i].id),
-            }
-            ui.close();
         }
     }
 
@@ -713,10 +727,10 @@ impl<D: Copy + PartialEq> Shell<D> {
         crate::i18n::tr(ctx, self.destinations[i].label)
     }
 
-    fn footer_ui(&mut self, ui: &mut egui::Ui, i: usize, side: f32) {
+    fn footer_ui(&mut self, ui: &mut egui::Ui, i: usize) {
         let d = &self.footer[i];
         let open = self.open == Some(d.id);
-        let response = icon_button(ui, open, d.icon.clone(), side)
+        let response = icon_button(ui, open, d.icon.clone(), BUTTON)
             .on_hover_text(crate::i18n::tr(ui.ctx(), d.label));
         #[cfg(test)]
         {
@@ -1151,16 +1165,17 @@ mod tests {
         assert_eq!(shell.current(), Some(Screen::Prefs));
     }
 
-    /// Eight screens of their own names and an action, with the footer.
+    /// The action first, then eight screens of their own names, with the footer.
     fn crowded_shell() -> Shell<Screen> {
         const NAMES: [&str; 8] = ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7"];
-        let screens = NAMES
-            .iter()
-            .map(|&name| Destination::new(Screen::Entries, crate::icons::settings(), name))
-            .collect();
-        Shell::new(screens)
-            .with_actions(vec![Action::new("new", crate::icons::plus(), "new-entry")])
-            .with_footer(prefs())
+        let mut items: Vec<RailItem<Screen>> =
+            vec![Action::new("new", crate::icons::plus(), "new-entry").into()];
+        items.extend(
+            NAMES.iter().map(|&name| {
+                Destination::new(Screen::Entries, crate::icons::settings(), name).into()
+            }),
+        );
+        Shell::from_items(items).with_footer(prefs())
     }
 
     /// `shell` on a `size` screen, with a 12-point foot, and a status bar when `status`.
@@ -1184,17 +1199,41 @@ mod tests {
     }
 
     #[test]
-    fn a_crowded_bar_keeps_the_footer_and_the_foot_on_the_screen() {
+    fn items_and_actions_mix_in_the_apps_order() {
+        let mut shell = crowded_shell();
+        assert_eq!(
+            shell.current(),
+            Some(Screen::Entries),
+            "the first screen, not the action"
+        );
+        crowded(&mut shell, [914.0, 900.0], true);
+        assert_eq!(shell.cell_rects.len(), 9);
+        assert_eq!(
+            shell.cell_rects[0], shell.action_rects[0],
+            "the action on top"
+        );
+        assert!(!shell.footer_in_menu);
+        assert!(shell.footer_rects[0].is_positive());
+        assert_eq!(shell.more_rect, egui::Rect::NOTHING, "no menu when all fit");
+    }
+
+    #[test]
+    fn a_crowded_bar_puts_the_more_button_where_the_footer_was() {
         for width in [320.0, 360.0, 411.0] {
             let mut shell = crowded_shell();
             let foot = crowded(&mut shell, [width, 700.0], false);
-            let (cells, more, footer) = (&shell.cell_rects, shell.more_rect, shell.footer_rects[0]);
+            let (cells, more) = (&shell.cell_rects, shell.more_rect);
             assert!(
                 !cells.is_empty() && cells.len() < 9,
                 "{width}: {}",
                 cells.len()
             );
-            for rect in cells.iter().chain([&more, &footer, &foot]) {
+            assert!(shell.footer_in_menu, "{width}");
+            assert!(
+                shell.footer_rects.is_empty(),
+                "{width}: the footer is in the menu"
+            );
+            for rect in cells.iter().chain([&more, &foot]) {
                 assert!(rect.is_positive(), "{width}: {rect:?}");
                 assert!(
                     rect.left() >= 0.0 && rect.right() <= width,
@@ -1202,46 +1241,80 @@ mod tests {
                 );
             }
             // In order, and none on top of the next.
-            let row: Vec<egui::Rect> = cells.iter().copied().chain([more, footer, foot]).collect();
+            let row: Vec<egui::Rect> = cells.iter().copied().chain([more, foot]).collect();
             for pair in row.windows(2) {
                 assert!(pair[0].right() <= pair[1].left(), "{width}: {pair:?}");
             }
             // Every button keeps its full size, and they line up.
-            for rect in cells.iter().chain([&more, &footer]) {
+            for rect in cells.iter().chain([&more]) {
                 assert_eq!(rect.size(), egui::vec2(BUTTON, BUTTON), "{width}: {rect:?}");
-                assert_eq!(rect.center().y, footer.center().y, "{width}: {rect:?}");
+                assert_eq!(rect.center().y, more.center().y, "{width}: {rect:?}");
             }
         }
     }
 
     #[test]
-    fn a_low_rail_keeps_its_items_clear_of_the_footer() {
+    fn a_low_rail_keeps_its_items_clear_of_the_more_button() {
         // A phone on its side (#29), a short desktop window, one shorter still.
         for (height, status) in [(411.0, true), (411.0, false), (300.0, true), (160.0, false)] {
             let mut shell = crowded_shell();
             let foot = crowded(&mut shell, [914.0, height], status);
-            let (cells, more, footer) = (&shell.cell_rects, shell.more_rect, shell.footer_rects[0]);
+            let (cells, more) = (&shell.cell_rects, shell.more_rect);
             let case = format!("{height} {status}");
             assert!(cells.len() < 9, "{case}: {}", cells.len());
+            assert!(
+                shell.footer_rects.is_empty(),
+                "{case}: the footer is in the menu"
+            );
             assert!(more.is_positive(), "{case}");
             let column: Vec<egui::Rect> = cells.iter().copied().chain([more]).collect();
             for pair in column.windows(2) {
                 assert!(pair[0].bottom() <= pair[1].top(), "{case}: {pair:?}");
             }
-            assert!(more.bottom() <= footer.top(), "{case}: {more:?} {footer:?}");
             if !status {
-                // The foot sits above the footer, at the rail's foot.
-                assert!(more.bottom() <= foot.top(), "{case}: {more:?} {foot:?}");
+                // The foot sits above the More button, at the rail's foot.
+                let last = cells.last().copied().unwrap_or(egui::Rect::NOTHING);
+                assert!(last.bottom() <= foot.top(), "{case}: {last:?} {foot:?}");
+                assert!(foot.bottom() <= more.top(), "{case}: {foot:?} {more:?}");
             }
         }
     }
 
     #[test]
-    fn a_tall_rail_has_room_for_everything() {
-        let mut shell = crowded_shell();
-        crowded(&mut shell, [914.0, 900.0], true);
-        assert_eq!(shell.cell_rects.len(), 9);
-        assert!(shell.more_rect.is_positive());
+    fn at_every_height_the_footer_or_the_more_button_holds_the_end() {
+        let mut both = (false, false);
+        for height in (200..=900).step_by(10) {
+            let height = height as f32;
+            let mut shell = crowded_shell();
+            crowded(&mut shell, [914.0, height], true);
+            let cells = &shell.cell_rects;
+            let end = if shell.footer_in_menu {
+                both.1 = true;
+                assert!(cells.len() < 9, "{height}");
+                assert!(shell.footer_rects.is_empty(), "{height}");
+                shell.more_rect
+            } else {
+                both.0 = true;
+                assert_eq!(cells.len(), 9, "{height}: all fit, or the footer goes");
+                assert_eq!(shell.more_rect, egui::Rect::NOTHING, "{height}");
+                shell.footer_rects[0]
+            };
+            assert!(end.is_positive(), "{height}");
+            for pair in cells
+                .iter()
+                .copied()
+                .chain([end])
+                .collect::<Vec<_>>()
+                .windows(2)
+            {
+                assert!(pair[0].bottom() <= pair[1].top(), "{height}: {pair:?}");
+            }
+        }
+        assert_eq!(
+            both,
+            (true, true),
+            "the sweep crosses from one to the other"
+        );
     }
 
     fn keys(shell: &Shell<Screen>) -> Vec<String> {
@@ -1251,61 +1324,56 @@ mod tests {
     #[test]
     fn the_rail_order_round_trips_and_skips_names_it_does_not_know() {
         let mut shell = crowded_shell();
-        assert_eq!(keys(&shell)[..2], ["s0", "s1"]);
-        assert_eq!(keys(&shell).last().unwrap(), "new");
+        assert_eq!(keys(&shell)[..3], ["new", "s0", "s1"]);
         let order = RailOrder {
-            order: vec!["new".into(), "s3".into(), "gone".into(), "s1".into()],
+            order: vec!["s3".into(), "gone".into(), "new".into(), "s1".into()],
             hidden: vec!["s1".into(), "gone".into()],
         };
         shell.set_rail_order(&order);
-        // The named first, then the rest in the app's order; the action stays after the
-        // screens.
+        // The named first, the action among them, then the rest in the app's order.
         assert_eq!(
             keys(&shell),
-            ["s3", "s1", "s0", "s2", "s4", "s5", "s6", "s7", "new"]
+            ["s3", "new", "s1", "s0", "s2", "s4", "s5", "s6", "s7"]
         );
         assert_eq!(shell.rail_order().hidden, ["s1"]);
         let again = shell.rail_order();
         shell.set_rail_order(&again);
         assert_eq!(shell.rail_order(), again);
+        shell.set_rail_order(&RailOrder::default());
+        assert_eq!(
+            keys(&shell)[..3],
+            ["new", "s0", "s1"],
+            "the default is the app's"
+        );
     }
 
     #[test]
-    fn a_hidden_item_is_left_off_the_rail() {
-        let mut shell = shell().with_rail_order(&RailOrder {
+    fn with_actions_still_puts_them_last() {
+        let shell =
+            shell().with_actions(vec![Action::new("new", crate::icons::plus(), "new-entry")]);
+        assert_eq!(keys(&shell), ["entries", "summary", "new"]);
+    }
+
+    #[test]
+    fn a_hidden_item_sends_the_footer_into_the_menu() {
+        let mut shell = shell().with_footer(prefs()).with_rail_order(&RailOrder {
             order: vec![],
             hidden: vec!["entries".into()],
         });
-        render(SIZES[0], |ui| shell.ui(ui, |ui, _| screen(ui)));
-        assert_eq!(shell.on_rail, [1]);
-        // Open while in the menu alone: the menu's button is marked instead.
-        assert_eq!(shell.current(), Some(Screen::Entries));
+        for size in SIZES {
+            render(size, |ui| shell.ui(ui, |ui, _| screen(ui)));
+            assert_eq!(shell.on_rail, [1], "{size:?}");
+            assert!(shell.footer_in_menu, "{size:?}");
+            assert_eq!(
+                shell.menu_rows(),
+                [Row::Footer(0), Row::Slot(0)],
+                "{size:?}: the footer first"
+            );
+        }
     }
 
-    #[test]
-    fn an_item_moves_among_its_kind_only() {
-        let mut shell = crowded_shell();
-        assert!(shell.move_slot(0, 2, true));
-        assert_eq!(keys(&shell)[..3], ["s1", "s2", "s0"]);
-        assert!(shell.move_slot(2, 0, false));
-        assert_eq!(keys(&shell)[..3], ["s0", "s1", "s2"]);
-        assert!(!shell.move_slot(1, 1, false), "onto itself");
-        assert!(!shell.move_slot(1, 0, true), "already after it");
-        assert!(!shell.move_slot(8, 0, false), "an action among the screens");
-        assert!(!shell.move_slot(7, 8, true), "a screen among the actions");
-    }
-
-    #[test]
-    fn the_menu_opens_a_screen_that_is_not_on_the_rail() {
-        let mut shell = Shell::new(vec![
-            Destination::new(Screen::Entries, crate::icons::settings(), "entries"),
-            Destination::new(Screen::Summary, crate::icons::arrow_left(), "summary"),
-        ])
-        .with_rail_order(&RailOrder {
-            order: vec![],
-            hidden: vec!["summary".into()],
-        });
-        let ctx = egui::Context::default();
+    /// Run `shell` on a 900 × 600 screen in `ctx`; clicking at `at` when given.
+    fn frames(ctx: &egui::Context, shell: &mut Shell<Screen>, at: Option<egui::Pos2>) {
         let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 600.0));
         let frame = |events: Vec<egui::Event>, shell: &mut Shell<Screen>| {
             let input = egui::RawInput {
@@ -1316,26 +1384,67 @@ mod tests {
             let mut output = ctx.run_ui(input, |ui| shell.ui(ui, |ui, _| screen(ui)));
             output.textures_delta.clear();
         };
-        let click = |pos: egui::Pos2, shell: &mut Shell<Screen>| {
-            let button = |pressed| egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed,
-                modifiers: egui::Modifiers::NONE,
-            };
-            frame(vec![egui::Event::PointerMoved(pos)], shell);
-            frame(vec![button(true)], shell);
-            frame(vec![button(false)], shell);
+        let Some(pos) = at else {
             frame(vec![], shell);
+            frame(vec![], shell);
+            return;
         };
-        frame(vec![], &mut shell);
-        frame(vec![], &mut shell);
-        let more = shell.more_rect.center();
-        click(more, &mut shell);
-        assert_eq!(shell.menu_rects.len(), 2, "the menu lists both screens");
-        let summary = shell.menu_rects[1].center();
-        click(summary, &mut shell);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(vec![egui::Event::PointerMoved(pos)], shell);
+        frame(vec![button(true)], shell);
+        frame(vec![button(false)], shell);
+        frame(vec![], shell);
+    }
+
+    #[test]
+    fn the_menu_opens_what_is_off_the_rail() {
+        let mut shell = shell().with_footer(prefs()).with_rail_order(&RailOrder {
+            order: vec![],
+            hidden: vec!["summary".into()],
+        });
+        let ctx = egui::Context::default();
+        frames(&ctx, &mut shell, None);
+        let at = shell.more_rect.center();
+        frames(&ctx, &mut shell, Some(at));
+        assert_eq!(
+            shell.menu_rects.len(),
+            2,
+            "the footer and the hidden screen"
+        );
+        let at = shell.menu_rects[1].center();
+        frames(&ctx, &mut shell, Some(at));
         assert_eq!(shell.current(), Some(Screen::Summary));
+        let at = shell.more_rect.center();
+        frames(&ctx, &mut shell, Some(at));
+        let at = shell.menu_rects[0].center();
+        frames(&ctx, &mut shell, Some(at));
+        assert_eq!(shell.current(), Some(Screen::Prefs));
+    }
+
+    #[test]
+    fn the_shell_lists_its_items_and_takes_the_order_asked_for() {
+        let ctx = egui::Context::default();
+        let mut shell = crowded_shell();
+        frames(&ctx, &mut shell, None);
+        let listed = published(&ctx).unwrap();
+        assert_eq!(listed.len(), 9);
+        assert_eq!(listed[0].key, "new");
+        request(
+            &ctx,
+            RailOrder {
+                order: vec!["s7".into()],
+                hidden: vec!["new".into()],
+            },
+        );
+        frames(&ctx, &mut shell, None);
+        assert_eq!(keys(&shell)[0], "s7");
+        assert_eq!(shell.rail_order().hidden, ["new"]);
+        assert_eq!(published(&ctx).unwrap()[0].key, "s7");
     }
 
     #[cfg(feature = "serde")]
@@ -1356,11 +1465,17 @@ mod tests {
         let ctx = egui::Context::default();
         store::attach(&ctx, file.clone());
         let mut shell = shell();
-        crate::test_support::render_in(&ctx, SIZES[0], |ui| shell.ui(ui, |ui, _| screen(ui)));
+        frames(&ctx, &mut shell, None);
         assert_eq!(shell.rail_order(), saved);
 
-        assert!(shell.move_slot(0, 1, true));
-        shell.order_changed(&ctx);
+        request(
+            &ctx,
+            RailOrder {
+                order: vec!["entries".into(), "summary".into()],
+                hidden: vec![],
+            },
+        );
+        frames(&ctx, &mut shell, None);
         assert_eq!(
             file.load().and_then(|s| s.rail).map(|r| r.order),
             Some(vec!["entries".to_owned(), "summary".to_owned()])

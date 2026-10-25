@@ -44,7 +44,13 @@ corundum-detail-show = Show the detail pane
 corundum-detail-hide = Hide the detail pane
 corundum-detail-close = Close
 
-# The shell's menu at the end of the rail (`Shell`): its button, and its rows' handle and box.
+# The shell's More button (`Shell`), in the footer's place when items are left off the rail.
 corundum-shell-more = More
-corundum-shell-drag = Drag to reorder
-corundum-shell-show = Show outside this menu
+
+# The rail's settings page (`settings::RailPage`): its name, what it does, a row's handle and
+# box, and the way back to the app's order.
+corundum-settings-rail = Navigation
+corundum-settings-rail-intro = Drag the items into the order you use them. Unticked items are in the ⋯ menu, with those the window has no room for.
+corundum-settings-rail-drag = Drag to reorder
+corundum-settings-rail-show = Show as a button
+corundum-settings-rail-reset = Reset to the default order

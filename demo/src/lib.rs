@@ -57,24 +57,22 @@ impl Demo {
         let applied = look::current(ctx).unwrap_or_default();
         // Saved too, when the device had none: the file is there from the first start.
         look::apply(ctx, &applied);
-        let shell = Shell::new(vec![
-            Destination::new(Screen::Overview, icons::info(), "demo-screen-overview"),
-            Destination::new(Screen::Theme, icons::star(), "demo-screen-theme"),
-            Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts"),
-            Destination::new(Screen::Icons, icons::images(), "demo-screen-icons"),
-            Destination::new(Screen::Language, icons::tag(), "demo-screen-language"),
-            Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail"),
+        // The action first, as an app's "new entry" would be.
+        let shell = Shell::from_items(vec![
+            Action::new("count", icons::plus(), "demo-action-count").into(),
+            Destination::new(Screen::Overview, icons::info(), "demo-screen-overview").into(),
+            Destination::new(Screen::Theme, icons::star(), "demo-screen-theme").into(),
+            Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts").into(),
+            Destination::new(Screen::Icons, icons::images(), "demo-screen-icons").into(),
+            Destination::new(Screen::Language, icons::tag(), "demo-screen-language").into(),
+            Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail").into(),
             Destination::new(
                 Screen::Platform,
                 icons::monitor_smartphone(),
                 "demo-screen-platform",
-            ),
+            )
+            .into(),
         ])
-        .with_actions(vec![Action::new(
-            "count",
-            icons::plus(),
-            "demo-action-count",
-        )])
         .with_footer(vec![Destination::new(
             Screen::Settings,
             icons::settings(),

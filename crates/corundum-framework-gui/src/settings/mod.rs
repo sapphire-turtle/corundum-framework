@@ -8,18 +8,21 @@
 //!
 //! [`scope_tabs`] is the row of tabs a page shows when a setting can be kept in more than
 //! one place — on this device or for the whole workgroup, on the client or on the server.
-//! [`AppearancePage`] is the theme and the language over those tabs.
+//! [`AppearancePage`] is the theme and the language over those tabs. [`RailPage`] is the
+//! order of the shell's rail, and which items it shows.
 //!
 //! Nothing here stores a setting or checks one: the pages show the host's values and give
 //! back what the person changed, and the host keeps them as it keeps the rest of its
-//! settings.
+//! settings. [`RailPage`] alone hands its change to the shell at once.
 
 mod appearance;
 mod layout;
+mod rail;
 mod scope;
 
 pub use appearance::{AppearanceChange, AppearanceCtx, AppearancePage, AppearanceScope};
 pub use layout::{ListItem, SettingsLayout};
+pub use rail::RailPage;
 pub use scope::{ScopeTab, scope_tabs};
 
 /// A page of [`Settings`].

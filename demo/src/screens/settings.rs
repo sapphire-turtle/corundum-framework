@@ -8,7 +8,7 @@
 use corundum_framework::gui::egui;
 use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::{
-    AppearanceCtx, AppearancePage, AppearanceScope, ScopeTab, Settings, SettingsGroup,
+    AppearanceCtx, AppearancePage, AppearanceScope, RailPage, ScopeTab, Settings, SettingsGroup,
     SettingsSection,
 };
 use corundum_framework::gui::store;
@@ -18,16 +18,19 @@ use corundum_framework::gui::tr;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct Device;
 
-/// The demo's Settings: its own page, General (Appearance), and About.
+/// The demo's Settings: its own page, General (Appearance, Navigation), and About.
 pub(crate) fn settings() -> Settings {
     Settings::new()
         .with_group(
             SettingsGroup::new(vec![Box::new(Sample::default())]).titled("demo-settings-demo"),
         )
         .with_group(
-            SettingsGroup::new(vec![Box::new(Appearance {
-                page: AppearancePage::new(),
-            })])
+            SettingsGroup::new(vec![
+                Box::new(Appearance {
+                    page: AppearancePage::new(),
+                }),
+                Box::new(RailPage::new()),
+            ])
             .titled("demo-settings-general"),
         )
         .with_group(SettingsGroup::new(vec![Box::new(About)]))

@@ -21,8 +21,10 @@ desktops and on phones.
   phone), with a footer for Settings and a slot of the app's own; wide, a status bar along
   the bottom, the app's from the left (a log line, the services' state, the track
   playing), its slot and the detail pane's toggle at the right end. Screens and actions
-  that do not fit on the rail or the bar go into a "More" menu at its end, where they can
-  be reordered and chosen to show on the rail.
+  mix on the rail in any order (a "new entry" action first, say). When some are left off
+  it — no room, or hidden — a "More" button takes the footer's place, its menu holding
+  the footer first, then those left off. A settings page (`settings::RailPage`) orders
+  them and chooses which the rail shows.
 - **Theme**: light and dark, three contrast levels and an accent colour, built in OKLCH;
   a settings widget and a tint picker (palette, hue/chroma disk, preview) to choose them.
 - **Fonts**: finds a CJK fallback font on the system (CoreText on iOS, the system font
