@@ -26,6 +26,11 @@ desktops and on phones.
 - **Icons**: a set of [Lucide](https://lucide.dev) icons and the SVG loader that draws them.
 - **Translations**: every string looked up by id through [Fluent](https://projectfluent.org)
   in the user's language (`tr!`), with English and Japanese bundled and a language picker.
+- **Settings**: the Settings screen, a list of pages beside the open one, into which the app
+  and the frameworks under it put their pages; tabs for the scopes a setting can be kept
+  in (a device and its workgroup, a client and its server); and an Appearance page, the
+  theme and the language over those tabs. The pages store nothing: the app keeps the
+  values.
 - **Window**: `window::run` opens a desktop window on wgpu the same way for every app;
   `window::run_android` does the same on an Android phone (GameActivity).
 

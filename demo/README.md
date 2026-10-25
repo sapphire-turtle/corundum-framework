@@ -12,7 +12,7 @@ rest, and never published.
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
-| Settings | An app's Settings screen: the theme's and the language's settings |
+| Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 
 The demo logs the window's rects and the safe area whenever they change (`corundum demo:
 window`), so a CI log shows what the insets did.

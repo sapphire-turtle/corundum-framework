@@ -83,4 +83,21 @@ demo-platform-cache = キャッシュ：{ $path }
 demo-platform-none = なし
 demo-platform-refresh = 読み直す
 
-demo-settings-intro = アプリの設定画面の例。テーマと言語の設定を並べ、アプリが保存します。
+# 設定画面：corundum のもので、デモのページを差し込んだもの。
+demo-settings-demo = デモ
+demo-settings-sample = サンプル
+demo-settings-sample-intro = アプリ独自のページです。変更は「適用」で反映され、それまでは一覧の項目に印が付きます。
+demo-settings-sample-name = 名前
+demo-settings-sample-saved = 保存済み：{ $name }
+demo-settings-apply = 適用
+demo-settings-revert = 元に戻す
+demo-settings-general = 一般
+# 外観を保存する場所：全デバイス共通のサーバーと、このデバイス独自のもの。
+demo-settings-scope-server = サーバー
+demo-settings-scope-device = このデバイス
+demo-settings-from-server = このデバイスはサーバーの設定を使っています。
+demo-settings-own = このデバイスでは個別に設定しています。
+demo-settings-use-server = サーバーの設定を使う
+demo-settings-device-wins = このデバイスでは、ここより個別の設定が優先されます。
+demo-settings-about = このアプリについて
+demo-settings-version = バージョン { $version }

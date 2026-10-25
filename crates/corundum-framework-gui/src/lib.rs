@@ -6,7 +6,9 @@
 //! CJK fallback font on the system; [`icons`] is a set of Lucide icons and the SVG loader
 //! that draws them; [`theme`] is the colours — light and dark, the contrast, the accent;
 //! [`i18n`] is the translations — every string looked up by id in the user's language,
-//! through [`tr!`].
+//! through [`tr!`]. [`settings`] is the Settings screen: the pages an app and the
+//! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
+//! theme and the language over them.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -28,6 +30,7 @@ pub mod i18n;
 pub mod icons;
 pub mod logcat;
 pub mod platform;
+pub mod settings;
 mod shell;
 pub mod theme;
 #[cfg(feature = "eframe")]

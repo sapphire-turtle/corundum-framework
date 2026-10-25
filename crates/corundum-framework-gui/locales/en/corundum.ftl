@@ -32,3 +32,8 @@ corundum-theme-swatch-purple = Purple
 corundum-theme-link = Link
 corundum-theme-label = Label
 corundum-theme-selected = Selected
+
+# The Settings screen (`settings`): the way back to its list on a phone, and the Appearance
+# page's heading.
+corundum-settings = Settings
+corundum-settings-appearance = Appearance
