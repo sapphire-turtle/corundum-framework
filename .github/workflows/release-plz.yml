@@ -1,0 +1,26 @@
+name: Release-plz
+
+# The libraries' releases: on every push to main, release-plz publishes what a merged
+# release PR bumped, then opens or updates the next release PR (RELEASING.md).
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Keep the release command and the release PR from racing on the same branch.
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-plz:
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: sapphire-turtle/sapphire-framework/.github/workflows/shared-release-plz.yml@main
+    with:
+      # eframe's windowing needs these to build on Linux, as in ci.yml: publishing builds
+      # each crate.
+      linux-packages: libwayland-dev libxkbcommon-dev
+    secrets: inherit

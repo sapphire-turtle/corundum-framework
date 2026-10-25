@@ -1,0 +1,36 @@
+[workspace]
+# The libraries are published to crates.io without tags or GitHub releases, as the
+# sapphire-turtle libraries are (sapphire-framework's ci/README.md).
+#
+# CHANGELOG.md is written by hand, under "Unreleased", as each change lands; the release
+# PR moves that section under the new version (RELEASING.md). release-plz writes none.
+changelog_update = false
+dependencies_update = true
+publish = true
+release = true
+git_release_enable = false
+git_tag_enable = false
+# Publish only when a release PR is merged, not on every push to main that carries an
+# unpublished version.
+release_always = false
+pr_branch_prefix = "release-plz/"
+pr_labels = ["release"]
+
+# The three move together: the facade re-exports the other two, and the gui crate is built
+# on the platform one.
+[[package]]
+name = "corundum-framework-platform"
+version_group = "corundum"
+
+[[package]]
+name = "corundum-framework-gui"
+version_group = "corundum"
+
+[[package]]
+name = "corundum-framework"
+version_group = "corundum"
+
+# The demo app is not released (`publish = false`).
+[[package]]
+name = "corundum-framework-demo"
+release = false
