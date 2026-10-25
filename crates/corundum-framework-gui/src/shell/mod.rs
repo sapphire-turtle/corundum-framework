@@ -380,8 +380,8 @@ impl<D: Copy + PartialEq> Shell<D> {
     /// As [`ui_with_foot`](Self::ui_with_foot), with a status bar along the window's
     /// bottom when wide. `status` fills it from the left — a log's last line, the services'
     /// state, the track playing; the bar's right end holds `foot` (there rather than at the
-    /// rail's foot), then the [detail pane](crate::detail)'s toggle when the open screen has
-    /// one. Narrow, as on a phone, there is no status bar: `foot` stays on the bottom bar,
+    /// rail's foot), then the [detail pane](crate::detail)'s toggle when a pane is drawn —
+    /// on every screen, for a pane the app holds around them all. Narrow, as on a phone, there is no status bar: `foot` stays on the bottom bar,
     /// and `status` is not called.
     pub fn ui_with_status(
         &mut self,

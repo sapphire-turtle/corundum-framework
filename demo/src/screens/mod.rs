@@ -27,7 +27,7 @@ pub enum Screen {
     Icons,
     /// The language picker, switched in place, and the demo's own messages.
     Language,
-    /// The detail pane: albums, and the picked one's tracks.
+    /// The side pane: albums, and the picked one's tracks.
     Detail,
     /// The clipboard, the insets and the app's directories.
     Platform,
@@ -68,7 +68,7 @@ pub(crate) struct State {
     selected: bool,
     text: String,
     icon_style: icons::Style,
-    detail: detail::State,
+    pub(crate) detail: detail::State,
     platform: platform::State,
 }
 
@@ -91,7 +91,7 @@ impl State {
     }
 }
 
-/// Draw `screen` into what the shell left of `ui`.
+/// Draw `screen` into what the shell and the side pane left of `ui`, as its root.
 pub(crate) fn ui(
     ui: &mut egui::Ui,
     screen: Screen,
@@ -119,6 +119,46 @@ pub(crate) fn ui(
                 Screen::Settings | Screen::Detail => unreachable!("drawn above"),
             });
     });
+}
+
+/// The app's side pane: the note being written, else the open screen's item (the Detail
+/// screen's album), else a word that there is none. A note saved is put in `saved`.
+pub(crate) fn side_ui(
+    ui: &mut egui::Ui,
+    screen: Screen,
+    picked: usize,
+    draft: &mut Option<String>,
+    saved: &mut Option<String>,
+) {
+    if let Some(text) = draft {
+        ui.heading(i18n::tr(ui.ctx(), "demo-note-new"));
+        ui.add(egui::TextEdit::multiline(text).desired_width(f32::INFINITY));
+        let (save, discard) = ui
+            .horizontal(|ui| {
+                let save = ui
+                    .add_enabled(
+                        !text.trim().is_empty(),
+                        egui::Button::new(i18n::tr(ui.ctx(), "demo-note-save")),
+                    )
+                    .clicked();
+                let discard = ui.button(i18n::tr(ui.ctx(), "demo-note-discard")).clicked();
+                (save, discard)
+            })
+            .inner;
+        if save {
+            *saved = Some(text.trim().to_owned());
+        }
+        if save || discard {
+            *draft = None;
+        }
+        return;
+    }
+    match screen {
+        Screen::Detail => detail::side_ui(ui, picked),
+        _ => {
+            ui.weak(i18n::tr(ui.ctx(), "demo-pane-empty"));
+        }
+    }
 }
 
 /// A screen's heading: its name, as the rail has it.

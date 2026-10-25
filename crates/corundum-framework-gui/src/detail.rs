@@ -1,6 +1,8 @@
-//! [`DetailPane`]: what the main view's item holds — the playlist playing, the journal open —
-//! beside it, over it, or in its place — and [`toggle_ui`], the button turning its column on
-//! and off, which the [`Shell`](crate::Shell)'s status bar holds.
+//! [`DetailPane`]: a right column beside the screens — what the main view's item holds (the
+//! playlist playing, the journal open), or a new entry begun from the rail's action — over
+//! the main view when there is no room for it, or in its place on a phone; and
+//! [`toggle_ui`], the button turning its column on and off, which the
+//! [`Shell`](crate::Shell)'s status bar holds.
 
 use crate::{COMPACT_WIDTH, icons, tr};
 
@@ -52,8 +54,12 @@ enum Shown {
     Screen,
 }
 
-/// The main view and the detail of its item, laid out for the window. Hold one per screen
-/// that has a detail; call [`ui`](Self::ui) every frame it is shown.
+/// The main view and the detail beside it, laid out for the window. Hold one for the app
+/// and draw it around every screen, inside the shell's `content`: the column and its toggle
+/// then stay whatever screen is open, and a new entry begun from the rail's action shows
+/// beside the screen the person is on. What the detail shows is the app's — the draft being
+/// written, else the open screen's item, else a word that there is none. (A pane held by
+/// one screen alone is drawn, and toggled, on that screen only.)
 ///
 /// - **Wide, with the column on**: the detail is always in a right column beside the main
 ///   view, its width dragged at its edge. [`toggle_ui`] — at the right end of the shell's
@@ -124,8 +130,11 @@ impl DetailPane {
         self.open
     }
 
-    /// Render into `ui`, as the root of what the shell leaves of it: `main` draws the main
-    /// view and `detail` the detail, each into a panel of its own (no panels of theirs).
+    /// Render into `ui`, as the root of what the shell leaves of it. `main` draws the main
+    /// view into what the column leaves, as it would at the root — its own panels, then a
+    /// `CentralPanel` — so a screen draws the same inside the pane as without it. `detail`
+    /// draws the detail into the column, the card or the phone's screen (no panels of its
+    /// own).
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
@@ -158,7 +167,7 @@ impl DetailPane {
                 });
             self.set_shown(true, false);
         }
-        egui::CentralPanel::default().show(ui, main);
+        main(ui);
         if let Some(detail) = detail {
             self.set_shown(false, self.open);
             if self.open {
@@ -178,11 +187,11 @@ impl DetailPane {
         {
             self.shown = if self.open { Shown::Screen } else { Shown::Not };
         }
+        if !self.open {
+            main(ui);
+            return;
+        }
         egui::CentralPanel::default().show(ui, |ui| {
-            if !self.open {
-                main(ui);
-                return;
-            }
             let back = icons::image(ui, icons::arrow_left(), 14.0);
             if ui
                 .add(egui::Button::image_and_text(
@@ -311,6 +320,35 @@ mod tests {
         let mut pane = DetailPane::new("t");
         assert_eq!(drawn(&mut pane, WIDE), (true, true));
         assert_eq!(pane.shown, Shown::Column);
+    }
+
+    #[test]
+    fn a_main_view_with_its_own_panels_keeps_clear_of_the_column() {
+        let ctx = egui::Context::default();
+        let mut pane = DetailPane::new("t");
+        let (mut list, mut page, mut column) = (
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+        );
+        render_in(&ctx, WIDE, |ui| {
+            pane.ui(
+                ui,
+                |ui| {
+                    list = egui::Panel::left("t_list")
+                        .show(ui, |ui| ui.label("list"))
+                        .response
+                        .rect;
+                    page = egui::CentralPanel::default()
+                        .show(ui, |ui| ui.label("page"))
+                        .response
+                        .rect;
+                },
+                |ui| column = ui.max_rect(),
+            )
+        });
+        assert!(list.right() <= page.left(), "{list:?} {page:?}");
+        assert!(page.right() <= column.left(), "{page:?} {column:?}");
     }
 
     #[test]

@@ -12,8 +12,8 @@ demo-screen-language = Language
 demo-screen-detail = Detail
 demo-screen-platform = Platform
 demo-screen-settings = Settings
-# The rail's action: counts its clicks on the Overview.
-demo-action-count = Count a click
+# The rail's action: a new note, written in the side pane beside whatever screen is open.
+demo-action-new = New note
 # The foot slot's dot, hovered.
 demo-foot-online = Online (click to go offline)
 demo-foot-offline = Offline (click to go online)
@@ -106,14 +106,21 @@ demo-settings-look-memory = Kept while the demo runs: this platform gives it no 
 demo-settings-about = About
 demo-settings-version = Version { $version }
 
-# The Detail screen: albums, and the picked one's tracks in the detail pane.
-demo-detail-intro = Pick an album to see its tracks. Wide, they are in the right column, which the button at the right end of the status bar hides; with it hidden, or on a phone, picking an album opens them.
+# The Detail screen: albums, and the picked one's tracks in the side pane.
+demo-detail-intro = Pick an album to see its tracks in the side pane. Wide, the pane is a right column beside every screen, which the button at the right end of the status bar hides; with it hidden, or on a phone, picking an album opens it.
 demo-detail-tracks = { $count ->
     [one] { $count } track
    *[other] { $count } tracks
 }
 
+# The side pane, app-wide: a note being written, else the open screen's item, else nothing.
+demo-pane-empty = Nothing to show here. Pick an album on the Detail screen, or start a note with +.
+demo-note-new = New note
+demo-note-save = Save
+demo-note-discard = Discard
+
 # The status bar's line: the last thing that happened.
 demo-status-ready = Ready
-demo-status-counted = Counted to { $count }
+demo-status-writing = Writing a new note
+demo-status-saved = Saved the note “{ $note }”
 demo-status-picked = Picked { $album }

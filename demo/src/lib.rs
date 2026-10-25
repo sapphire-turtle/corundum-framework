@@ -6,6 +6,7 @@
 
 use std::sync::OnceLock;
 
+use corundum_framework::gui::detail::DetailPane;
 use corundum_framework::gui::i18n::{self, LanguageSettings, Resources};
 use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::Settings;
@@ -33,10 +34,14 @@ pub const APP_NAME: &str = "corundum-framework-demo";
 /// system has none, unset when the app did not start through [`run`].
 static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
 
-/// The app: the shell around the screens, and the look it keeps on the device. The shell's
-/// rail keeps its order there too, by itself.
+/// The app: the shell around the screens, the side pane beside them all, and the look it
+/// keeps on the device. The shell's rail keeps its order there too, by itself.
 pub struct Demo {
     shell: Shell<Screen>,
+    /// The side pane, the app's rather than a screen's: beside whatever screen is open.
+    pane: DetailPane,
+    /// The note the rail's action began, written in the side pane.
+    draft: Option<String>,
     settings: Settings,
     /// The theme and the language the Theme and Language screens edit.
     theme: ThemeSettings,
@@ -59,7 +64,7 @@ impl Demo {
         look::apply(ctx, &applied);
         // The action first, as an app's "new entry" would be.
         let shell = Shell::from_items(vec![
-            Action::new("count", icons::plus(), "demo-action-count").into(),
+            Action::new("new-note", icons::plus(), "demo-action-new").into(),
             Destination::new(Screen::Overview, icons::info(), "demo-screen-overview").into(),
             Destination::new(Screen::Theme, icons::star(), "demo-screen-theme").into(),
             Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts").into(),
@@ -80,6 +85,8 @@ impl Demo {
         )]);
         Demo {
             shell,
+            pane: DetailPane::new("demo_side"),
+            draft: None,
             settings: screens::settings::settings(),
             theme: applied.theme.clone(),
             language: applied.language.clone(),
@@ -104,6 +111,8 @@ impl Demo {
         self.log_rects(ui);
         let Demo {
             shell,
+            pane,
+            draft,
             settings,
             theme,
             language,
@@ -114,14 +123,35 @@ impl Demo {
         // the Overview, and a line the screen logs on the status bar, next frame.
         let mut online = state.online;
         let log = state.log.clone();
+        let had_draft = draft.is_some();
+        let mut saved = None;
         shell.ui_with_status(
             ui,
             |ui| foot_ui(ui, &mut online),
             |ui| {
                 ui.weak(log.text(ui.ctx()));
             },
-            |ui, screen| screens::ui(ui, screen, state, settings, theme, language),
+            |ui, screen| {
+                // Last frame's pick: the pane is drawn beside the screen, not after it.
+                let picked = state.detail.picked;
+                pane.ui(
+                    ui,
+                    |ui| screens::ui(ui, screen, state, settings, theme, language),
+                    |ui| screens::side_ui(ui, screen, picked, draft, &mut saved),
+                );
+            },
         );
+        if std::mem::take(&mut state.detail.opened) {
+            pane.open();
+        }
+        // Saved or discarded: the card or the phone's screen it was written on closes.
+        if had_draft && draft.is_none() {
+            pane.close();
+            ui.ctx().request_repaint();
+        }
+        if let Some(note) = saved {
+            state.log = i18n::Message::new("demo-status-saved").arg("note", note);
+        }
         if log != state.log {
             ui.ctx().request_repaint();
         }
@@ -129,9 +159,11 @@ impl Demo {
             state.online = online;
             ui.ctx().request_repaint();
         }
-        if shell.take_action() == Some("count") {
+        if shell.take_action() == Some("new-note") {
             state.clicks += 1;
-            state.log = i18n::Message::new("demo-status-counted").arg("count", state.clicks);
+            draft.get_or_insert_with(String::new);
+            pane.open();
+            state.log = i18n::Message::new("demo-status-writing");
             ui.ctx().request_repaint();
         }
         if let Some(screen) = state.open.take() {

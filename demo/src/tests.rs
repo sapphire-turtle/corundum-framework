@@ -32,6 +32,25 @@ fn every_screen_draws_wide_and_narrow() {
 }
 
 #[test]
+fn a_note_stays_open_beside_every_screen() {
+    for size in [[1000.0, 700.0], [390.0, 844.0]] {
+        let ctx = egui::Context::default();
+        let mut app = Demo::new(&ctx);
+        app.draft = Some("groceries".into());
+        app.pane.open();
+        for screen in Screen::ALL {
+            app.open(screen);
+            render(&ctx, size, &mut app);
+            assert_eq!(
+                app.draft.as_deref(),
+                Some("groceries"),
+                "{screen:?} at {size:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn the_screens_draw_in_japanese() {
     let ctx = egui::Context::default();
     let mut app = Demo::new(&ctx);

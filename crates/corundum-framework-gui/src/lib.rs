@@ -8,8 +8,8 @@
 //! [`i18n`] is the translations — every string looked up by id in the user's language,
 //! through [`tr!`]. [`settings`] is the Settings screen: the pages an app and the
 //! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
-//! theme and the language over them. [`detail`] is a main view's detail pane: a right
-//! column beside it, a card over it, or on a phone the screen in its place; its column's
+//! theme and the language over them. [`detail`] is the app's side pane: a right column
+//! beside every screen, a card over it, or on a phone the screen in its place; its column's
 //! toggle sits at the right end of the shell's status bar. With the `serde` feature,
 //! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
 //! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
