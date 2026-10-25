@@ -10,104 +10,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.1.0](https://github.com/sapphire-turtle/corundum-framework/releases/tag/v0.1.0) - 2026-10-25
 
-### Added
-
-- *(corundum-framework-gui)* a detail pane, and a status bar to toggle it from
-- *(corundum-framework-gui)* the Settings screen, moved from sapphire-framework-gui
-- add the demo app corundum-framework-demo
-- add the corundum-framework facade crate
-- *(corundum-framework-platform)* a platform crate without egui
-
-### Fixed
-
-- *(corundum-framework-platform)* use the sandbox's roots as a phone app's own dirs
-- *(corundum-framework)* re-export eframe with the android feature too
-
-### Other
-
-- *(corundum-framework)* match the default feature by line, for CRLF checkouts
-- stand alone as sapphire-turtle/corundum-framework
-
-`corundum-framework-gui` moved out of sapphire-framework, where it was `corundum-gui`
+The first release. `corundum-framework-gui` moved out of sapphire-framework, where it was
+`corundum-gui`
 ([`crates/corundum-gui`](https://github.com/sapphire-turtle/sapphire-framework/tree/e716455a49daeaf9ab25e666f6cb99cf5e858f02/crates/corundum-gui)),
 into this repository, with its history kept. Issue and pull request numbers in that
-history refer to sapphire-framework. Nothing is published yet; 0.1.0 will be the first
-release.
-
-### Changed
-
-- `corundum-framework-gui`: renamed from `corundum-gui` (lib `corundum_framework_gui`);
-  its translations' bundle name is `corundum-framework-gui`. Message ids keep their
-  `corundum-` prefix.
-- `corundum-framework-gui`: the system's languages (`i18n::system_languages`, re-exported)
-  and the Android clipboard and insets (`platform`) are read through
-  `corundum-framework-platform`; the gui crate no longer depends on jni, ndk-context or
-  sys-locale itself. `platform::clipboard_text` now reads the clipboard on Android without
-  the `android` feature too.
-- `corundum-framework-gui`: egui, eframe and egui_extras 0.37 (were 0.36). Apps must use
-  egui 0.37 as well. On iOS, eframe is built without its `wayland` feature.
+history refer to sapphire-framework; those below are this repository's.
 
 ### Added
-
-- `corundum-framework` (#10), the facade over the crates: `platform` (default) and `gui`
-  re-export them as modules; `eframe`, `android` and `serde` pass through to the gui crate.
-  `eframe`, and `android` (which brings `eframe`), re-export eframe as `corundum_framework::eframe`.
-  The default leaves egui out, as sapphire-framework's facade leaves out its gui.
-- `corundum-framework-platform` (#9), a crate without egui for what an app asks of the OS:
-  `dirs` (config, data and cache roots, the `dirs` crate's on the desktops and the
-  sandbox's on iOS and Android, and an app's own `AppDirs` under them: `<root>/<app
-  name>` on the desktops, the sandbox's roots themselves on a phone), `locale`
-  (`system_languages`, moved from the gui crate), `clipboard` and `insets` (Android, moved
-  from the gui crate's `platform`), and `android` (`with_env`, the application context and
-  the window's activity, for an app's own JNI calls).
-
-- `icons`: Lucide icons for media apps such as asteria (#6): `picture` (Lucide's `image`),
-  `images`, `music`, `list_music`, `smartphone`, `monitor_smartphone`, `play`, `pause`,
-  `skip_back`, `skip_forward`, `volume_2`, `volume_x`, `star`, `tag`, `search`,
-  `clipboard_copy`, `upload`, `download` and `cloud_off`.
-- `icons`: icons in theme colours (#12). `image_as` draws in a `Tone` of a `Swatch`,
-  `image_in` and `paint` in a given colour, and `button` makes an icon button whose icon
-  takes the colour of its state: stronger when hovered, the accent when selected, faded
-  when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
-  accent.
-- `corundum-framework-demo` (#7, not published), in `demo/`: an app showing the shell, the
-  theme, the fonts, the icons, the translations and the platform calls, for the desktops
-  (`cargo run -p corundum-framework-demo`), the iOS simulator (an XcodeGen project) and
-  the Android emulator (a Gradle project, GameActivity). Mobile CI builds it, starts it on
-  the simulator and the emulator, and uploads a screenshot.
-- `settings`: the Settings screen, moved from sapphire-framework-gui without its storage.
-  `Settings` holds the pages (`SettingsSection`) an app and the frameworks under it put
-  in, by `SettingsGroup`, in a list beside the open page (narrow, one at a time under a
-  way back); `SettingsLayout` is that layout alone, for a host that gives the list every
-  frame. `scope_tabs` draws a tab per scope a setting can be kept in (`ScopeTab`, over
-  the host's own scope type), and `AppearancePage` the theme and the language over them,
-  giving back what changed (`AppearanceChange`) for the host to store. The demo's
-  Settings screen is one, with a server's and a device's scope.
-- `detail::DetailPane`: a main view and the detail of its item. Wide, the detail is in
-  a right column (dragged wider or narrower) that `detail::toggle_ui` turns off and on;
-  with it off, or no room for it, an opened detail is a card over the middle of the
-  screen, closed by `×`, `Esc` or a click outside; on a phone it takes the main view's
-  place under a way back. The `panel_right` icon is new for the toggle. The demo's
-  Detail screen shows albums and their tracks in it.
-- `Shell::ui_with_status`: wide, a status bar along the window's bottom. The app fills it
-  from the left (a log line, the services' state, the track playing); its right end holds
-  the foot slot, moved there from the rail's foot, and the detail pane's toggle when the
-  open screen has one. Narrow, there is no status bar and the foot stays on the bottom
-  bar. The demo logs its last event there.
-
-### Fixed
-
-- `Shell`: a crowded bottom bar keeps the footer and the foot on the screen (#21). They
-  keep the width they need at the bar's end; the screens and the actions share the rest,
-  their buttons narrowing (a smaller icon, then less padding) when the cells do.
-- `Shell`: keeps clear of egui's safe area (the status bar, the notch and the home
-  indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
-  bottom bar's fill runs on under the home indicator. A margin the app already keeps is not
-  added again, so apps can drop their own.
-- `window::run` on iOS: the picture is no longer stretched taller with its bottom (the
-  Shell's bar) cut off (#20). eframe 0.37 made the wgpu surface the size of the safe area
-  but laid egui out over the whole screen; the window now makes the surface the whole
-  screen, and gives egui the safe area itself.
 
 `corundum-framework-gui`, as it came from sapphire-framework:
 
@@ -130,16 +39,91 @@ release.
   logcat, the clipboard and the window insets.
 - Feature `serde`: `Serialize` / `Deserialize` on the theme and language settings.
 
+`corundum-framework-gui`, new here:
+
+- `icons`: Lucide icons for media apps such as asteria (#6): `picture` (Lucide's `image`),
+  `images`, `music`, `list_music`, `smartphone`, `monitor_smartphone`, `play`, `pause`,
+  `skip_back`, `skip_forward`, `volume_2`, `volume_x`, `star`, `tag`, `search`,
+  `clipboard_copy`, `upload`, `download`, `cloud_off` and `panel_right`.
+- `icons`: icons in theme colours (#12). `image_as` draws in a `Tone` of a `Swatch`,
+  `image_in` and `paint` in a given colour, and `button` makes an icon button whose icon
+  takes the colour of its state: stronger when hovered, the accent when selected, faded
+  when disabled. `Shell`'s rail and bottom bar use it, so the open screen's icon is in the
+  accent.
+- `settings` (#27): the Settings screen, moved from sapphire-framework-gui without its
+  storage. `Settings` holds the pages (`SettingsSection`) an app and the frameworks under
+  it put in, by `SettingsGroup`, in a list beside the open page (narrow, one at a time
+  under a way back); `SettingsLayout` is that layout alone, for a host that gives the list
+  every frame. `scope_tabs` draws a tab per scope a setting can be kept in (`ScopeTab`,
+  over the host's own scope type), and `AppearancePage` the theme and the language over
+  them, giving back what changed (`AppearanceChange`) for the host to store.
+- `detail::DetailPane` (#28): a main view and the detail of its item. Wide, the detail is
+  in a right column (dragged wider or narrower) that `detail::toggle_ui` turns off and on;
+  with it off, or no room for it, an opened detail is a card over the middle of the
+  screen, closed by `×`, `Esc` or a click outside; on a phone it takes the main view's
+  place under a way back.
+- `Shell::ui_with_status` (#28): wide, a status bar along the window's bottom. The app
+  fills it from the left (a log line, the services' state, the track playing); its right
+  end holds the foot slot, moved there from the rail's foot, and the detail pane's toggle
+  when the open screen has one. Narrow, there is no status bar and the foot stays on the
+  bottom bar.
+
+The other crates:
+
+- `corundum-framework-platform` (#9), a crate without egui for what an app asks of the OS:
+  `dirs` (config, data and cache roots, the `dirs` crate's on the desktops and the
+  sandbox's on iOS and Android, and an app's own `AppDirs` under them: `<root>/<app
+  name>` on the desktops, the sandbox's roots themselves on a phone (#26)), `locale`
+  (`system_languages`, moved from the gui crate), `clipboard` and `insets` (Android, moved
+  from the gui crate's `platform`), and `android` (`with_env`, the application context and
+  the window's activity, for an app's own JNI calls).
+- `corundum-framework` (#10), the facade over the crates: `platform` (default) and `gui`
+  re-export them as modules; `eframe`, `android` and `serde` pass through to the gui crate.
+  `eframe`, and `android` (which brings `eframe`), re-export eframe as
+  `corundum_framework::eframe` (#22). The default leaves egui out, as sapphire-framework's
+  facade leaves out its gui.
+- `corundum-framework-demo` (#7, not published), in `demo/`: an app showing the shell, the
+  theme, the fonts, the icons, the translations, the platform calls, the Settings screen
+  and the detail pane, for the desktops (`cargo run -p corundum-framework-demo`), the iOS
+  simulator (an XcodeGen project) and the Android emulator (a Gradle project,
+  GameActivity). Mobile CI builds it, starts it on the simulator and the emulator, and
+  uploads a screenshot.
+
+### Changed
+
+From `corundum-gui` in sapphire-framework:
+
+- `corundum-framework-gui`: renamed from `corundum-gui` (lib `corundum_framework_gui`);
+  its translations' bundle name is `corundum-framework-gui`. Message ids keep their
+  `corundum-` prefix.
+- `corundum-framework-gui`: the system's languages (`i18n::system_languages`, re-exported)
+  and the Android clipboard and insets (`platform`) are read through
+  `corundum-framework-platform`; the gui crate no longer depends on jni, ndk-context or
+  sys-locale itself. `platform::clipboard_text` now reads the clipboard on Android without
+  the `android` feature too.
+- `corundum-framework-gui`: egui, eframe and egui_extras 0.37 (were 0.36). Apps must use
+  egui 0.37 as well. On iOS, eframe is built without its `wayland` feature.
+
 ### Fixed
 
-- `corundum-framework-gui`: `gpu::wgpu_options` asks for wgpu's default limits only as far
-  as the adapter has them. The iOS simulator's GPU falls short of the defaults, and the
-  window failed to open there.
-- `corundum-framework-gui`: on Android, `gpu::wgpu_options` leaves out wgpu's debug labels
-  in a debug build. The emulator's Vulkan driver crashed the app when wgpu named its
-  objects.
-- `corundum-framework-gui`: `window::run_android` reads the keyboard's text only while a
-  field has focus. android-activity 0.6 slices that text from a null pointer until it is
-  set (#19), and a debug build aborted on its first frame. Its docs also say to build
-  android-activity without debug assertions in a debug build, as this workspace does,
-  until #19 is fixed upstream.
+- `Shell`: a crowded bottom bar keeps the footer and the foot on the screen (#21). They
+  keep the width they need at the bar's end; the screens and the actions share the rest,
+  their buttons narrowing (a smaller icon, then less padding) when the cells do.
+- `Shell`: keeps clear of egui's safe area (the status bar, the notch and the home
+  indicator on iOS) (#5). The rail, the bar's buttons and the screens stay inside it; the
+  bottom bar's fill runs on under the home indicator. A margin the app already keeps is not
+  added again, so apps can drop their own.
+- `window::run` on iOS: the picture is no longer stretched taller with its bottom (the
+  Shell's bar) cut off (#20). eframe 0.37 made the wgpu surface the size of the safe area
+  but laid egui out over the whole screen; the window now makes the surface the whole
+  screen, and gives egui the safe area itself.
+- `gpu::wgpu_options` asks for wgpu's default limits only as far as the adapter has them.
+  The iOS simulator's GPU falls short of the defaults, and the window failed to open
+  there.
+- On Android, `gpu::wgpu_options` leaves out wgpu's debug labels in a debug build. The
+  emulator's Vulkan driver crashed the app when wgpu named its objects.
+- `window::run_android` reads the keyboard's text only while a field has focus.
+  android-activity 0.6 slices that text from a null pointer until it is set (#19), and a
+  debug build aborted on its first frame. Its docs also say to build android-activity
+  without debug assertions in a debug build, as this workspace does, until #19 is fixed
+  upstream.
