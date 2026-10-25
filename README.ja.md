@@ -34,7 +34,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 
 アプリが OS に求めるもののうち、egui に依存しない部分です。ウィンドウを持たないクレート（サーバー、CLI）でも使えます。アプリが JNI や Objective-C を直接呼ばずに済むようにします。
 
-- **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。
+- **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。`AppDirs` はデスクトップでは `<root>/<アプリ名>`、スマートフォンではサンドボックスのディレクトリそのもの。
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。

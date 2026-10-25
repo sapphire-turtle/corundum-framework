@@ -35,7 +35,8 @@ release.
   The default leaves egui out, as sapphire-framework's facade leaves out its gui.
 - `corundum-framework-platform` (#9), a crate without egui for what an app asks of the OS:
   `dirs` (config, data and cache roots, the `dirs` crate's on the desktops and the
-  sandbox's on iOS and Android, and an app's own `AppDirs` under them), `locale`
+  sandbox's on iOS and Android, and an app's own `AppDirs` under them: `<root>/<app
+  name>` on the desktops, the sandbox's roots themselves on a phone), `locale`
   (`system_languages`, moved from the gui crate), `clipboard` and `insets` (Android, moved
   from the gui crate's `platform`), and `android` (`with_env`, the application context and
   the window's activity, for an app's own JNI calls).
