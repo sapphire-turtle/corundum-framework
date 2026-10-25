@@ -1,69 +1,31 @@
 //! The Settings screen, as an app puts its pages into corundum's: one of its own, the
-//! Appearance page over two scopes (a server's settings and this device's own, as a client
-//! of a server keeps them), and About.
-
-use std::cell::RefCell;
-use std::rc::Rc;
+//! Appearance page, and About.
+//!
+//! The demo keeps no settings of its own beyond the look, so the look corundum keeps on the
+//! device (`look`) is where the Appearance page stores it: a change is applied, saved, and
+//! there again at the next start.
 
 use corundum_framework::gui::egui;
-use corundum_framework::gui::i18n::{self, LanguageSettings};
+use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::{
     AppearanceCtx, AppearancePage, AppearanceScope, ScopeTab, Settings, SettingsGroup,
     SettingsSection,
 };
-use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::tr;
 
-/// Where the demo keeps a look: as a client of a server would.
+/// The one place the demo keeps the look: this device.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Scope {
-    /// The server's, for every device.
-    Server,
-    /// This device's own, over the server's.
-    Device,
-}
-
-/// The theme and the language as the demo stores them: the server's, and this device's own
-/// where it has them. A real app saves these; the demo keeps them while it runs.
-#[derive(Default)]
-pub(crate) struct Looks {
-    server_theme: ThemeSettings,
-    server_language: LanguageSettings,
-    device_theme: Option<ThemeSettings>,
-    device_language: Option<LanguageSettings>,
-    /// The look in effect changed: the Theme and Language screens take it.
-    pub(crate) changed: bool,
-}
-
-impl Looks {
-    /// The theme and the language in effect: the device's own over the server's.
-    pub(crate) fn effective(&self) -> (ThemeSettings, LanguageSettings) {
-        (
-            self.device_theme
-                .clone()
-                .unwrap_or_else(|| self.server_theme.clone()),
-            self.device_language
-                .clone()
-                .unwrap_or_else(|| self.server_language.clone()),
-        )
-    }
-
-    /// Whether this device sets anything itself.
-    fn own(&self) -> bool {
-        self.device_theme.is_some() || self.device_language.is_some()
-    }
-}
+struct Device;
 
 /// The demo's Settings: its own page, General (Appearance), and About.
-pub(crate) fn settings(looks: Rc<RefCell<Looks>>) -> Settings {
+pub(crate) fn settings() -> Settings {
     Settings::new()
         .with_group(
             SettingsGroup::new(vec![Box::new(Sample::default())]).titled("demo-settings-demo"),
         )
         .with_group(
             SettingsGroup::new(vec![Box::new(Appearance {
-                looks,
-                page: AppearancePage::new().with_tab(Scope::Server),
+                page: AppearancePage::new(),
             })])
             .titled("demo-settings-general"),
         )
@@ -118,10 +80,9 @@ impl SettingsSection for Sample {
     }
 }
 
-/// The Appearance page over the server's look and this device's own.
+/// The Appearance page over the look the device keeps.
 struct Appearance {
-    looks: Rc<RefCell<Looks>>,
-    page: AppearancePage<Scope>,
+    page: AppearancePage<Device>,
 }
 
 impl SettingsSection for Appearance {
@@ -130,79 +91,39 @@ impl SettingsSection for Appearance {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
-        let (scopes, own) = {
-            let looks = self.looks.borrow();
-            let (theme, language) = looks.effective();
-            let scopes = [
-                AppearanceScope {
-                    tab: ScopeTab::new(Scope::Server, tr!(ui, "demo-settings-scope-server")),
-                    theme: looks.server_theme.clone(),
-                    language: looks.server_language.clone(),
-                },
-                // The device's tab shows what is in effect, which its own values would change.
-                AppearanceScope {
-                    tab: ScopeTab::new(Scope::Device, tr!(ui, "demo-settings-scope-device")),
-                    theme,
-                    language,
-                },
-            ];
-            (scopes, looks.own())
-        };
-        let mut use_server = false;
+        let current = look::current(ui.ctx()).unwrap_or_default();
+        let scopes = [AppearanceScope {
+            tab: ScopeTab::new(Device, tr!(ui, "demo-settings-scope-device")),
+            theme: current.theme.clone(),
+            language: current.language.clone(),
+        }];
         let change = self
             .page
-            .ui(ui, &AppearanceCtx::new(&scopes), |ui, scope| match scope {
-                Scope::Server if own => {
-                    ui.weak(tr!(ui, "demo-settings-device-wins"));
-                }
-                Scope::Server => {}
-                Scope::Device if own => {
-                    ui.weak(tr!(ui, "demo-settings-own"));
-                    use_server = ui.button(tr!(ui, "demo-settings-use-server")).clicked();
-                }
-                Scope::Device => {
-                    ui.weak(tr!(ui, "demo-settings-from-server"));
-                }
+            .ui(ui, &AppearanceCtx::new(&scopes), |ui, Device| {
+                file_line(ui);
             });
-
-        let mut looks = self.looks.borrow_mut();
-        let mut stored = false;
-        if use_server {
-            looks.device_theme = None;
-            looks.device_language = None;
-            stored = true;
-        }
         if let Some(change) = change {
-            match change.scope {
-                Scope::Server => {
-                    if let Some(theme) = change.theme {
-                        looks.server_theme = theme;
-                    }
-                    if let Some(language) = change.language {
-                        looks.server_language = language;
-                    }
-                }
-                Scope::Device => {
-                    if let Some(theme) = change.theme {
-                        looks.device_theme = Some(theme);
-                    }
-                    if let Some(language) = change.language {
-                        looks.device_language = Some(language);
-                    }
-                }
-            }
-            stored = true;
-        }
-        if stored {
-            // Stored at once: install the look in effect, which on the server's tab is the
-            // device's own where it has one, and show the stored values.
-            let (theme, language) = looks.effective();
-            theme::install(ui.ctx(), &theme);
-            i18n::install(ui.ctx(), &language);
-            looks.changed = true;
+            let look = Look {
+                theme: change.theme.unwrap_or(current.theme),
+                language: change.language.unwrap_or(current.language),
+            };
+            // Saved at once: show what is stored.
+            look::apply(ui.ctx(), &look);
             self.page.reloaded();
         }
     }
+}
+
+/// Where the look is saved, or that it is kept only while the demo runs.
+fn file_line(ui: &mut egui::Ui) {
+    match look::store(ui.ctx()) {
+        Some(store) => ui.weak(tr!(
+            ui,
+            "demo-settings-look-file",
+            path = store.path().display().to_string()
+        )),
+        None => ui.weak(tr!(ui, "demo-settings-look-memory")),
+    };
 }
 
 /// The app's name and version.
@@ -220,24 +141,5 @@ impl SettingsSection for About {
             "demo-settings-version",
             version = env!("CARGO_PKG_VERSION")
         ));
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_devices_own_look_wins() {
-        let mut looks = Looks::default();
-        assert_eq!(looks.effective().0, ThemeSettings::default());
-        looks.server_theme.contrast = theme::Contrast::High;
-        assert_eq!(looks.effective().0.contrast, theme::Contrast::High);
-        looks.device_theme = Some(ThemeSettings {
-            contrast: theme::Contrast::Low,
-            ..Default::default()
-        });
-        assert_eq!(looks.effective().0.contrast, theme::Contrast::Low);
-        assert!(looks.own());
     }
 }

@@ -21,7 +21,7 @@
 //! | `gui` | [`gui`] | `corundum-framework-gui`: the shell, theme, fonts, icons and translations (brings `platform`) |
 //! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
 //! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
-//! | `serde` | — | `Serialize` / `Deserialize` on the gui's theme and language settings |
+//! | `serde` | `gui::look` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `look`: the look in effect, kept on the device and installed before the first frame |
 
 #[cfg(feature = "platform")]
 pub use corundum_framework_platform as platform;

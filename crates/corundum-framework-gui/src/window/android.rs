@@ -31,6 +31,8 @@ pub fn run_android(
     options: WindowOptions,
     create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App>,
 ) -> eframe::Result<()> {
+    let mut options = options;
+    let create = options.wrap_create(create);
     let WindowOptions { title, fonts, .. } = options;
     gpu::install_panic_hook();
     crate::platform::set_android_activity(android_app.activity_as_ptr());

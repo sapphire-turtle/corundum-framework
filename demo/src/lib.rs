@@ -4,11 +4,10 @@
 //! [`Demo`] is the app; [`run`] opens it in a desktop window (and on iOS, where
 //! `corundum_demo_main` calls it), and `android_main` on an Android phone.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::OnceLock;
 
 use corundum_framework::gui::i18n::{self, LanguageSettings, Resources};
+use corundum_framework::gui::look::{self, Look, LookStore};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, egui, icons};
@@ -33,27 +32,29 @@ pub const APP_NAME: &str = "corundum-framework-demo";
 /// system has none, unset when the app did not start through [`run`].
 static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
 
-/// The app: the shell around the screens, and the settings a real app would save.
+/// The app: the shell around the screens, and the look it keeps on the device.
 pub struct Demo {
     shell: Shell<Screen>,
     settings: Settings,
-    /// The look as Settings stores it; the theme and the language in effect follow it.
-    looks: Rc<RefCell<screens::settings::Looks>>,
+    /// The theme and the language the Theme and Language screens edit.
     theme: ThemeSettings,
     language: LanguageSettings,
+    /// The look as last applied: what the screens' edits and the Settings page's changes
+    /// are told apart from.
+    applied: Look,
     state: screens::State,
     /// The window's rects as last logged, to log them again only when they change.
     logged: Option<[egui::Rect; 3]>,
 }
 
 impl Demo {
-    /// The app in `ctx`, with the default theme and the system's language.
+    /// The app in `ctx`, in the look the window installed from the device, or else the
+    /// default theme and the system's language.
     pub fn new(ctx: &egui::Context) -> Demo {
-        let looks = Rc::new(RefCell::new(screens::settings::Looks::default()));
-        let (theme, language) = looks.borrow().effective();
-        theme::install(ctx, &theme);
         i18n::register(ctx, DEMO);
-        i18n::install(ctx, &language);
+        let applied = look::current(ctx).unwrap_or_default();
+        // Saved too, when the device had none: the file is there from the first start.
+        look::apply(ctx, &applied);
         let shell = Shell::new(vec![
             Destination::new(Screen::Overview, icons::info(), "demo-screen-overview"),
             Destination::new(Screen::Theme, icons::star(), "demo-screen-theme"),
@@ -79,10 +80,10 @@ impl Demo {
         )]);
         Demo {
             shell,
-            settings: screens::settings::settings(looks.clone()),
-            looks,
-            theme,
-            language,
+            settings: screens::settings::settings(),
+            theme: applied.theme.clone(),
+            language: applied.language.clone(),
+            applied,
             state: screens::State::new(CJK_FAMILY.get().cloned()),
             logged: None,
         }
@@ -136,9 +137,29 @@ impl Demo {
         if let Some(screen) = state.open.take() {
             shell.open(screen);
         }
-        let mut looks = self.looks.borrow_mut();
-        if std::mem::take(&mut looks.changed) {
-            (self.theme, self.language) = looks.effective();
+        self.follow_look(ui.ctx());
+    }
+
+    /// Save what the Theme and Language screens changed — a drag's once it ends — or take
+    /// what the Settings page applied.
+    fn follow_look(&mut self, ctx: &egui::Context) {
+        let edited = Look {
+            theme: self.theme.clone(),
+            language: self.language.clone(),
+        };
+        if edited != self.applied {
+            if !ctx.input(|i| i.pointer.any_down()) {
+                look::apply(ctx, &edited);
+                self.applied = edited;
+            }
+            return;
+        }
+        if let Some(current) = look::current(ctx)
+            && current != self.applied
+        {
+            self.theme = current.theme.clone();
+            self.language = current.language.clone();
+            self.applied = current;
         }
     }
 }
@@ -193,15 +214,26 @@ impl corundum_framework::eframe::App for Demo {
     }
 }
 
-/// The window's options: its title and size, and the fonts, recording the CJK font found.
+/// The window's options: its title and size, the fonts, recording the CJK font found, and
+/// the look, kept in the app's config directory.
 fn window_options() -> corundum_framework::gui::window::WindowOptions {
-    corundum_framework::gui::window::WindowOptions::new("corundum-framework demo")
+    let options = corundum_framework::gui::window::WindowOptions::new("corundum-framework demo")
         .inner_size([960.0, 680.0])
         .min_inner_size([320.0, 400.0])
         .fonts(|ctx| {
             let family = corundum_framework::gui::fonts::install_system_cjk_fallback(ctx);
             let _ = CJK_FAMILY.set(family);
-        })
+        });
+    match LookStore::for_app(APP_NAME) {
+        Some(store) => {
+            tracing::info!(path = %store.path().display(), "corundum demo: look file");
+            options.remember_look(store)
+        }
+        None => {
+            tracing::warn!("corundum demo: no config directory; the look is not saved");
+            options
+        }
+    }
 }
 
 /// Open the demo in a window and run it until it closes. On iOS this runs on the main
