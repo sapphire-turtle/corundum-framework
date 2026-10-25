@@ -8,19 +8,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [0.1.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.1.0...v0.1.1) - 2026-10-25
+## [0.2.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.1.0...v0.2.0) - 2026-10-25
+
+### Breaking
+
+- *(corundum-framework-gui)* `DetailPane::ui`'s main view draws as the root — its own
+  panels, then a `CentralPanel` — like the shell's content; a `main` closure that drew
+  straight into the pane's `ui` now draws its own `CentralPanel`.
+- *(corundum-framework-gui)* the shell's bottom bar keeps full-size buttons instead of
+  narrowing them, and with the rail puts what does not fit into a More menu that takes the
+  footer's place (Settings goes into the menu first).
+- *(corundum-framework-gui)* the `serde` feature brings `toml` instead of `serde_json`.
 
 ### Added
 
-- *(corundum-framework-gui)* the side pane in the shell, and ShellApp
-- *(corundum-framework-gui)* one side pane for the app, beside every screen
-- *(corundum-framework-gui)* mix actions with screens, More in the footer's place, order in Settings
-- *(corundum-framework-gui)* put what the rail cannot hold in a menu, and keep its order
-- *(corundum-framework-gui)* keep the look in effect on the device
-
-### Other
-
-- *(corundum-framework-gui)* name the file corundum.toml, and the store Store
+- *(corundum-framework-gui)* the side pane in the shell, and `ShellApp`: `Shell::show`,
+  `with_side_pane`, `with_status_bar`, `Side`
+- *(corundum-framework-gui)* mix actions with screens on the rail (`Shell::from_items`,
+  `RailItem`), the More menu, and the rail's order on a settings page
+  (`settings::RailPage`, `RailOrder`)
+- *(corundum-framework-gui)* keep the look in effect, the rail's order and the side column on
+  the device in `corundum.toml` (`store`, `look`, with the `serde` feature)
 
 ## [0.1.0](https://github.com/sapphire-turtle/corundum-framework/releases/tag/v0.1.0) - 2026-10-25
 
