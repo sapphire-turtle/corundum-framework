@@ -1,10 +1,11 @@
 //! The demo's screens, one per piece of the framework, and what they keep between frames.
 
 use corundum_framework::gui::egui;
-use corundum_framework::gui::i18n::{self, LanguageSettings};
+use corundum_framework::gui::i18n::{self, LanguageSettings, Message};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{ThemeSettings, Tint};
 
+mod detail;
 mod fonts;
 pub(crate) mod icons;
 mod language;
@@ -26,6 +27,8 @@ pub enum Screen {
     Icons,
     /// The language picker, switched in place, and the demo's own messages.
     Language,
+    /// The detail pane: albums, and the picked one's tracks.
+    Detail,
     /// The clipboard, the insets and the app's directories.
     Platform,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
@@ -34,12 +37,13 @@ pub enum Screen {
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 7] = [
+    pub const ALL: [Screen; 8] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
         Screen::Icons,
         Screen::Language,
+        Screen::Detail,
         Screen::Platform,
         Screen::Settings,
     ];
@@ -51,6 +55,8 @@ pub(crate) struct State {
     pub(crate) clicks: u32,
     /// The foot slot's dot.
     pub(crate) online: bool,
+    /// The last thing that happened, for the status bar: a log's last line.
+    pub(crate) log: Message,
     /// A screen a screen asked to open, opened after the shell has drawn.
     pub(crate) open: Option<Screen>,
     /// The CJK font the window installed: `None` when the demo did not start in a window.
@@ -62,6 +68,7 @@ pub(crate) struct State {
     selected: bool,
     text: String,
     icon_style: icons::Style,
+    detail: detail::State,
     platform: platform::State,
 }
 
@@ -70,6 +77,7 @@ impl State {
         State {
             clicks: 0,
             online: true,
+            log: Message::new("demo-status-ready"),
             open: None,
             cjk,
             accent: None,
@@ -77,6 +85,7 @@ impl State {
             selected: true,
             text: String::new(),
             icon_style: icons::Style::Text,
+            detail: detail::State::default(),
             platform: platform::State::read(),
         }
     }
@@ -91,10 +100,11 @@ pub(crate) fn ui(
     theme: &mut ThemeSettings,
     language: &mut LanguageSettings,
 ) {
-    if screen == Screen::Settings {
-        // Its own panels: the list beside the page.
-        settings.ui(ui);
-        return;
+    // These two lay out their own panels.
+    match screen {
+        Screen::Settings => return settings.ui(ui),
+        Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log),
+        _ => {}
     }
     egui::CentralPanel::default().show(ui, |ui| {
         egui::ScrollArea::vertical()
@@ -106,7 +116,7 @@ pub(crate) fn ui(
                 Screen::Icons => icons::ui(ui, &mut state.icon_style),
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
-                Screen::Settings => unreachable!("drawn above"),
+                Screen::Settings | Screen::Detail => unreachable!("drawn above"),
             });
     });
 }

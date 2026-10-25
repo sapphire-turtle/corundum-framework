@@ -18,7 +18,9 @@ desktops and on phones.
 ### corundum-framework-gui
 
 - **Shell**: the app's screens on a rail (a bottom bar when the window is narrow, as on a
-  phone), with a footer for Settings and a slot of the app's own.
+  phone), with a footer for Settings and a slot of the app's own; wide, a status bar along
+  the bottom, the app's from the left (a log line, the services' state, the track
+  playing), its slot and the detail pane's toggle at the right end.
 - **Theme**: light and dark, three contrast levels and an accent colour, built in OKLCH;
   a settings widget and a tint picker (palette, hue/chroma disk, preview) to choose them.
 - **Fonts**: finds a CJK fallback font on the system (CoreText on iOS, the system font
@@ -31,6 +33,9 @@ desktops and on phones.
   in (a device and its workgroup, a client and its server); and an Appearance page, the
   theme and the language over those tabs. The pages store nothing: the app keeps the
   values.
+- **Detail pane**: what the main view's item holds (the playlist playing, the journal
+  open), in a right column beside it that a button on the status bar hides, on a card over
+  the middle of the screen when the column is hidden, or on a phone in its place.
 - **Window**: `window::run` opens a desktop window on wgpu the same way for every app;
   `window::run_android` does the same on an Android phone (GameActivity).
 

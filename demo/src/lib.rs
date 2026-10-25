@@ -60,6 +60,7 @@ impl Demo {
             Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts"),
             Destination::new(Screen::Icons, icons::images(), "demo-screen-icons"),
             Destination::new(Screen::Language, icons::tag(), "demo-screen-language"),
+            Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail"),
             Destination::new(
                 Screen::Platform,
                 icons::monitor_smartphone(),
@@ -108,19 +109,29 @@ impl Demo {
             state,
             ..
         } = self;
-        // The foot draws before the screen; a flip shows on the Overview next frame.
+        // The foot and the status are drawn apart from the screen: a flip of the dot shows on
+        // the Overview, and a line the screen logs on the status bar, next frame.
         let mut online = state.online;
-        shell.ui_with_foot(
+        let log = state.log.clone();
+        shell.ui_with_status(
             ui,
             |ui| foot_ui(ui, &mut online),
+            |ui| {
+                ui.weak(log.text(ui.ctx()));
+            },
             |ui, screen| screens::ui(ui, screen, state, settings, theme, language),
         );
+        if log != state.log {
+            ui.ctx().request_repaint();
+        }
         if online != state.online {
             state.online = online;
             ui.ctx().request_repaint();
         }
         if shell.take_action() == Some("count") {
             state.clicks += 1;
+            state.log = i18n::Message::new("demo-status-counted").arg("count", state.clicks);
+            ui.ctx().request_repaint();
         }
         if let Some(screen) = state.open.take() {
             shell.open(screen);

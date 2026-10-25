@@ -9,6 +9,7 @@ demo-screen-theme = Theme
 demo-screen-fonts = Fonts
 demo-screen-icons = Icons
 demo-screen-language = Language
+demo-screen-detail = Detail
 demo-screen-platform = Platform
 demo-screen-settings = Settings
 # The rail's action: counts its clicks on the Overview.
@@ -107,3 +108,15 @@ demo-settings-use-server = Use the server's
 demo-settings-device-wins = This device's own settings win over these.
 demo-settings-about = About
 demo-settings-version = Version { $version }
+
+# The Detail screen: albums, and the picked one's tracks in the detail pane.
+demo-detail-intro = Pick an album to see its tracks. Wide, they are in the right column, which the button at the right end of the status bar hides; with it hidden, or on a phone, picking an album opens them.
+demo-detail-tracks = { $count ->
+    [one] { $count } track
+   *[other] { $count } tracks
+}
+
+# The status bar's line: the last thing that happened.
+demo-status-ready = Ready
+demo-status-counted = Counted to { $count }
+demo-status-picked = Picked { $album }
