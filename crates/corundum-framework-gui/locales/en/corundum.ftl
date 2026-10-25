@@ -43,3 +43,8 @@ corundum-detail-back = Back
 corundum-detail-show = Show the detail pane
 corundum-detail-hide = Hide the detail pane
 corundum-detail-close = Close
+
+# The shell's menu at the end of the rail (`Shell`): its button, and its rows' handle and box.
+corundum-shell-more = More
+corundum-shell-drag = Drag to reorder
+corundum-shell-show = Show outside this menu

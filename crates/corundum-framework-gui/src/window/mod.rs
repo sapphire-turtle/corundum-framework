@@ -48,7 +48,7 @@ pub struct WindowOptions {
     min_inner_size: [f32; 2],
     fonts: Option<InstallFonts>,
     #[cfg(feature = "serde")]
-    look: Option<crate::look::LookStore>,
+    store: Option<crate::store::UiStore>,
 }
 
 impl WindowOptions {
@@ -60,7 +60,7 @@ impl WindowOptions {
             min_inner_size: [600.0, 400.0],
             fonts: None,
             #[cfg(feature = "serde")]
-            look: None,
+            store: None,
         }
     }
 
@@ -83,26 +83,27 @@ impl WindowOptions {
         self
     }
 
-    /// Keep the look in `store`: the look saved there is installed before the app's first
-    /// frame, and [`look::apply`](crate::look::apply) saves the look there from then on.
+    /// Keep the UI in `store`: the look saved there is installed before the app's first
+    /// frame, and the [`Shell`](crate::Shell) takes the rail's order saved there; from then
+    /// on [`look::apply`](crate::look::apply) and the shell's menu save their changes there.
     #[cfg(feature = "serde")]
-    pub fn remember_look(mut self, store: crate::look::LookStore) -> WindowOptions {
-        self.look = Some(store);
+    pub fn remember(mut self, store: crate::store::UiStore) -> WindowOptions {
+        self.store = Some(store);
         self
     }
 
-    /// `create`, after attaching the look's store to the context when there is one.
+    /// `create`, after attaching the UI's store to the context when there is one.
     #[cfg_attr(not(feature = "serde"), allow(unused_mut))]
     pub(crate) fn wrap_create<'f>(
         &mut self,
         create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'f,
     ) -> impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'f {
         #[cfg(feature = "serde")]
-        let look = self.look.take();
+        let store = self.store.take();
         move |cc| {
             #[cfg(feature = "serde")]
-            if let Some(store) = look {
-                crate::look::attach(&cc.egui_ctx, store);
+            if let Some(store) = store {
+                crate::store::attach(&cc.egui_ctx, store);
             }
             create(cc)
         }

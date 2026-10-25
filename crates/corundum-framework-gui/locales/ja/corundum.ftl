@@ -43,3 +43,8 @@ corundum-detail-back = 戻る
 corundum-detail-show = 詳細ペインを表示
 corundum-detail-hide = 詳細ペインを隠す
 corundum-detail-close = 閉じる
+
+# レールの端のメニュー（`Shell`）：そのボタン、行の並べ替えハンドルとチェックボックス。
+corundum-shell-more = その他
+corundum-shell-drag = ドラッグで並べ替え
+corundum-shell-show = メニューの外にも表示

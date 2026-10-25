@@ -11,8 +11,9 @@
 //! theme and the language over them. [`detail`] is a main view's detail pane: a right
 //! column beside it, a card over it, or on a phone the screen in its place; its column's
 //! toggle sits at the right end of the shell's status bar. With the `serde` feature,
-//! [`look`] is the theme and the language in effect, kept on the device and installed before
-//! the app's first frame.
+//! [`store`] keeps on the device what the person left the UI in — [`look`], the theme and
+//! the language in effect, and the order of the shell's rail — and puts it back before the
+//! app's first frame.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -39,6 +40,8 @@ pub mod look;
 pub mod platform;
 pub mod settings;
 mod shell;
+#[cfg(feature = "serde")]
+pub mod store;
 pub mod theme;
 #[cfg(feature = "eframe")]
 pub mod window;
@@ -46,4 +49,4 @@ pub mod window;
 #[cfg(test)]
 mod test_support;
 
-pub use shell::{Action, COMPACT_WIDTH, Destination, Shell};
+pub use shell::{Action, COMPACT_WIDTH, Destination, RailOrder, Shell};

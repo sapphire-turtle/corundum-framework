@@ -20,7 +20,9 @@ desktops and on phones.
 - **Shell**: the app's screens on a rail (a bottom bar when the window is narrow, as on a
   phone), with a footer for Settings and a slot of the app's own; wide, a status bar along
   the bottom, the app's from the left (a log line, the services' state, the track
-  playing), its slot and the detail pane's toggle at the right end.
+  playing), its slot and the detail pane's toggle at the right end. Screens and actions
+  that do not fit on the rail or the bar go into a "More" menu at its end, where they can
+  be reordered and chosen to show on the rail.
 - **Theme**: light and dark, three contrast levels and an accent colour, built in OKLCH;
   a settings widget and a tint picker (palette, hue/chroma disk, preview) to choose them.
 - **Fonts**: finds a CJK fallback font on the system (CoreText on iOS, the system font
@@ -33,9 +35,9 @@ desktops and on phones.
   in (a device and its workgroup, a client and its server); and an Appearance page, the
   theme and the language over those tabs. The pages store nothing: the app keeps the
   values.
-- **Look**: the theme and the language in effect, kept in a file in the app's config
-  directory (`look`, with the `serde` feature) and installed before the first frame, so
-  the app opens in them. An app that merges settings from elsewhere (a workgroup, a
+- **Look**: the theme and the language in effect, kept with the rail's order in a TOML
+  file in the app's config directory (`look` and `store`, with the `serde` feature) and
+  installed before the first frame, so the app opens in them. An app that merges settings from elsewhere (a workgroup, a
   server) applies the result there; an app with nothing else to keep them in stores them
   there alone, as the demo does.
 - **Detail pane**: what the main view's item holds (the playlist playing, the journal
