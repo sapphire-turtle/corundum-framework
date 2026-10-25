@@ -1,4 +1,5 @@
-//! The window on an iPhone: drawn over the whole screen, with egui told the safe area.
+//! The window on an iPhone: drawn over the whole screen, with egui told the safe area, put
+//! in a scene ([`scene`]) and taking the keyboards that compose ([`ime`]).
 //!
 //! eframe 0.37 sizes egui's screen and its wgpu surface from two different sizes on iOS.
 //! egui-winit takes the screen from winit's `outer_size`, the whole screen; eframe makes
@@ -13,6 +14,9 @@
 //! `raw_input_hook`. Remove this once eframe sizes the surface from the same size as the
 //! screen.
 
+mod ime;
+pub(super) mod scene;
+
 use std::ffi::CString;
 
 use objc2::encode::Encode;
@@ -22,8 +26,9 @@ use objc2::{ClassType, Message, msg_send, sel};
 use objc2_ui_kit::{UIEdgeInsets, UIView, UIWindow};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-/// Make the window's surface the whole screen, and wrap `app` to give egui the safe area.
-/// The app is returned as is when the window's view cannot be found.
+/// Make the window's surface the whole screen and its view take the keyboards that compose,
+/// and wrap `app` to give egui the safe area and the keyboard's text. The app is returned as
+/// is when the window's view cannot be found.
 pub(super) fn full_screen(
     cc: &eframe::CreationContext<'_>,
     app: Box<dyn eframe::App>,
@@ -40,7 +45,15 @@ pub(super) fn full_screen(
     // winit's view reports a resize from its layout, and eframe then resizes the surface
     // at `inner_size`, now the whole screen.
     view.setNeedsLayout();
-    Box::new(IosWindow { app, window })
+    if !ime::install(&view, &cc.egui_ctx) {
+        tracing::warn!("the view does not take UITextInput: keyboards that compose type nothing");
+    }
+    Box::new(IosWindow {
+        app,
+        window,
+        view,
+        focused: None,
+    })
 }
 
 fn ui_view(cc: &eframe::CreationContext<'_>) -> Option<Retained<UIView>> {
@@ -99,15 +112,20 @@ fn safe_area(window: &UIWindow) -> egui::SafeAreaInsets {
     })
 }
 
-/// The app, told the real safe area every frame.
+/// The app, told the real safe area and the keyboard's text every frame.
 struct IosWindow {
     app: Box<dyn eframe::App>,
     window: Retained<UIWindow>,
+    view: Retained<UIView>,
+    /// The widget with focus after the last frame: a composition does not follow focus to
+    /// another field.
+    focused: Option<egui::Id>,
 }
 
 impl eframe::App for IosWindow {
     fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         raw_input.safe_area_insets = Some(safe_area(&self.window));
+        raw_input.events.extend(ime::take_events());
         self.app.raw_input_hook(ctx, raw_input);
     }
 
@@ -117,6 +135,17 @@ impl eframe::App for IosWindow {
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.ui(ui, frame);
+        let ctx = ui.ctx();
+        let focused = ctx.memory(|memory| memory.focused());
+        if focused != self.focused {
+            self.focused = focused;
+            ime::reset(&self.view);
+        }
+        // The keyboard shows its candidates by the text cursor. egui's points are UIKit's
+        // scaled by egui's zoom.
+        if let Some(output) = ctx.output(|output| output.ime) {
+            ime::set_caret(output.cursor_rect * ctx.zoom_factor());
+        }
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

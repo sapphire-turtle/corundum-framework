@@ -49,7 +49,9 @@ xcrun simctl launch --console-pty booted io.github.sapphireturtle.corundum.demo
 ```
 
 The project's pre-build script (`build-rust.sh`) builds the demo's staticlib for the SDK
-Xcode targets; `Sources/main.m` hands the main thread to it. For a real device, copy
+Xcode targets; `Sources/main.m` hands the main thread to it. The Info.plist declares a
+scene with `CorundumSceneDelegate` as its delegate, as iOS 27 requires of an app built with
+its SDK (corundum's window puts winit's in that scene). For a real device, copy
 `Local.xcconfig.example` to `Local.xcconfig` and set your `DEVELOPMENT_TEAM` (and a bundle
 id of your own).
 

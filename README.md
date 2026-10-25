@@ -48,7 +48,10 @@ desktops and on phones.
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.
 - **Window**: `window::run` opens a desktop window on wgpu the same way for every app;
-  `window::run_android` does the same on an Android phone (GameActivity).
+  `window::run_android` does the same on an Android phone (GameActivity). On iOS the window
+  is put in a scene, which iOS 27 requires (the app's Info.plist declares one with
+  `CorundumSceneDelegate` as its delegate: see `window`), and takes the keyboards that
+  compose (Japanese, Chinese, Korean), which winit 0.30 alone does not.
 
 | Feature | What it enables | Default |
 |---|---|---|

@@ -6,6 +6,19 @@
 //! `run_android` opens the window on an Android phone. The sapphire apps
 //! and asteria open their windows through here, so a renderer fix reaches all of them.
 //!
+//! On iOS, an app built with the iOS 27 SDK must declare a scene in its Info.plist, with
+//! [`IOS_SCENE_DELEGATE`] as the scene's delegate: iOS 27 stops at launch an app that does
+//! not, and winit 0.30 does not put its window in a scene by itself (#37).
+//!
+//! ```yaml
+//! UIApplicationSceneManifest:
+//!   UIApplicationSupportsMultipleScenes: false
+//!   UISceneConfigurations:
+//!     UIWindowSceneSessionRoleApplication:
+//!       - UISceneConfigurationName: Default
+//!         UISceneDelegateClassName: CorundumSceneDelegate
+//! ```
+//!
 //! ```no_run
 //! use corundum_framework_gui::{eframe, egui, window};
 //!
@@ -31,12 +44,19 @@ use crate::gpu;
 mod android;
 #[cfg(target_os = "ios")]
 mod ios;
+// Used by the iOS window; kept platform-free so its tests run on a desktop.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+mod marked_text;
 // Used by the Android window; kept platform-free so its tests run on a desktop.
 #[cfg_attr(not(all(target_os = "android", feature = "android")), allow(dead_code))]
 mod text_input;
 
 #[cfg(all(target_os = "android", feature = "android"))]
 pub use android::{AndroidApp, run_android};
+
+/// The class of the scene delegate an iOS app names in its Info.plist's scene manifest
+/// (`UISceneDelegateClassName`). It shows the window once the app's scene connects.
+pub const IOS_SCENE_DELEGATE: &str = "CorundumSceneDelegate";
 
 /// Sets the egui context's fonts, once, before the app is built.
 pub type InstallFonts = Box<dyn FnOnce(&egui::Context)>;
@@ -148,6 +168,9 @@ pub fn open(
     fonts: Option<InstallFonts>,
     create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App>,
 ) -> eframe::Result<()> {
+    // Before the event loop starts: UIKit makes the app's scene as it launches (#37).
+    #[cfg(target_os = "ios")]
+    ios::scene::adopt();
     eframe::run_native(
         title,
         native,

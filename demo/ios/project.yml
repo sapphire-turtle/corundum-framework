@@ -46,6 +46,14 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSupportsIndirectInputEvents: true
+        # A scene, which iOS 27 requires of an app built with its SDK. corundum's window
+        # puts winit's in it (corundum_framework_gui::window::IOS_SCENE_DELEGATE).
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: CorundumSceneDelegate
     preBuildScripts:
       - name: Build the Rust staticlib
         script: ./build-rust.sh
