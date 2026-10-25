@@ -10,7 +10,7 @@ use super::heading;
 type Icon = fn() -> egui::ImageSource<'static>;
 
 /// Every icon corundum-framework-gui bundles, by its Lucide name.
-pub(crate) const ALL: [(&str, Icon); 36] = [
+pub(crate) const ALL: [(&str, Icon); 37] = [
     ("settings", icons::settings),
     ("arrow-left", icons::arrow_left),
     ("x", icons::x),
@@ -19,6 +19,7 @@ pub(crate) const ALL: [(&str, Icon); 36] = [
     ("pencil-line", icons::pencil_line),
     ("refresh-cw", icons::refresh_cw),
     ("info", icons::info),
+    ("panel-right", icons::panel_right),
     ("ellipsis", icons::ellipsis),
     ("chevron-right", icons::chevron_right),
     ("chevron-down", icons::chevron_down),

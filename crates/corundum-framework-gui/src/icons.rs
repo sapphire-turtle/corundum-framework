@@ -116,6 +116,11 @@ pub fn info() -> egui::ImageSource<'static> {
     icon!("info")
 }
 
+/// The detail pane at the right, shown or hidden.
+pub fn panel_right() -> egui::ImageSource<'static> {
+    icon!("panel-right")
+}
+
 /// More actions, in a menu.
 pub fn ellipsis() -> egui::ImageSource<'static> {
     icon!("ellipsis")

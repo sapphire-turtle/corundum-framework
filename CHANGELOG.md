@@ -63,6 +63,17 @@ release.
   the host's own scope type), and `AppearancePage` the theme and the language over them,
   giving back what changed (`AppearanceChange`) for the host to store. The demo's
   Settings screen is one, with a server's and a device's scope.
+- `detail::DetailPane`: a main view and the detail of its item. Wide, the detail is in
+  a right column (dragged wider or narrower) that `detail::toggle_ui` turns off and on;
+  with it off, or no room for it, an opened detail is a card over the middle of the
+  screen, closed by `×`, `Esc` or a click outside; on a phone it takes the main view's
+  place under a way back. The `panel_right` icon is new for the toggle. The demo's
+  Detail screen shows albums and their tracks in it.
+- `Shell::ui_with_status`: wide, a status bar along the window's bottom. The app fills it
+  from the left (a log line, the services' state, the track playing); its right end holds
+  the foot slot, moved there from the rail's foot, and the detail pane's toggle when the
+  open screen has one. Narrow, there is no status bar and the foot stays on the bottom
+  bar. The demo logs its last event there.
 
 ### Fixed
 

@@ -37,3 +37,9 @@ corundum-theme-selected = 選択中
 # page's heading.
 corundum-settings = 設定
 corundum-settings-appearance = 外観
+
+# 詳細ペイン（`detail`）：スマートフォンでの戻る、右カラムの切り替え、カードを閉じる。
+corundum-detail-back = 戻る
+corundum-detail-show = 詳細ペインを表示
+corundum-detail-hide = 詳細ペインを隠す
+corundum-detail-close = 閉じる

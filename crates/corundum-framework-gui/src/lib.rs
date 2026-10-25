@@ -8,7 +8,9 @@
 //! [`i18n`] is the translations — every string looked up by id in the user's language,
 //! through [`tr!`]. [`settings`] is the Settings screen: the pages an app and the
 //! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
-//! theme and the language over them.
+//! theme and the language over them. [`detail`] is a main view's detail pane: a right
+//! column beside it, a card over it, or on a phone the screen in its place; its column's
+//! toggle sits at the right end of the shell's status bar.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -23,6 +25,7 @@ pub use egui;
 #[cfg(feature = "eframe")]
 pub use eframe;
 
+pub mod detail;
 pub mod fonts;
 #[cfg(feature = "eframe")]
 pub mod gpu;

@@ -6,11 +6,12 @@ rest, and never published.
 
 | Screen | What it shows |
 |---|---|
-| Overview | The `Shell`: the rail (a bottom bar below 600 points), the rail's action (counted here), the footer (Settings) and the foot slot (the dot) |
+| Overview | The `Shell`: the rail (a bottom bar below 600 points), the rail's action (counted here), the footer (Settings), the foot slot (the dot), and wide, the status bar (the last event, the dot, the detail pane's toggle) |
 | Theme | `theme::settings_ui`, a `TintPicker` on its own, the palette (every tone by every swatch), widgets in the theme |
 | Fonts | The system's CJK fallback font, with Japanese, Chinese and Korean samples |
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
+| Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
 | Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 

@@ -37,3 +37,9 @@ corundum-theme-selected = Selected
 # page's heading.
 corundum-settings = Settings
 corundum-settings-appearance = Appearance
+
+# The detail pane (`detail`): the way back on a phone, the column's toggle, the card's close.
+corundum-detail-back = Back
+corundum-detail-show = Show the detail pane
+corundum-detail-hide = Hide the detail pane
+corundum-detail-close = Close

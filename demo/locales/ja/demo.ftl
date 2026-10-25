@@ -9,6 +9,7 @@ demo-screen-theme = テーマ
 demo-screen-fonts = フォント
 demo-screen-icons = アイコン
 demo-screen-language = 言語
+demo-screen-detail = 詳細
 demo-screen-platform = プラットフォーム
 demo-screen-settings = 設定
 # レールのアクション。クリックの回数を概要に出す。
@@ -101,3 +102,12 @@ demo-settings-use-server = サーバーの設定を使う
 demo-settings-device-wins = このデバイスでは、ここより個別の設定が優先されます。
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
+
+# 詳細画面：アルバムと、選んだアルバムの曲を詳細ペインに。
+demo-detail-intro = アルバムを選ぶと曲が表示されます。広い画面では右カラムに表示され、ステータスバー右端のボタンで隠せます。隠しているときやスマートフォンでは、アルバムを選ぶと開きます。
+demo-detail-tracks = { $count } 曲
+
+# ステータスバーの1行：最後に起きたこと。
+demo-status-ready = 準備完了
+demo-status-counted = { $count } まで数えました
+demo-status-picked = { $album } を選びました

@@ -13,6 +13,9 @@ pub const COMPACT_WIDTH: f32 = 600.0;
 /// The rail's width, wide.
 const RAIL_WIDTH: f32 = 48.0;
 
+/// The space above and below the status bar's row.
+const STATUS_MARGIN: f32 = 3.0;
+
 /// One of the app's screens on the rail.
 pub struct Destination<D> {
     /// What the app matches on to draw it.
@@ -175,6 +178,32 @@ impl<D: Copy + PartialEq> Shell<D> {
         foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
         content: impl FnOnce(&mut egui::Ui, D),
     ) {
+        self.frame_ui(ui, foot, None::<fn(&mut egui::Ui)>, content);
+    }
+
+    /// As [`ui_with_foot`](Self::ui_with_foot), with a status bar along the window's
+    /// bottom when wide. `status` fills it from the left — a log's last line, the services'
+    /// state, the track playing; the bar's right end holds `foot` (there rather than at the
+    /// rail's foot), then the [detail pane](crate::detail)'s toggle when the open screen has
+    /// one. Narrow, as on a phone, there is no status bar: `foot` stays on the bottom bar,
+    /// and `status` is not called.
+    pub fn ui_with_status(
+        &mut self,
+        ui: &mut egui::Ui,
+        foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
+        status: impl FnOnce(&mut egui::Ui),
+        content: impl FnOnce(&mut egui::Ui, D),
+    ) {
+        self.frame_ui(ui, foot, Some(status), content);
+    }
+
+    fn frame_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
+        status: Option<impl FnOnce(&mut egui::Ui)>,
+        content: impl FnOnce(&mut egui::Ui, D),
+    ) {
         if !std::mem::replace(&mut self.loaders, true) {
             crate::icons::install_loaders(ui.ctx());
             // The app may have installed its saved theme already; only fill the gap.
@@ -202,6 +231,31 @@ impl<D: Copy + PartialEq> Shell<D> {
         // The strips under the status bar and the notch take the panels' colour.
         if safe != egui::epaint::MarginF32::ZERO {
             ui.painter().rect_filled(full, 0.0, ui.visuals().panel_fill);
+        }
+        if !compact && let Some(status) = status {
+            // The bar under the rail and the screen, which keep what is above it.
+            let height = ui.spacing().interact_size.y + 2.0 * STATUS_MARGIN;
+            let above = inner.with_max_y(inner.bottom() - height);
+            let strip = inner.with_min_y(above.bottom());
+            ui.scope_builder(egui::UiBuilder::new().max_rect(above), |ui| {
+                let opened = egui::Panel::left("shell_rail")
+                    .resizable(false)
+                    .exact_size(RAIL_WIDTH)
+                    .show(ui, |ui| self.rail_ui(ui, |_| None))
+                    .inner;
+                if let Some(id) = opened {
+                    self.open = Some(id);
+                }
+                if let Some(id) = self.open {
+                    content(ui, id);
+                }
+            });
+            // Drawn after the screen, so the toggle knows of the detail pane drawn there.
+            if let Some(id) = status_bar_ui(ui, strip, foot, status) {
+                self.open = Some(id);
+                ui.ctx().request_repaint();
+            }
+            return;
         }
         ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
             let opened = if compact {
@@ -373,6 +427,38 @@ impl<D: Copy + PartialEq> Shell<D> {
         }
         response
     }
+}
+
+/// The status bar along the bottom of `strip`: `status` from the left, `foot` and the
+/// detail pane's toggle at the right end. The destination `foot` returns, if any.
+fn status_bar_ui<D>(
+    ui: &mut egui::Ui,
+    strip: egui::Rect,
+    foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
+    status: impl FnOnce(&mut egui::Ui),
+) -> Option<D> {
+    let visuals = ui.visuals();
+    ui.painter().rect_filled(strip, 0.0, visuals.panel_fill);
+    ui.painter().hline(
+        strip.x_range(),
+        strip.top(),
+        visuals.widgets.noninteractive.bg_stroke,
+    );
+    let row = strip.shrink2(egui::vec2(8.0, STATUS_MARGIN));
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(row)
+            .layout(egui::Layout::right_to_left(egui::Align::Center)),
+        |ui| {
+            ui.set_clip_rect(row);
+            crate::detail::toggle_ui(ui);
+            let opened = foot(ui);
+            // What is left, from the left: the app's.
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), status);
+            opened
+        },
+    )
+    .inner
 }
 
 /// How far the system's bars and notches (egui's safe area insets) reach into `ui`, side by
@@ -808,6 +894,53 @@ mod tests {
         for rect in &shell.cell_rects {
             assert_eq!(rect.size(), egui::vec2(BUTTON, BUTTON), "{rect:?}");
         }
+    }
+
+    /// Render `shell` with a status bar at `size`: where the foot was drawn, and whether
+    /// the status was.
+    fn with_status(shell: &mut Shell<Screen>, size: [f32; 2]) -> (egui::Rect, bool) {
+        let (mut foot, mut status) = (egui::Rect::NOTHING, false);
+        render(size, |ui| {
+            shell.ui_with_status(
+                ui,
+                |ui| {
+                    foot = ui.label("dot").rect;
+                    None
+                },
+                |ui| {
+                    status = true;
+                    ui.label("saved");
+                },
+                |ui, _| screen(ui),
+            )
+        });
+        (foot, status)
+    }
+
+    #[test]
+    fn wide_the_status_bar_holds_the_status_and_the_foot() {
+        let mut shell = shell().with_footer(prefs());
+        let (foot, status) = with_status(&mut shell, SIZES[0]);
+        assert!(status);
+        // On the bar along the bottom, at its right end: not at the rail's foot.
+        assert!(foot.bottom() > SIZES[0][1] - 30.0, "{foot:?}");
+        assert!(foot.left() > SIZES[0][0] / 2.0, "{foot:?}");
+        // The rail stops above the bar.
+        assert!(
+            shell.footer_rects[0].bottom() < foot.top(),
+            "{:?}",
+            shell.footer_rects
+        );
+    }
+
+    #[test]
+    fn narrow_there_is_no_status_bar_and_the_foot_stays_on_the_bar() {
+        let mut shell = shell().with_footer(prefs());
+        let (foot, status) = with_status(&mut shell, SIZES[1]);
+        assert!(!status);
+        assert!(foot.is_positive());
+        let bar_top = shell.footer_rects[0].top();
+        assert!(foot.top() >= bar_top - 10.0, "{foot:?} beside {bar_top}");
     }
 
     #[test]
