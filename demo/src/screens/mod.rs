@@ -2,14 +2,15 @@
 
 use corundum_framework::gui::egui;
 use corundum_framework::gui::i18n::{self, LanguageSettings};
-use corundum_framework::gui::theme::{self, ThemeSettings, Tint};
-use corundum_framework::gui::tr;
+use corundum_framework::gui::settings::Settings;
+use corundum_framework::gui::theme::{ThemeSettings, Tint};
 
 mod fonts;
 pub(crate) mod icons;
 mod language;
 mod overview;
 mod platform;
+pub(crate) mod settings;
 mod theme_screen;
 
 /// The screens, as the shell opens them.
@@ -27,7 +28,7 @@ pub enum Screen {
     Language,
     /// The clipboard, the insets and the app's directories.
     Platform,
-    /// An app's Settings screen, in the footer.
+    /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
@@ -86,9 +87,15 @@ pub(crate) fn ui(
     ui: &mut egui::Ui,
     screen: Screen,
     state: &mut State,
+    settings: &mut Settings,
     theme: &mut ThemeSettings,
     language: &mut LanguageSettings,
 ) {
+    if screen == Screen::Settings {
+        // Its own panels: the list beside the page.
+        settings.ui(ui);
+        return;
+    }
     egui::CentralPanel::default().show(ui, |ui| {
         egui::ScrollArea::vertical()
             .auto_shrink(false)
@@ -99,7 +106,7 @@ pub(crate) fn ui(
                 Screen::Icons => icons::ui(ui, &mut state.icon_style),
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
-                Screen::Settings => settings_ui(ui, theme, language),
+                Screen::Settings => unreachable!("drawn above"),
             });
     });
 }
@@ -115,17 +122,4 @@ fn section(ui: &mut egui::Ui, id: &str) {
     ui.add_space(12.0);
     ui.strong(i18n::tr(ui.ctx(), id));
     ui.add_space(4.0);
-}
-
-/// An app's Settings screen: the theme's and the language's settings.
-fn settings_ui(ui: &mut egui::Ui, theme: &mut ThemeSettings, language: &mut LanguageSettings) {
-    heading(ui, "demo-screen-settings");
-    ui.label(tr!(ui, "demo-settings-intro"));
-    ui.add_space(8.0);
-    theme::settings_ui(ui, theme);
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.label(tr!(ui, "corundum-language"));
-        i18n::settings_ui(ui, language);
-    });
 }

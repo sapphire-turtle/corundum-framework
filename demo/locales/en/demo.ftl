@@ -89,4 +89,21 @@ demo-platform-cache = Cache: { $path }
 demo-platform-none = none
 demo-platform-refresh = Read again
 
-demo-settings-intro = An app's Settings screen: the theme's and the language's settings, which the app saves.
+# The Settings screen: corundum's, with the demo's pages in it.
+demo-settings-demo = Demo
+demo-settings-sample = Sample
+demo-settings-sample-intro = A page of the app's own. A change applies with Apply; until then, its entry in the list is marked.
+demo-settings-sample-name = Name
+demo-settings-sample-saved = Saved: { $name }
+demo-settings-apply = Apply
+demo-settings-revert = Revert
+demo-settings-general = General
+# The scopes a look is kept in: the server's for every device, and this device's own.
+demo-settings-scope-server = Server
+demo-settings-scope-device = This device
+demo-settings-from-server = This device uses the server's settings.
+demo-settings-own = This device uses its own settings.
+demo-settings-use-server = Use the server's
+demo-settings-device-wins = This device's own settings win over these.
+demo-settings-about = About
+demo-settings-version = Version { $version }

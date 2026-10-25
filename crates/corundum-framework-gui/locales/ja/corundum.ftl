@@ -32,3 +32,8 @@ corundum-theme-swatch-purple = 紫
 corundum-theme-link = リンク
 corundum-theme-label = ラベル
 corundum-theme-selected = 選択中
+
+# The Settings screen (`settings`): the way back to its list on a phone, and the Appearance
+# page's heading.
+corundum-settings = 設定
+corundum-settings-appearance = 外観

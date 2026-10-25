@@ -55,6 +55,14 @@ release.
   (`cargo run -p corundum-framework-demo`), the iOS simulator (an XcodeGen project) and
   the Android emulator (a Gradle project, GameActivity). Mobile CI builds it, starts it on
   the simulator and the emulator, and uploads a screenshot.
+- `settings`: the Settings screen, moved from sapphire-framework-gui without its storage.
+  `Settings` holds the pages (`SettingsSection`) an app and the frameworks under it put
+  in, by `SettingsGroup`, in a list beside the open page (narrow, one at a time under a
+  way back); `SettingsLayout` is that layout alone, for a host that gives the list every
+  frame. `scope_tabs` draws a tab per scope a setting can be kept in (`ScopeTab`, over
+  the host's own scope type), and `AppearancePage` the theme and the language over them,
+  giving back what changed (`AppearanceChange`) for the host to store. The demo's
+  Settings screen is one, with a server's and a device's scope.
 
 ### Fixed
 

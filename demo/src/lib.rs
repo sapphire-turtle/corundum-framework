@@ -4,9 +4,12 @@
 //! [`Demo`] is the app; [`run`] opens it in a desktop window (and on iOS, where
 //! `corundum_demo_main` calls it), and `android_main` on an Android phone.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::OnceLock;
 
 use corundum_framework::gui::i18n::{self, LanguageSettings, Resources};
+use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, egui, icons};
 
@@ -33,6 +36,9 @@ static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
 /// The app: the shell around the screens, and the settings a real app would save.
 pub struct Demo {
     shell: Shell<Screen>,
+    settings: Settings,
+    /// The look as Settings stores it; the theme and the language in effect follow it.
+    looks: Rc<RefCell<screens::settings::Looks>>,
     theme: ThemeSettings,
     language: LanguageSettings,
     state: screens::State,
@@ -43,8 +49,8 @@ pub struct Demo {
 impl Demo {
     /// The app in `ctx`, with the default theme and the system's language.
     pub fn new(ctx: &egui::Context) -> Demo {
-        let theme = ThemeSettings::default();
-        let language = LanguageSettings::default();
+        let looks = Rc::new(RefCell::new(screens::settings::Looks::default()));
+        let (theme, language) = looks.borrow().effective();
         theme::install(ctx, &theme);
         i18n::register(ctx, DEMO);
         i18n::install(ctx, &language);
@@ -72,6 +78,8 @@ impl Demo {
         )]);
         Demo {
             shell,
+            settings: screens::settings::settings(looks.clone()),
+            looks,
             theme,
             language,
             state: screens::State::new(CJK_FAMILY.get().cloned()),
@@ -94,6 +102,7 @@ impl Demo {
         self.log_rects(ui);
         let Demo {
             shell,
+            settings,
             theme,
             language,
             state,
@@ -104,7 +113,7 @@ impl Demo {
         shell.ui_with_foot(
             ui,
             |ui| foot_ui(ui, &mut online),
-            |ui, screen| screens::ui(ui, screen, state, theme, language),
+            |ui, screen| screens::ui(ui, screen, state, settings, theme, language),
         );
         if online != state.online {
             state.online = online;
@@ -115,6 +124,10 @@ impl Demo {
         }
         if let Some(screen) = state.open.take() {
             shell.open(screen);
+        }
+        let mut looks = self.looks.borrow_mut();
+        if std::mem::take(&mut looks.changed) {
+            (self.theme, self.language) = looks.effective();
         }
     }
 }
