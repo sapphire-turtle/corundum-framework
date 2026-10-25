@@ -8,6 +8,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.0](https://github.com/sapphire-turtle/corundum-framework/releases/tag/v0.1.0) - 2026-10-25
+
+### Added
+
+- *(corundum-framework-gui)* a detail pane, and a status bar to toggle it from
+- *(corundum-framework-gui)* the Settings screen, moved from sapphire-framework-gui
+- add the demo app corundum-framework-demo
+- add the corundum-framework facade crate
+- *(corundum-framework-platform)* a platform crate without egui
+
+### Fixed
+
+- *(corundum-framework-platform)* use the sandbox's roots as a phone app's own dirs
+- *(corundum-framework)* re-export eframe with the android feature too
+
+### Other
+
+- *(corundum-framework)* match the default feature by line, for CRLF checkouts
+- stand alone as sapphire-turtle/corundum-framework
+
 `corundum-framework-gui` moved out of sapphire-framework, where it was `corundum-gui`
 ([`crates/corundum-gui`](https://github.com/sapphire-turtle/sapphire-framework/tree/e716455a49daeaf9ab25e666f6cb99cf5e858f02/crates/corundum-gui)),
 into this repository, with its history kept. Issue and pull request numbers in that
