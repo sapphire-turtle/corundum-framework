@@ -8,6 +8,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.1.0...v0.1.1) - 2026-10-25
+
+### Added
+
+- *(corundum-framework-gui)* the side pane in the shell, and ShellApp
+- *(corundum-framework-gui)* one side pane for the app, beside every screen
+- *(corundum-framework-gui)* mix actions with screens, More in the footer's place, order in Settings
+- *(corundum-framework-gui)* put what the rail cannot hold in a menu, and keep its order
+- *(corundum-framework-gui)* keep the look in effect on the device
+
+### Other
+
+- *(corundum-framework-gui)* name the file corundum.toml, and the store Store
+
 ## [0.1.0](https://github.com/sapphire-turtle/corundum-framework/releases/tag/v0.1.0) - 2026-10-25
 
 The first release. `corundum-framework-gui` moved out of sapphire-framework, where it was
