@@ -46,7 +46,8 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
 
 - **Directories**: `dirs::{config_dir, data_dir, cache_dir}` and an app's own `AppDirs`
   under them: the `dirs` crate's on the desktops, the sandbox's on iOS (`NSFileManager`)
-  and Android (the context's files and cache directories).
+  and Android (the context's files and cache directories). `AppDirs` is
+  `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone.
 - **Languages**: `locale::system_languages`, the system's preferred languages (Android's
   whole `LocaleList`, where `sys-locale` gives only one).
 - **Window support**: the clipboard and the window insets on Android, which the gui

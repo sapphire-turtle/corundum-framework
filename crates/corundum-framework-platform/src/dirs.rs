@@ -14,7 +14,8 @@
 //! on macOS: an app that keeps both must not give a file in each the same name.
 //!
 //! These are the roots, shared by every app on a desktop. [`AppDirs`] is an app's own
-//! directory under each, `<root>/<app name>`, as the sapphire apps lay theirs out.
+//! directory under each: `<root>/<app name>` on the desktops, as the sapphire apps lay
+//! theirs out, and the root itself on a phone, whose sandbox is the app's alone.
 
 use std::path::{Path, PathBuf};
 
@@ -49,8 +50,9 @@ pub fn cache_dir() -> Option<PathBuf> {
     return ::dirs::cache_dir();
 }
 
-/// An app's own directories: `<root>/<app name>` under [`config_dir`], [`data_dir`] and
-/// [`cache_dir`]. Nothing is created; the app makes them as it writes.
+/// An app's own directories under [`config_dir`], [`data_dir`] and [`cache_dir`]:
+/// `<root>/<app name>` on the desktops, and the roots themselves on iOS and Android, where
+/// they are already the app's. Nothing is created; the app makes them as it writes.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AppDirs {
     config: PathBuf,
@@ -60,12 +62,12 @@ pub struct AppDirs {
 
 impl AppDirs {
     /// `app_name`'s directories (`sapphire-journal`, say), or `None` where the platform
-    /// has no root for one of them.
+    /// has no root for one of them. A phone does not use `app_name`.
     pub fn new(app_name: &str) -> Option<AppDirs> {
         Some(AppDirs {
-            config: config_dir()?.join(app_name),
-            data: data_dir()?.join(app_name),
-            cache: cache_dir()?.join(app_name),
+            config: own(config_dir()?, app_name),
+            data: own(data_dir()?, app_name),
+            cache: own(cache_dir()?, app_name),
         })
     }
 
@@ -82,6 +84,15 @@ impl AppDirs {
     /// Where the app keeps its cache.
     pub fn cache(&self) -> &Path {
         &self.cache
+    }
+}
+
+/// An app's directory under `root`: its own on the desktops, and `root` on a phone.
+fn own(root: PathBuf, app_name: &str) -> PathBuf {
+    if cfg!(any(target_os = "android", target_os = "ios")) {
+        root
+    } else {
+        root.join(app_name)
     }
 }
 
@@ -177,8 +188,16 @@ mod tests {
         let Some(dirs) = AppDirs::new("corundum-test") else {
             return;
         };
-        assert_eq!(dirs.config(), config_dir().unwrap().join("corundum-test"));
-        assert_eq!(dirs.data(), data_dir().unwrap().join("corundum-test"));
-        assert_eq!(dirs.cache(), cache_dir().unwrap().join("corundum-test"));
+        let own = |root: Option<PathBuf>| {
+            let root = root.unwrap();
+            if cfg!(any(target_os = "android", target_os = "ios")) {
+                root
+            } else {
+                root.join("corundum-test")
+            }
+        };
+        assert_eq!(dirs.config(), own(config_dir()));
+        assert_eq!(dirs.data(), own(data_dir()));
+        assert_eq!(dirs.cache(), own(cache_dir()));
     }
 }
