@@ -10,7 +10,9 @@
 //! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
 //! theme and the language over them. [`detail`] is a main view's detail pane: a right
 //! column beside it, a card over it, or on a phone the screen in its place; its column's
-//! toggle sits at the right end of the shell's status bar.
+//! toggle sits at the right end of the shell's status bar. With the `serde` feature,
+//! [`look`] is the theme and the language in effect, kept on the device and installed before
+//! the app's first frame.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -32,6 +34,8 @@ pub mod gpu;
 pub mod i18n;
 pub mod icons;
 pub mod logcat;
+#[cfg(feature = "serde")]
+pub mod look;
 pub mod platform;
 pub mod settings;
 mod shell;

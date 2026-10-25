@@ -34,7 +34,8 @@ eframe = ["gui", "corundum-framework-gui/eframe"]
 # The phone's window is eframe's too, so `android` brings `eframe` (and `::eframe`) along;
 # the gui crate's `android` already turns on its own `eframe`, so nothing more is built.
 android = ["eframe", "corundum-framework-gui/android"]
-# Serialize / Deserialize on the gui's theme and language settings (applies when `gui` is on).
+# Serialize / Deserialize on the gui's theme and language settings, and `gui::look`, the look
+# in effect kept on the device (applies when `gui` is on).
 serde = ["corundum-framework-gui?/serde"]
 
 [dependencies]

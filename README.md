@@ -33,6 +33,11 @@ desktops and on phones.
   in (a device and its workgroup, a client and its server); and an Appearance page, the
   theme and the language over those tabs. The pages store nothing: the app keeps the
   values.
+- **Look**: the theme and the language in effect, kept in a file in the app's config
+  directory (`look`, with the `serde` feature) and installed before the first frame, so
+  the app opens in them. An app that merges settings from elsewhere (a workgroup, a
+  server) applies the result there; an app with nothing else to keep them in stores them
+  there alone, as the demo does.
 - **Detail pane**: what the main view's item holds (the playlist playing, the journal
   open), in a right column beside it that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.

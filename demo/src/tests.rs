@@ -49,6 +49,36 @@ fn the_screens_draw_in_japanese() {
 }
 
 #[test]
+fn a_look_changed_on_a_screen_is_there_at_the_next_start() {
+    let dir = std::env::temp_dir().join(format!("corundum-demo-look-{}", std::process::id()));
+    let store = LookStore::at(dir.join(look::FILE_NAME));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let ctx = egui::Context::default();
+    look::attach(&ctx, store.clone());
+    let mut app = Demo::new(&ctx);
+    assert_eq!(
+        store.load(),
+        Some(Look::default()),
+        "saved from the first start"
+    );
+    app.theme.contrast = theme::Contrast::High;
+    app.open(Screen::Theme);
+    render(&ctx, [1000.0, 700.0], &mut app);
+    assert_eq!(
+        store.load().map(|l| l.theme.contrast),
+        Some(theme::Contrast::High)
+    );
+
+    // The next start: a new context, the same file.
+    let ctx = egui::Context::default();
+    assert!(look::attach(&ctx, store));
+    let app = Demo::new(&ctx);
+    assert_eq!(app.theme.contrast, theme::Contrast::High);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn the_translations_parse_and_match() {
     assert_eq!(check::parse_errors(&DEMO), Vec::<String>::new());
     assert_eq!(

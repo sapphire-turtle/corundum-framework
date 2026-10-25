@@ -99,13 +99,10 @@ demo-settings-sample-saved = Saved: { $name }
 demo-settings-apply = Apply
 demo-settings-revert = Revert
 demo-settings-general = General
-# The scopes a look is kept in: the server's for every device, and this device's own.
-demo-settings-scope-server = Server
+# Where the look is kept: a file on this device (corundum's look).
 demo-settings-scope-device = This device
-demo-settings-from-server = This device uses the server's settings.
-demo-settings-own = This device uses its own settings.
-demo-settings-use-server = Use the server's
-demo-settings-device-wins = This device's own settings win over these.
+demo-settings-look-file = Saved in { $path }, and shown again at the next start.
+demo-settings-look-memory = Kept while the demo runs: this platform gives it no config directory.
 demo-settings-about = About
 demo-settings-version = Version { $version }
 

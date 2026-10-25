@@ -47,6 +47,8 @@ pub struct WindowOptions {
     inner_size: [f32; 2],
     min_inner_size: [f32; 2],
     fonts: Option<InstallFonts>,
+    #[cfg(feature = "serde")]
+    look: Option<crate::look::LookStore>,
 }
 
 impl WindowOptions {
@@ -57,6 +59,8 @@ impl WindowOptions {
             inner_size: [900.0, 600.0],
             min_inner_size: [600.0, 400.0],
             fonts: None,
+            #[cfg(feature = "serde")]
+            look: None,
         }
     }
 
@@ -78,6 +82,31 @@ impl WindowOptions {
         self.fonts = Some(Box::new(install));
         self
     }
+
+    /// Keep the look in `store`: the look saved there is installed before the app's first
+    /// frame, and [`look::apply`](crate::look::apply) saves the look there from then on.
+    #[cfg(feature = "serde")]
+    pub fn remember_look(mut self, store: crate::look::LookStore) -> WindowOptions {
+        self.look = Some(store);
+        self
+    }
+
+    /// `create`, after attaching the look's store to the context when there is one.
+    #[cfg_attr(not(feature = "serde"), allow(unused_mut))]
+    pub(crate) fn wrap_create<'f>(
+        &mut self,
+        create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'f,
+    ) -> impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App> + 'f {
+        #[cfg(feature = "serde")]
+        let look = self.look.take();
+        move |cc| {
+            #[cfg(feature = "serde")]
+            if let Some(store) = look {
+                crate::look::attach(&cc.egui_ctx, store);
+            }
+            create(cc)
+        }
+    }
 }
 
 /// Open a desktop window and run it until it closes.
@@ -88,11 +117,14 @@ pub fn run(
     options: WindowOptions,
     create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App>,
 ) -> eframe::Result<()> {
+    let mut options = options;
+    let create = options.wrap_create(create);
     let WindowOptions {
         title,
         inner_size,
         min_inner_size,
         fonts,
+        ..
     } = options;
     gpu::install_panic_hook();
     let native = eframe::NativeOptions {

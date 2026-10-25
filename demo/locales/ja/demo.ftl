@@ -93,13 +93,10 @@ demo-settings-sample-saved = 保存済み：{ $name }
 demo-settings-apply = 適用
 demo-settings-revert = 元に戻す
 demo-settings-general = 一般
-# 外観を保存する場所：全デバイス共通のサーバーと、このデバイス独自のもの。
-demo-settings-scope-server = サーバー
+# 外観を保存する場所：このデバイスのファイル（corundum の look）。
 demo-settings-scope-device = このデバイス
-demo-settings-from-server = このデバイスはサーバーの設定を使っています。
-demo-settings-own = このデバイスでは個別に設定しています。
-demo-settings-use-server = サーバーの設定を使う
-demo-settings-device-wins = このデバイスでは、ここより個別の設定が優先されます。
+demo-settings-look-file = { $path } に保存し、次に起動したときも使います。
+demo-settings-look-memory = デモの実行中だけ保持します。このプラットフォームには設定ディレクトリがありません。
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
 
