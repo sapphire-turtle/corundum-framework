@@ -22,7 +22,13 @@ categories = ["gui"]
 # (winit needs an activity chosen), so an Android app turns this on.
 [features]
 default = ["eframe"]
-eframe = ["dep:eframe", "dep:objc2", "dep:objc2-ui-kit", "dep:raw-window-handle"]
+eframe = [
+    "dep:eframe",
+    "dep:objc2",
+    "dep:objc2-foundation",
+    "dep:objc2-ui-kit",
+    "dep:raw-window-handle",
+]
 android = [
     "eframe",
     "eframe/android-game-activity",
@@ -75,12 +81,29 @@ eframe = { version = "0.37", optional = true }
 # iOS's sandbox refuses to list the system font directories, so the font files are found
 # through CoreText instead (fonts::apple).
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFDictionary", "CFSet", "CFString", "CFURL"] }
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFDictionary", "CFSet", "CFString", "CFURL"] }
 objc2-core-text = { version = "0.3.2", default-features = false, features = ["std", "CTFontDescriptor", "CTFontCollection"] }
 # The `eframe` feature's: the window drawn over the whole screen, with egui told the safe
-# area (window::ios), as eframe 0.37 stretches its surface there.
+# area (window::ios), as eframe 0.37 stretches its surface there; put in a scene, which
+# iOS 27 requires and winit 0.30 does not do (window::ios::scene); and with a view that
+# takes the keyboards that compose, which winit 0.30's does not (window::ios::ime).
 objc2 = { version = "0.6.4", optional = true }
-objc2-ui-kit = { version = "0.3.2", optional = true, default-features = false, features = ["std", "objc2-core-foundation", "UIGeometry", "UIResponder", "UIView", "UIWindow"] }
+objc2-foundation = { version = "0.3.2", optional = true, default-features = false, features = ["std", "NSArray", "NSBundle", "NSRange", "NSSet", "NSString"] }
+objc2-ui-kit = { version = "0.3.2", optional = true, default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "UIApplication",
+    "UIGeometry",
+    "UIResponder",
+    "UIScene",
+    "UISceneDefinitions",
+    "UISceneOptions",
+    "UISceneSession",
+    "UITextInput",
+    "UIView",
+    "UIWindow",
+    "UIWindowScene",
+] }
 raw-window-handle = { version = "0.6", optional = true }
 
 # The `android` feature's: the activity and logcat. The JNI calls are
