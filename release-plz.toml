@@ -37,7 +37,5 @@ git_release_enable = true
 git_tag_name = "v{{ version }}"
 git_release_name = "v{{ version }}"
 
-# The demo app is not released (`publish = false`).
-[[package]]
-name = "corundum-framework-demo"
-release = false
+# The demo app is not released: release-plz skips it for its `publish = false`. An entry
+# here would set `publish = true` on it from the workspace's, and release-plz refuses that.
