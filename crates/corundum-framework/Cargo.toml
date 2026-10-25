@@ -1,7 +1,7 @@
 [package]
 name = "corundum-framework"
 # Versioned on its own, as the crates under it are.
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 description = "The application framework shared by sapphire and asteria apps - single-dependency facade over the corundum-framework-* crates"
 license = "MIT OR Apache-2.0"
@@ -39,6 +39,6 @@ android = ["eframe", "corundum-framework-gui/android"]
 serde = ["corundum-framework-gui?/serde"]
 
 [dependencies]
-corundum-framework-platform = { version = "0.1.0", path = "../corundum-framework-platform", optional = true }
+corundum-framework-platform = { version = "0.2.0", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.
-corundum-framework-gui = { version = "0.1.0", path = "../corundum-framework-gui", optional = true, default-features = false }
+corundum-framework-gui = { version = "0.2.0", path = "../corundum-framework-gui", optional = true, default-features = false }
