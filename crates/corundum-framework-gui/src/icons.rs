@@ -126,6 +126,11 @@ pub fn ellipsis() -> egui::ImageSource<'static> {
     icon!("ellipsis")
 }
 
+/// A handle to drag a row by.
+pub fn grip_vertical() -> egui::ImageSource<'static> {
+    icon!("grip-vertical")
+}
+
 /// A collapsed row, or a way further in.
 pub fn chevron_right() -> egui::ImageSource<'static> {
     icon!("chevron-right")
@@ -267,7 +272,7 @@ mod tests {
 
     type Icon = fn() -> egui::ImageSource<'static>;
 
-    const ALL: [(&str, Icon); 36] = [
+    const ALL: [(&str, Icon); 37] = [
         ("settings", settings),
         ("arrow_left", arrow_left),
         ("x", x),
@@ -277,6 +282,7 @@ mod tests {
         ("refresh_cw", refresh_cw),
         ("info", info),
         ("ellipsis", ellipsis),
+        ("grip_vertical", grip_vertical),
         ("chevron_right", chevron_right),
         ("chevron_down", chevron_down),
         ("circle_check", circle_check),

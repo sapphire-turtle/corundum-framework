@@ -30,9 +30,10 @@ android = [
     "dep:android_log-sys",
     "dep:tracing-subscriber",
 ]
-# Serialize / Deserialize on the theme and language settings, and `look`: the look in
-# effect, kept on the device and installed before the app's first frame.
-serde = ["dep:serde", "dep:serde_json", "egui/serde"]
+# Serialize / Deserialize on the theme and language settings and the rail's order, and
+# `store`: the look in effect and the rail's order, kept on the device in a TOML file and
+# put back before the app's first frame.
+serde = ["dep:serde", "dep:toml", "egui/serde"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -60,7 +61,7 @@ fontdb = "0.24"
 ttf-parser = "0.25"
 tracing.workspace = true
 serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+toml = { version = "1", optional = true }
 unic-langid = "0.9"
 
 [dev-dependencies]

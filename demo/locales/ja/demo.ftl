@@ -93,9 +93,9 @@ demo-settings-sample-saved = 保存済み：{ $name }
 demo-settings-apply = 適用
 demo-settings-revert = 元に戻す
 demo-settings-general = 一般
-# 外観を保存する場所：このデバイスのファイル（corundum の look）。
+# 外観を保存する場所：このデバイスのファイル（corundum の store）。レールの並び順も一緒に保存する。
 demo-settings-scope-device = このデバイス
-demo-settings-look-file = { $path } に保存し、次に起動したときも使います。
+demo-settings-look-file = レールの並び順と一緒に { $path } に保存し、次に起動したときも使います。
 demo-settings-look-memory = デモの実行中だけ保持します。このプラットフォームには設定ディレクトリがありません。
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }

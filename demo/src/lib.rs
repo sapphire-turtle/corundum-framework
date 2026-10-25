@@ -7,8 +7,9 @@
 use std::sync::OnceLock;
 
 use corundum_framework::gui::i18n::{self, LanguageSettings, Resources};
-use corundum_framework::gui::look::{self, Look, LookStore};
+use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::Settings;
+use corundum_framework::gui::store::Store;
 use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, egui, icons};
 
@@ -32,7 +33,8 @@ pub const APP_NAME: &str = "corundum-framework-demo";
 /// system has none, unset when the app did not start through [`run`].
 static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
 
-/// The app: the shell around the screens, and the look it keeps on the device.
+/// The app: the shell around the screens, and the look it keeps on the device. The shell's
+/// rail keeps its order there too, by itself.
 pub struct Demo {
     shell: Shell<Screen>,
     settings: Settings,
@@ -55,24 +57,22 @@ impl Demo {
         let applied = look::current(ctx).unwrap_or_default();
         // Saved too, when the device had none: the file is there from the first start.
         look::apply(ctx, &applied);
-        let shell = Shell::new(vec![
-            Destination::new(Screen::Overview, icons::info(), "demo-screen-overview"),
-            Destination::new(Screen::Theme, icons::star(), "demo-screen-theme"),
-            Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts"),
-            Destination::new(Screen::Icons, icons::images(), "demo-screen-icons"),
-            Destination::new(Screen::Language, icons::tag(), "demo-screen-language"),
-            Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail"),
+        // The action first, as an app's "new entry" would be.
+        let shell = Shell::from_items(vec![
+            Action::new("count", icons::plus(), "demo-action-count").into(),
+            Destination::new(Screen::Overview, icons::info(), "demo-screen-overview").into(),
+            Destination::new(Screen::Theme, icons::star(), "demo-screen-theme").into(),
+            Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts").into(),
+            Destination::new(Screen::Icons, icons::images(), "demo-screen-icons").into(),
+            Destination::new(Screen::Language, icons::tag(), "demo-screen-language").into(),
+            Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail").into(),
             Destination::new(
                 Screen::Platform,
                 icons::monitor_smartphone(),
                 "demo-screen-platform",
-            ),
+            )
+            .into(),
         ])
-        .with_actions(vec![Action::new(
-            "count",
-            icons::plus(),
-            "demo-action-count",
-        )])
         .with_footer(vec![Destination::new(
             Screen::Settings,
             icons::settings(),
@@ -215,7 +215,7 @@ impl corundum_framework::eframe::App for Demo {
 }
 
 /// The window's options: its title and size, the fonts, recording the CJK font found, and
-/// the look, kept in the app's config directory.
+/// the look and the rail's order, kept in the app's config directory.
 fn window_options() -> corundum_framework::gui::window::WindowOptions {
     let options = corundum_framework::gui::window::WindowOptions::new("corundum-framework demo")
         .inner_size([960.0, 680.0])
@@ -224,13 +224,15 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
             let family = corundum_framework::gui::fonts::install_system_cjk_fallback(ctx);
             let _ = CJK_FAMILY.set(family);
         });
-    match LookStore::for_app(APP_NAME) {
+    match Store::for_app(APP_NAME) {
         Some(store) => {
-            tracing::info!(path = %store.path().display(), "corundum demo: look file");
-            options.remember_look(store)
+            tracing::info!(path = %store.path().display(), "corundum demo: corundum file");
+            options.remember(store)
         }
         None => {
-            tracing::warn!("corundum demo: no config directory; the look is not saved");
+            tracing::warn!(
+                "corundum demo: no config directory; the look and the rail are not saved"
+            );
             options
         }
     }

@@ -2,31 +2,35 @@
 //! Appearance page, and About.
 //!
 //! The demo keeps no settings of its own beyond the look, so the look corundum keeps on the
-//! device (`look`) is where the Appearance page stores it: a change is applied, saved, and
-//! there again at the next start.
+//! device (`look`, in `store`'s file) is where the Appearance page stores it: a change is
+//! applied, saved, and there again at the next start.
 
 use corundum_framework::gui::egui;
 use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::{
-    AppearanceCtx, AppearancePage, AppearanceScope, ScopeTab, Settings, SettingsGroup,
+    AppearanceCtx, AppearancePage, AppearanceScope, RailPage, ScopeTab, Settings, SettingsGroup,
     SettingsSection,
 };
+use corundum_framework::gui::store;
 use corundum_framework::gui::tr;
 
 /// The one place the demo keeps the look: this device.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct Device;
 
-/// The demo's Settings: its own page, General (Appearance), and About.
+/// The demo's Settings: its own page, General (Appearance, Navigation), and About.
 pub(crate) fn settings() -> Settings {
     Settings::new()
         .with_group(
             SettingsGroup::new(vec![Box::new(Sample::default())]).titled("demo-settings-demo"),
         )
         .with_group(
-            SettingsGroup::new(vec![Box::new(Appearance {
-                page: AppearancePage::new(),
-            })])
+            SettingsGroup::new(vec![
+                Box::new(Appearance {
+                    page: AppearancePage::new(),
+                }),
+                Box::new(RailPage::new()),
+            ])
             .titled("demo-settings-general"),
         )
         .with_group(SettingsGroup::new(vec![Box::new(About)]))
@@ -116,7 +120,7 @@ impl SettingsSection for Appearance {
 
 /// Where the look is saved, or that it is kept only while the demo runs.
 fn file_line(ui: &mut egui::Ui) {
-    match look::store(ui.ctx()) {
+    match store::store(ui.ctx()) {
         Some(store) => ui.weak(tr!(
             ui,
             "demo-settings-look-file",

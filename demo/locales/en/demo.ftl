@@ -99,9 +99,9 @@ demo-settings-sample-saved = Saved: { $name }
 demo-settings-apply = Apply
 demo-settings-revert = Revert
 demo-settings-general = General
-# Where the look is kept: a file on this device (corundum's look).
+# Where the look is kept: a file on this device (corundum's store), with the rail's order.
 demo-settings-scope-device = This device
-demo-settings-look-file = Saved in { $path }, and shown again at the next start.
+demo-settings-look-file = Saved in { $path } with the rail's order, and shown again at the next start.
 demo-settings-look-memory = Kept while the demo runs: this platform gives it no config directory.
 demo-settings-about = About
 demo-settings-version = Version { $version }
