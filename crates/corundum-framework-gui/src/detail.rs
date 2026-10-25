@@ -1,6 +1,8 @@
-//! [`DetailPane`]: what the main view's item holds — the playlist playing, the journal open —
-//! beside it, over it, or in its place — and [`toggle_ui`], the button turning its column on
-//! and off, which the [`Shell`](crate::Shell)'s status bar holds.
+//! [`DetailPane`]: a right column beside the screens — what the main view's item holds (the
+//! playlist playing, the journal open), or a new entry begun from the rail's action — over
+//! the main view when there is no room for it, or in its place on a phone; and
+//! [`toggle_ui`], the button turning its column on and off, which the
+//! [`Shell`](crate::Shell)'s status bar holds.
 
 use crate::{COMPACT_WIDTH, icons, tr};
 
@@ -38,6 +40,15 @@ fn clicked_id() -> egui::Id {
     egui::Id::unique("corundum_detail_clicked")
 }
 
+/// The part of a pane [`DetailPane::show`] asks to be drawn.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Part {
+    /// The main view, as the root of what the pane leaves.
+    Main,
+    /// The detail, in the column, the card or the phone's screen.
+    Detail,
+}
+
 /// How the detail was shown in the last frame.
 #[cfg(test)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -52,8 +63,12 @@ enum Shown {
     Screen,
 }
 
-/// The main view and the detail of its item, laid out for the window. Hold one per screen
-/// that has a detail; call [`ui`](Self::ui) every frame it is shown.
+/// The main view and the detail beside it, laid out for the window. Hold one for the app
+/// and draw it around every screen, inside the shell's `content`: the column and its toggle
+/// then stay whatever screen is open, and a new entry begun from the rail's action shows
+/// beside the screen the person is on. What the detail shows is the app's — the draft being
+/// written, else the open screen's item, else a word that there is none. (A pane held by
+/// one screen alone is drawn, and toggled, on that screen only.)
 ///
 /// - **Wide, with the column on**: the detail is always in a right column beside the main
 ///   view, its width dragged at its edge. [`toggle_ui`] — at the right end of the shell's
@@ -124,16 +139,32 @@ impl DetailPane {
         self.open
     }
 
-    /// Render into `ui`, as the root of what the shell leaves of it: `main` draws the main
-    /// view and `detail` the detail, each into a panel of its own (no panels of theirs).
+    /// Render into `ui`, as the root of what the shell leaves of it. `main` draws the main
+    /// view into what the column leaves, as it would at the root — its own panels, then a
+    /// `CentralPanel` — so a screen draws the same inside the pane as without it. `detail`
+    /// draws the detail into the column, the card or the phone's screen (no panels of its
+    /// own).
+    ///
+    /// A [`Shell`](crate::Shell) built [`with_side_pane`](crate::Shell::with_side_pane)
+    /// holds a pane and draws it itself, around every screen.
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
         main: impl FnOnce(&mut egui::Ui),
         detail: impl FnOnce(&mut egui::Ui),
     ) {
+        let (mut main, mut detail) = (Some(main), Some(detail));
+        self.show(ui, |ui, part| match part {
+            Part::Main => main.take().map_or((), |m| m(ui)),
+            Part::Detail => detail.take().map_or((), |d| d(ui)),
+        });
+    }
+
+    /// As [`ui`](Self::ui), with one `draw` for both parts, called once for each part shown:
+    /// what lets the shell hand both to an app's `&mut self` in turn.
+    pub(crate) fn show(&mut self, ui: &mut egui::Ui, mut draw: impl FnMut(&mut egui::Ui, Part)) {
         if ui.ctx().content_rect().width() < COMPACT_WIDTH {
-            self.screen_ui(ui, main, detail);
+            self.screen_ui(ui, &mut draw);
             return;
         }
         let room = ui.available_width();
@@ -141,8 +172,8 @@ impl DetailPane {
         if fits {
             self.offer_toggle(ui.ctx());
         }
-        let mut detail = Some(detail);
-        if self.column && fits {
+        let column = self.column && fits;
+        if column {
             // The column shows it already: nothing is left open to pop up when it goes.
             self.open = false;
             egui::Panel::right(self.id.with("column"))
@@ -154,35 +185,30 @@ impl DetailPane {
                     egui::ScrollArea::vertical()
                         .id_salt(self.id.with("column_scroll"))
                         .auto_shrink(false)
-                        .show(ui, |ui| detail.take().map(|d| d(ui)));
+                        .show(ui, |ui| draw(ui, Part::Detail));
                 });
             self.set_shown(true, false);
         }
-        egui::CentralPanel::default().show(ui, main);
-        if let Some(detail) = detail {
+        draw(ui, Part::Main);
+        if !column {
             self.set_shown(false, self.open);
             if self.open {
-                self.card_ui(ui.ctx(), detail);
+                self.card_ui(ui.ctx(), &mut draw);
             }
         }
     }
 
     /// On a phone: the main view, or the detail in its place under a way back.
-    fn screen_ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        main: impl FnOnce(&mut egui::Ui),
-        detail: impl FnOnce(&mut egui::Ui),
-    ) {
+    fn screen_ui(&mut self, ui: &mut egui::Ui, draw: &mut impl FnMut(&mut egui::Ui, Part)) {
         #[cfg(test)]
         {
             self.shown = if self.open { Shown::Screen } else { Shown::Not };
         }
+        if !self.open {
+            draw(ui, Part::Main);
+            return;
+        }
         egui::CentralPanel::default().show(ui, |ui| {
-            if !self.open {
-                main(ui);
-                return;
-            }
             let back = icons::image(ui, icons::arrow_left(), 14.0);
             if ui
                 .add(egui::Button::image_and_text(
@@ -197,7 +223,7 @@ impl DetailPane {
             egui::ScrollArea::vertical()
                 .id_salt(self.id.with("screen_scroll"))
                 .auto_shrink(false)
-                .show(ui, detail);
+                .show(ui, |ui| draw(ui, Part::Detail));
         });
     }
 
@@ -222,7 +248,7 @@ impl DetailPane {
     }
 
     /// The card over the middle of the screen, with a way to close it.
-    fn card_ui(&mut self, ctx: &egui::Context, detail: impl FnOnce(&mut egui::Ui)) {
+    fn card_ui(&mut self, ctx: &egui::Context, draw: &mut impl FnMut(&mut egui::Ui, Part)) {
         let screen = ctx.content_rect();
         let mut close = false;
         let response = egui::Modal::new(self.id.with("card")).show(ctx, |ui| {
@@ -241,7 +267,7 @@ impl DetailPane {
             egui::ScrollArea::vertical()
                 .id_salt(self.id.with("card_scroll"))
                 .max_height(screen.height() * CARD_SHARE)
-                .show(ui, detail);
+                .show(ui, |ui| draw(ui, Part::Detail));
         });
         if close || response.should_close() {
             self.open = false;
@@ -311,6 +337,35 @@ mod tests {
         let mut pane = DetailPane::new("t");
         assert_eq!(drawn(&mut pane, WIDE), (true, true));
         assert_eq!(pane.shown, Shown::Column);
+    }
+
+    #[test]
+    fn a_main_view_with_its_own_panels_keeps_clear_of_the_column() {
+        let ctx = egui::Context::default();
+        let mut pane = DetailPane::new("t");
+        let (mut list, mut page, mut column) = (
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+            egui::Rect::NOTHING,
+        );
+        render_in(&ctx, WIDE, |ui| {
+            pane.ui(
+                ui,
+                |ui| {
+                    list = egui::Panel::left("t_list")
+                        .show(ui, |ui| ui.label("list"))
+                        .response
+                        .rect;
+                    page = egui::CentralPanel::default()
+                        .show(ui, |ui| ui.label("page"))
+                        .response
+                        .rect;
+                },
+                |ui| column = ui.max_rect(),
+            )
+        });
+        assert!(list.right() <= page.left(), "{list:?} {page:?}");
+        assert!(page.right() <= column.left(), "{page:?} {column:?}");
     }
 
     #[test]

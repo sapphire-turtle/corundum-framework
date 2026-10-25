@@ -1,9 +1,9 @@
 //! The demo's screens, one per piece of the framework, and what they keep between frames.
 
-use corundum_framework::gui::egui;
 use corundum_framework::gui::i18n::{self, LanguageSettings, Message};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{ThemeSettings, Tint};
+use corundum_framework::gui::{Side, egui};
 
 mod detail;
 mod fonts;
@@ -27,7 +27,7 @@ pub enum Screen {
     Icons,
     /// The language picker, switched in place, and the demo's own messages.
     Language,
-    /// The detail pane: albums, and the picked one's tracks.
+    /// The side pane: albums, and the picked one's tracks.
     Detail,
     /// The clipboard, the insets and the app's directories.
     Platform,
@@ -91,7 +91,7 @@ impl State {
     }
 }
 
-/// Draw `screen` into what the shell left of `ui`.
+/// Draw `screen` into what the shell and the side pane left of `ui`, as its root.
 pub(crate) fn ui(
     ui: &mut egui::Ui,
     screen: Screen,
@@ -99,11 +99,12 @@ pub(crate) fn ui(
     settings: &mut Settings,
     theme: &mut ThemeSettings,
     language: &mut LanguageSettings,
+    side: &mut Side,
 ) {
     // These two lay out their own panels.
     match screen {
         Screen::Settings => return settings.ui(ui),
-        Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log),
+        Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log, side),
         _ => {}
     }
     egui::CentralPanel::default().show(ui, |ui| {
@@ -119,6 +120,48 @@ pub(crate) fn ui(
                 Screen::Settings | Screen::Detail => unreachable!("drawn above"),
             });
     });
+}
+
+/// The app's side pane: the note being written, else the open screen's item (the Detail
+/// screen's album), else a word that there is none. A note saved or discarded closes the
+/// pane, where it was open on the card or in the screen's place.
+pub(crate) fn side_ui(
+    ui: &mut egui::Ui,
+    screen: Screen,
+    state: &mut State,
+    draft: &mut Option<String>,
+    side: &mut Side,
+) {
+    if let Some(text) = draft {
+        ui.heading(i18n::tr(ui.ctx(), "demo-note-new"));
+        ui.add(egui::TextEdit::multiline(text).desired_width(f32::INFINITY));
+        let (save, discard) = ui
+            .horizontal(|ui| {
+                let save = ui
+                    .add_enabled(
+                        !text.trim().is_empty(),
+                        egui::Button::new(i18n::tr(ui.ctx(), "demo-note-save")),
+                    )
+                    .clicked();
+                let discard = ui.button(i18n::tr(ui.ctx(), "demo-note-discard")).clicked();
+                (save, discard)
+            })
+            .inner;
+        if save {
+            state.log = Message::new("demo-status-saved").arg("note", text.trim().to_owned());
+        }
+        if save || discard {
+            *draft = None;
+            side.close();
+        }
+        return;
+    }
+    match screen {
+        Screen::Detail => detail::side_ui(ui, &state.detail),
+        _ => {
+            ui.weak(i18n::tr(ui.ctx(), "demo-pane-empty"));
+        }
+    }
 }
 
 /// A screen's heading: its name, as the rail has it.

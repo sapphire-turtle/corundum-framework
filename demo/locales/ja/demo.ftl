@@ -12,8 +12,8 @@ demo-screen-language = 言語
 demo-screen-detail = 詳細
 demo-screen-platform = プラットフォーム
 demo-screen-settings = 設定
-# レールのアクション。クリックの回数を概要に出す。
-demo-action-count = クリックを数える
+# レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
+demo-action-new = 新しいメモ
 # フッターのスロットの点（ホバー）。
 demo-foot-online = オンライン（クリックでオフライン）
 demo-foot-offline = オフライン（クリックでオンライン）
@@ -100,11 +100,18 @@ demo-settings-look-memory = デモの実行中だけ保持します。このプ�
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
 
-# 詳細画面：アルバムと、選んだアルバムの曲を詳細ペインに。
-demo-detail-intro = アルバムを選ぶと曲が表示されます。広い画面では右カラムに表示され、ステータスバー右端のボタンで隠せます。隠しているときやスマートフォンでは、アルバムを選ぶと開きます。
+# 詳細画面：アルバムと、選んだアルバムの曲をサイドペインに。
+demo-detail-intro = アルバムを選ぶと、曲がサイドペインに表示されます。広い画面ではどの画面でも右カラムとして表示され、ステータスバー右端のボタンで隠せます。隠しているときやスマートフォンでは、アルバムを選ぶと開きます。
 demo-detail-tracks = { $count } 曲
+
+# サイドペイン（アプリ全体で1つ）：書いているメモ、なければ開いている画面の項目、なければ何もない。
+demo-pane-empty = ここに表示するものはありません。詳細画面でアルバムを選ぶか、+ でメモを書き始めてください。
+demo-note-new = 新しいメモ
+demo-note-save = 保存
+demo-note-discard = 破棄
 
 # ステータスバーの1行：最後に起きたこと。
 demo-status-ready = 準備完了
-demo-status-counted = { $count } まで数えました
+demo-status-writing = 新しいメモを書いています
+demo-status-saved = メモ「{ $note }」を保存しました
 demo-status-picked = { $album } を選びました

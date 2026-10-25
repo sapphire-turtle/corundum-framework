@@ -11,7 +11,7 @@ use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::store::Store;
 use corundum_framework::gui::theme::{self, ThemeSettings};
-use corundum_framework::gui::{Action, Destination, Shell, egui, icons};
+use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, icons};
 
 mod screens;
 
@@ -33,10 +33,20 @@ pub const APP_NAME: &str = "corundum-framework-demo";
 /// system has none, unset when the app did not start through [`run`].
 static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
 
-/// The app: the shell around the screens, and the look it keeps on the device. The shell's
-/// rail keeps its order there too, by itself.
+/// The demo: the shell, and the app it draws.
 pub struct Demo {
     shell: Shell<Screen>,
+    app: App,
+    /// The window's rects as last logged, to log them again only when they change.
+    logged: Option<[egui::Rect; 3]>,
+}
+
+/// What the shell draws: the screens, the side pane beside them all, the foot and the
+/// status, and the look the app keeps on the device. The shell's rail and side column keep
+/// their state there too, by themselves.
+struct App {
+    /// The note the rail's action began, written in the side pane.
+    draft: Option<String>,
     settings: Settings,
     /// The theme and the language the Theme and Language screens edit.
     theme: ThemeSettings,
@@ -45,8 +55,6 @@ pub struct Demo {
     /// are told apart from.
     applied: Look,
     state: screens::State,
-    /// The window's rects as last logged, to log them again only when they change.
-    logged: Option<[egui::Rect; 3]>,
 }
 
 impl Demo {
@@ -59,7 +67,7 @@ impl Demo {
         look::apply(ctx, &applied);
         // The action first, as an app's "new entry" would be.
         let shell = Shell::from_items(vec![
-            Action::new("count", icons::plus(), "demo-action-count").into(),
+            Action::new("new-note", icons::plus(), "demo-action-new").into(),
             Destination::new(Screen::Overview, icons::info(), "demo-screen-overview").into(),
             Destination::new(Screen::Theme, icons::star(), "demo-screen-theme").into(),
             Destination::new(Screen::Fonts, icons::file_text(), "demo-screen-fonts").into(),
@@ -77,14 +85,19 @@ impl Demo {
             Screen::Settings,
             icons::settings(),
             "demo-screen-settings",
-        )]);
+        )])
+        .with_side_pane()
+        .with_status_bar();
         Demo {
             shell,
-            settings: screens::settings::settings(),
-            theme: applied.theme.clone(),
-            language: applied.language.clone(),
-            applied,
-            state: screens::State::new(CJK_FAMILY.get().cloned()),
+            app: App {
+                draft: None,
+                settings: screens::settings::settings(),
+                theme: applied.theme.clone(),
+                language: applied.language.clone(),
+                applied,
+                state: screens::State::new(CJK_FAMILY.get().cloned()),
+            },
             logged: None,
         }
     }
@@ -102,44 +115,49 @@ impl Demo {
     /// Draw the app into the window's root `ui`.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.log_rects(ui);
-        let Demo {
-            shell,
+        self.shell.show(ui, &mut self.app);
+        if let Some(screen) = self.app.state.open.take() {
+            self.shell.open(screen);
+        }
+        self.app.follow_look(ui.ctx());
+    }
+}
+
+impl ShellApp<Screen> for App {
+    fn screen_ui(&mut self, ui: &mut egui::Ui, screen: Screen, side: &mut Side) {
+        let App {
             settings,
             theme,
             language,
             state,
             ..
         } = self;
-        // The foot and the status are drawn apart from the screen: a flip of the dot shows on
-        // the Overview, and a line the screen logs on the status bar, next frame.
-        let mut online = state.online;
-        let log = state.log.clone();
-        shell.ui_with_status(
-            ui,
-            |ui| foot_ui(ui, &mut online),
-            |ui| {
-                ui.weak(log.text(ui.ctx()));
-            },
-            |ui, screen| screens::ui(ui, screen, state, settings, theme, language),
-        );
-        if log != state.log {
-            ui.ctx().request_repaint();
-        }
-        if online != state.online {
-            state.online = online;
-            ui.ctx().request_repaint();
-        }
-        if shell.take_action() == Some("count") {
-            state.clicks += 1;
-            state.log = i18n::Message::new("demo-status-counted").arg("count", state.clicks);
-            ui.ctx().request_repaint();
-        }
-        if let Some(screen) = state.open.take() {
-            shell.open(screen);
-        }
-        self.follow_look(ui.ctx());
+        screens::ui(ui, screen, state, settings, theme, language, side);
     }
 
+    fn side_ui(&mut self, ui: &mut egui::Ui, screen: Screen, side: &mut Side) {
+        screens::side_ui(ui, screen, &mut self.state, &mut self.draft, side);
+    }
+
+    fn foot_ui(&mut self, ui: &mut egui::Ui) -> Option<Screen> {
+        foot_ui(ui, &mut self.state.online)
+    }
+
+    fn status_ui(&mut self, ui: &mut egui::Ui) {
+        ui.weak(self.state.log.text(ui.ctx()));
+    }
+
+    fn action(&mut self, id: &'static str, side: &mut Side) {
+        if id == "new-note" {
+            self.state.clicks += 1;
+            self.draft.get_or_insert_with(String::new);
+            side.open();
+            self.state.log = i18n::Message::new("demo-status-writing");
+        }
+    }
+}
+
+impl App {
     /// Save what the Theme and Language screens changed — a drag's once it ends — or take
     /// what the Settings page applied.
     fn follow_look(&mut self, ctx: &egui::Context) {

@@ -13,6 +13,8 @@
 mod order;
 
 pub use order::RailOrder;
+
+use crate::detail::Part;
 pub(crate) use order::{RailEntry, move_to, published, request};
 
 /// Below this width the layout is a phone's: the rail becomes a bottom bar, and screens
@@ -153,8 +155,155 @@ pub struct Shell<D> {
     open: Option<D>,
     /// How big the foot was last frame: the rail or the bar keeps room for it.
     foot_size: egui::Vec2,
+    /// The side pane, [`with_side_pane`](Self::with_side_pane).
+    pane: Option<crate::detail::DetailPane>,
+    /// Whether the side column was on at the last frame's end, to save it when it turns.
+    side_column: Option<bool>,
+    /// Whether [`show`](Self::show) draws a status bar.
+    status_bar: bool,
     /// Whether the SVG loader, the theme and the language have been put in place.
     loaders: bool,
+}
+
+/// An app as the shell draws it, each frame, with [`Shell::show`]: its screens, its side
+/// pane, its foot and status, and what its actions do. The shell calls these in turn, each
+/// with the app's `&mut self`, so a screen and the side pane share the app's state freely.
+///
+/// ```no_run
+/// # use corundum_framework_gui::{Action, Destination, Shell, ShellApp, Side, icons};
+/// #[derive(Clone, Copy, PartialEq)]
+/// enum Screen { Entries, Settings }
+///
+/// struct Journal { draft: Option<String> }
+///
+/// impl ShellApp<Screen> for Journal {
+///     fn screen_ui(&mut self, ui: &mut egui::Ui, screen: Screen, side: &mut Side) {
+///         egui::CentralPanel::default().show(ui, |ui| ui.label("…"));
+///     }
+///
+///     fn side_ui(&mut self, ui: &mut egui::Ui, screen: Screen, side: &mut Side) {
+///         match &mut self.draft {
+///             Some(text) => {
+///                 ui.text_edit_multiline(text);
+///                 if ui.button("Save").clicked() {
+///                     self.draft = None;
+///                     side.close();
+///                 }
+///             }
+///             None => { ui.weak("Nothing selected"); }
+///         }
+///     }
+///
+///     fn action(&mut self, id: &'static str, side: &mut Side) {
+///         if id == "new-entry" {
+///             self.draft = Some(String::new());
+///             side.open();
+///         }
+///     }
+/// }
+///
+/// # fn example(ui: &mut egui::Ui) {
+/// let mut shell = Shell::from_items(vec![
+///     Action::new("new-entry", icons::plus(), "new-entry").into(),
+///     Destination::new(Screen::Entries, icons::file_text(), "entries").into(),
+/// ])
+/// .with_footer(vec![Destination::new(Screen::Settings, icons::settings(), "settings")])
+/// .with_side_pane()
+/// .with_status_bar();
+/// let mut journal = Journal { draft: None };
+/// // Every frame:
+/// shell.show(ui, &mut journal);
+/// # }
+/// ```
+pub trait ShellApp<D> {
+    /// Draw `screen` into what the frame leaves of `ui`, as it would at the root: its own
+    /// panels, then a `CentralPanel`. Through `side` it opens the side pane — on a card, or
+    /// on a phone in the screen's place — when the person picks an item.
+    fn screen_ui(&mut self, ui: &mut egui::Ui, screen: D, side: &mut Side);
+
+    /// Fill the side pane, [`with_side_pane`](Shell::with_side_pane) (no panels of its own):
+    /// the new entry being written, else `screen`'s item, else a word that there is none.
+    /// Through `side` it closes the pane once the entry is saved or dropped.
+    fn side_ui(&mut self, ui: &mut egui::Ui, screen: D, side: &mut Side) {
+        let _ = (ui, screen, side);
+    }
+
+    /// Draw the foot — a status dot, say — at the rail's foot, at the bottom bar's end, or
+    /// on the status bar; a destination it returns is opened.
+    fn foot_ui(&mut self, ui: &mut egui::Ui) -> Option<D> {
+        let _ = ui;
+        None
+    }
+
+    /// Fill the status bar from the left, [`with_status_bar`](Shell::with_status_bar).
+    fn status_ui(&mut self, ui: &mut egui::Ui) {
+        let _ = ui;
+    }
+
+    /// Do what the [`Action`] `id` names: it was clicked on the rail or in the More menu. A
+    /// "new entry" begins the entry and opens it in the side pane through `side`.
+    fn action(&mut self, id: &'static str, side: &mut Side) {
+        let _ = (id, side);
+    }
+}
+
+/// The side pane, as a [`ShellApp`] asks things of it. What is asked is done after the
+/// call. Without a side pane, it asks nothing.
+#[derive(Debug)]
+pub struct Side {
+    pane: bool,
+    open: bool,
+    asked: Option<bool>,
+}
+
+impl Side {
+    /// Show the side pane's content: on the card, or on a phone in the screen's place. While
+    /// the column shows it, there is nothing more to show.
+    pub fn open(&mut self) {
+        self.asked = Some(true);
+        self.open = self.pane;
+    }
+
+    /// Back to the screen alone, on the card or on a phone. The column stays.
+    pub fn close(&mut self) {
+        self.asked = Some(false);
+        self.open = false;
+    }
+
+    /// Whether the side pane is open on the card or in the screen's place.
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+}
+
+/// The closures of [`Shell::ui`] and its kin, as a [`ShellApp`].
+struct Closures<F, S, C> {
+    foot: Option<F>,
+    status: Option<S>,
+    content: Option<C>,
+}
+
+impl<D, F, S, C> ShellApp<D> for Closures<F, S, C>
+where
+    F: FnOnce(&mut egui::Ui) -> Option<D>,
+    S: FnOnce(&mut egui::Ui),
+    C: FnOnce(&mut egui::Ui, D),
+{
+    fn screen_ui(&mut self, ui: &mut egui::Ui, screen: D, _: &mut Side) {
+        if let Some(content) = self.content.take() {
+            content(ui, screen);
+        }
+    }
+
+    fn foot_ui(&mut self, ui: &mut egui::Ui) -> Option<D> {
+        self.foot.take().and_then(|foot| foot(ui))
+    }
+
+    fn status_ui(&mut self, ui: &mut egui::Ui) {
+        if let Some(status) = self.status.take() {
+            status(ui);
+        }
+    }
 }
 
 /// A screen or an action, by its index in the shell's.
@@ -208,6 +357,9 @@ impl<D: Copy + PartialEq> Shell<D> {
             menu_rects: Vec::new(),
             open: None,
             foot_size: egui::Vec2::ZERO,
+            pane: None,
+            side_column: None,
+            status_bar: false,
             loaders: false,
         };
         for item in items {
@@ -357,11 +509,49 @@ impl<D: Copy + PartialEq> Shell<D> {
         self.open = Some(id);
     }
 
+    /// Give the app a side pane: a right column beside every screen when wide, which the
+    /// status bar's button hides; a card over the screen when it is hidden or there is no
+    /// room; on a phone, the screen's place. [`ShellApp::side_ui`] fills it, and a screen
+    /// or an action opens it through [`Side`]. Whether the column is on is kept with the
+    /// rail's order, in the [store](crate::store) if one is attached.
+    pub fn with_side_pane(mut self) -> Shell<D> {
+        self.pane = Some(crate::detail::DetailPane::new("corundum_shell_side"));
+        self
+    }
+
+    /// Draw a status bar along the window's bottom when wide: [`ShellApp::status_ui`] fills
+    /// it from the left — a log's last line, the services' state, the track playing; its
+    /// right end holds [`ShellApp::foot_ui`] (there rather than at the rail's foot), then
+    /// the side pane's toggle. Narrow, as on a phone, there is no status bar: the foot stays
+    /// on the bottom bar.
+    pub fn with_status_bar(mut self) -> Shell<D> {
+        self.status_bar = true;
+        self
+    }
+
+    /// Render `app` into the window's root `ui`: the rail, the open screen
+    /// ([`ShellApp::screen_ui`]) and, [`with_side_pane`](Self::with_side_pane), the side
+    /// pane beside it; then hand an action clicked to [`ShellApp::action`]. The first frame
+    /// installs the default [`theme`](crate::theme) and [`language`](crate::i18n) if the app
+    /// has not installed them, and takes the rail's order and the side column from the
+    /// [store](crate::store) if one is attached.
+    pub fn show(&mut self, ui: &mut egui::Ui, app: &mut impl ShellApp<D>) {
+        self.frame_ui(ui, app, self.status_bar);
+        if let Some(id) = self.clicked.take() {
+            let mut side = self.side();
+            app.action(id, &mut side);
+            self.apply_side(side);
+            ui.ctx().request_repaint();
+        }
+    }
+
     /// Render into the window's root `ui`. `content` draws the open destination into what
     /// the frame leaves of `ui`, as it would at the root: its own panels, then a
-    /// `CentralPanel`. The first frame installs the default [`theme`](crate::theme) and
+    /// `CentralPanel`. An action clicked waits for [`take_action`](Self::take_action). The
+    /// first frame installs the default [`theme`](crate::theme) and
     /// [`language`](crate::i18n) if the app has not installed them, and takes the rail's
-    /// order from the [store](crate::store) if one is attached.
+    /// order from the [store](crate::store) if one is attached. An app with a side pane or
+    /// state shared by its screens implements [`ShellApp`] and calls [`show`](Self::show).
     pub fn ui(&mut self, ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui, D)) {
         self.ui_with_foot(ui, |_| None, content);
     }
@@ -374,15 +564,18 @@ impl<D: Copy + PartialEq> Shell<D> {
         foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
         content: impl FnOnce(&mut egui::Ui, D),
     ) {
-        self.frame_ui(ui, foot, None::<fn(&mut egui::Ui)>, content);
+        let mut app = Closures {
+            foot: Some(foot),
+            status: None::<fn(&mut egui::Ui)>,
+            content: Some(content),
+        };
+        self.frame_ui(ui, &mut app, false);
     }
 
     /// As [`ui_with_foot`](Self::ui_with_foot), with a status bar along the window's
-    /// bottom when wide. `status` fills it from the left — a log's last line, the services'
-    /// state, the track playing; the bar's right end holds `foot` (there rather than at the
-    /// rail's foot), then the [detail pane](crate::detail)'s toggle when the open screen has
-    /// one. Narrow, as on a phone, there is no status bar: `foot` stays on the bottom bar,
-    /// and `status` is not called.
+    /// bottom when wide, as [`with_status_bar`](Self::with_status_bar): `status` fills it
+    /// from the left, and its right end holds `foot`. Narrow, as on a phone, there is no
+    /// status bar: `foot` stays on the bottom bar, and `status` is not called.
     pub fn ui_with_status(
         &mut self,
         ui: &mut egui::Ui,
@@ -390,17 +583,72 @@ impl<D: Copy + PartialEq> Shell<D> {
         status: impl FnOnce(&mut egui::Ui),
         content: impl FnOnce(&mut egui::Ui, D),
     ) {
-        self.frame_ui(ui, foot, Some(status), content);
+        let mut app = Closures {
+            foot: Some(foot),
+            status: Some(status),
+            content: Some(content),
+        };
+        self.frame_ui(ui, &mut app, true);
     }
 
-    fn frame_ui(
-        &mut self,
-        ui: &mut egui::Ui,
-        foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
-        status: Option<impl FnOnce(&mut egui::Ui)>,
-        content: impl FnOnce(&mut egui::Ui, D),
-    ) {
-        if !std::mem::replace(&mut self.loaders, true) {
+    /// The side pane's state, for the app to ask things of.
+    fn side(&self) -> Side {
+        Side {
+            pane: self.pane.is_some(),
+            open: self.pane.as_ref().is_some_and(|p| p.is_open()),
+            asked: None,
+        }
+    }
+
+    fn apply_side(&mut self, side: Side) {
+        if let (Some(pane), Some(open)) = (&mut self.pane, side.asked) {
+            if open {
+                pane.open();
+            } else {
+                pane.close();
+            }
+        }
+    }
+
+    /// The open screen, in the side pane when there is one.
+    fn content_ui(&mut self, ui: &mut egui::Ui, app: &mut impl ShellApp<D>, id: D) {
+        let mut side = self.side();
+        match &mut self.pane {
+            Some(pane) => pane.show(ui, |ui, part| match part {
+                Part::Main => app.screen_ui(ui, id, &mut side),
+                Part::Detail => app.side_ui(ui, id, &mut side),
+            }),
+            None => app.screen_ui(ui, id, &mut side),
+        }
+        self.apply_side(side);
+    }
+
+    /// Take the side column's state from the store on the first frame, and keep it there
+    /// when the person turns it on or off.
+    fn sync_side(&mut self, ctx: &egui::Context, first: bool) {
+        let Some(pane) = &mut self.pane else {
+            return;
+        };
+        #[cfg(feature = "serde")]
+        {
+            if first && let Some(saved) = crate::store::state(ctx).side {
+                pane.set_column(saved.column);
+            }
+            let column = pane.column();
+            if !first && self.side_column != Some(column) {
+                crate::store::update(ctx, |state| {
+                    state.side = Some(crate::store::SidePane { column });
+                });
+            }
+        }
+        #[cfg(not(feature = "serde"))]
+        let _ = (ctx, first);
+        self.side_column = Some(pane.column());
+    }
+
+    fn frame_ui(&mut self, ui: &mut egui::Ui, app: &mut impl ShellApp<D>, status: bool) {
+        let first = !std::mem::replace(&mut self.loaders, true);
+        if first {
             crate::icons::install_loaders(ui.ctx());
             // The app may have installed its saved theme already; only fill the gap.
             if !crate::theme::is_installed(ui.ctx()) {
@@ -414,6 +662,7 @@ impl<D: Copy + PartialEq> Shell<D> {
             if let Some(order) = crate::store::state(ui.ctx()).rail {
                 self.set_rail_order(&order);
             }
+            self.sync_side(ui.ctx(), true);
         }
         self.sync_order(ui.ctx());
         let safe = unsafe_margin(ui);
@@ -433,7 +682,7 @@ impl<D: Copy + PartialEq> Shell<D> {
         if safe != egui::epaint::MarginF32::ZERO {
             ui.painter().rect_filled(full, 0.0, ui.visuals().panel_fill);
         }
-        if !compact && let Some(status) = status {
+        if !compact && status {
             // The bar under the rail and the screen, which keep what is above it.
             let height = ui.spacing().interact_size.y + 2.0 * STATUS_MARGIN;
             let above = inner.with_max_y(inner.bottom() - height);
@@ -448,41 +697,43 @@ impl<D: Copy + PartialEq> Shell<D> {
                     self.open = Some(id);
                 }
                 if let Some(id) = self.open {
-                    content(ui, id);
+                    self.content_ui(ui, app, id);
                 }
             });
             // Drawn after the screen, so the toggle knows of the detail pane drawn there.
-            if let Some(id) = status_bar_ui(ui, strip, foot, status) {
+            if let Some(id) = status_bar_ui(ui, strip, app) {
                 self.open = Some(id);
                 ui.ctx().request_repaint();
             }
-            return;
+        } else {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
+                let foot = |ui: &mut egui::Ui| app.foot_ui(ui);
+                let opened = if compact {
+                    let mut frame = egui::Frame::side_top_panel(ui.style());
+                    frame.inner_margin.bottom = frame
+                        .inner_margin
+                        .bottom
+                        .saturating_add(safe.bottom.round().min(127.0) as i8);
+                    egui::Panel::bottom("shell_bar")
+                        .frame(frame)
+                        .show(ui, |ui| self.bar_ui(ui, foot))
+                        .inner
+                } else {
+                    egui::Panel::left("shell_rail")
+                        .resizable(false)
+                        .exact_size(RAIL_WIDTH)
+                        .show(ui, |ui| self.rail_ui(ui, foot))
+                        .inner
+                };
+                if let Some(id) = opened {
+                    self.open = Some(id);
+                }
+                if let Some(id) = self.open {
+                    self.content_ui(ui, app, id);
+                }
+            });
         }
-        ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
-            let opened = if compact {
-                let mut frame = egui::Frame::side_top_panel(ui.style());
-                frame.inner_margin.bottom = frame
-                    .inner_margin
-                    .bottom
-                    .saturating_add(safe.bottom.round().min(127.0) as i8);
-                egui::Panel::bottom("shell_bar")
-                    .frame(frame)
-                    .show(ui, |ui| self.bar_ui(ui, foot))
-                    .inner
-            } else {
-                egui::Panel::left("shell_rail")
-                    .resizable(false)
-                    .exact_size(RAIL_WIDTH)
-                    .show(ui, |ui| self.rail_ui(ui, foot))
-                    .inner
-            };
-            if let Some(id) = opened {
-                self.open = Some(id);
-            }
-            if let Some(id) = self.open {
-                content(ui, id);
-            }
-        });
+        self.sync_side(ui.ctx(), false);
     }
 
     /// How many of the `shown` items the rail or bar holds in `room` (its length less the
@@ -760,14 +1011,9 @@ impl<D: Copy + PartialEq> Shell<D> {
     }
 }
 
-/// The status bar along the bottom of `strip`: `status` from the left, `foot` and the
-/// detail pane's toggle at the right end. The destination `foot` returns, if any.
-fn status_bar_ui<D>(
-    ui: &mut egui::Ui,
-    strip: egui::Rect,
-    foot: impl FnOnce(&mut egui::Ui) -> Option<D>,
-    status: impl FnOnce(&mut egui::Ui),
-) -> Option<D> {
+/// The status bar along the bottom of `strip`: the app's status from the left, its foot and
+/// the side pane's toggle at the right end. The destination the foot returns, if any.
+fn status_bar_ui<D>(ui: &mut egui::Ui, strip: egui::Rect, app: &mut impl ShellApp<D>) -> Option<D> {
     let visuals = ui.visuals();
     ui.painter().rect_filled(strip, 0.0, visuals.panel_fill);
     ui.painter().hline(
@@ -783,9 +1029,11 @@ fn status_bar_ui<D>(
         |ui| {
             ui.set_clip_rect(row);
             crate::detail::toggle_ui(ui);
-            let opened = foot(ui);
+            let opened = app.foot_ui(ui);
             // What is left, from the left: the app's.
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), status);
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                app.status_ui(ui)
+            });
             opened
         },
     )
@@ -1460,6 +1708,7 @@ mod tests {
         file.save(&Stored {
             look: None,
             rail: Some(saved.clone()),
+            side: None,
         })
         .unwrap();
         let ctx = egui::Context::default();
@@ -1480,6 +1729,171 @@ mod tests {
             file.load().and_then(|s| s.rail).map(|r| r.order),
             Some(vec!["entries".to_owned(), "summary".to_owned()])
         );
+    }
+
+    /// An app whose screens and side pane share its state: the draft an action begins, and
+    /// what was drawn.
+    #[derive(Default)]
+    struct Notes {
+        draft: Option<String>,
+        screens: Vec<Screen>,
+        sides: Vec<Screen>,
+        status: bool,
+    }
+
+    impl ShellApp<Screen> for Notes {
+        fn screen_ui(&mut self, ui: &mut egui::Ui, screen: Screen, _: &mut Side) {
+            self.screens.push(screen);
+            egui::CentralPanel::default().show(ui, |ui| ui.label("screen"));
+        }
+
+        fn side_ui(&mut self, ui: &mut egui::Ui, screen: Screen, side: &mut Side) {
+            self.sides.push(screen);
+            if let Some(draft) = &mut self.draft {
+                ui.text_edit_singleline(draft);
+                if ui.button("save").clicked() {
+                    self.draft = None;
+                    side.close();
+                }
+            }
+        }
+
+        fn status_ui(&mut self, ui: &mut egui::Ui) {
+            self.status = true;
+            ui.label("ready");
+        }
+
+        fn action(&mut self, id: &'static str, side: &mut Side) {
+            assert_eq!(id, "new");
+            self.draft = Some(String::new());
+            side.open();
+        }
+    }
+
+    fn notes_shell() -> Shell<Screen> {
+        Shell::from_items(vec![
+            Action::new("new", crate::icons::plus(), "new-entry").into(),
+            Destination::new(Screen::Entries, crate::icons::settings(), "entries").into(),
+            Destination::new(Screen::Summary, crate::icons::arrow_left(), "summary").into(),
+        ])
+        .with_footer(prefs())
+        .with_side_pane()
+        .with_status_bar()
+    }
+
+    /// Two frames of `app` in `shell` on a `size` screen in `ctx`, then a click at `at`.
+    fn show(
+        ctx: &egui::Context,
+        shell: &mut Shell<Screen>,
+        app: &mut Notes,
+        size: [f32; 2],
+        at: Option<egui::Pos2>,
+    ) {
+        let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(size[0], size[1]));
+        let mut frame = |events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(rect),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| shell.show(ui, app));
+            output.textures_delta.clear();
+        };
+        frame(vec![]);
+        frame(vec![]);
+        if let Some(pos) = at {
+            let button = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            frame(vec![egui::Event::PointerMoved(pos)]);
+            frame(vec![button(true)]);
+            frame(vec![button(false)]);
+            frame(vec![]);
+        }
+    }
+
+    #[test]
+    fn wide_the_side_pane_is_beside_every_screen() {
+        let ctx = egui::Context::default();
+        let (mut shell, mut app) = (notes_shell(), Notes::default());
+        for screen in [Screen::Entries, Screen::Summary, Screen::Prefs] {
+            app.sides.clear();
+            shell.open(screen);
+            show(&ctx, &mut shell, &mut app, SIZES[0], None);
+            assert_eq!(app.sides.last(), Some(&screen), "{screen:?}");
+            assert_eq!(app.screens.last(), Some(&screen), "{screen:?}");
+        }
+        assert!(app.status, "the status bar is drawn");
+    }
+
+    #[test]
+    fn an_action_begins_an_entry_in_the_side_pane() {
+        // Wide, beside the screen; on a phone, in its place.
+        for (size, in_place) in [(SIZES[0], false), (SIZES[1], true)] {
+            let ctx = egui::Context::default();
+            let (mut shell, mut app) = (notes_shell(), Notes::default());
+            show(&ctx, &mut shell, &mut app, size, None);
+            let at = shell.action_rects[0].center();
+            show(&ctx, &mut shell, &mut app, size, Some(at));
+            assert_eq!(app.draft.as_deref(), Some(""), "{size:?}");
+            assert_eq!(
+                shell.current(),
+                Some(Screen::Entries),
+                "{size:?}: the screen stays"
+            );
+            app.screens.clear();
+            app.sides.clear();
+            show(&ctx, &mut shell, &mut app, size, None);
+            assert!(!app.sides.is_empty(), "{size:?}");
+            assert_eq!(app.screens.is_empty(), in_place, "{size:?}");
+        }
+    }
+
+    #[test]
+    fn without_a_side_pane_side_ui_is_never_called() {
+        let ctx = egui::Context::default();
+        let mut shell =
+            shell().with_actions(vec![Action::new("new", crate::icons::plus(), "new-entry")]);
+        let mut app = Notes::default();
+        show(&ctx, &mut shell, &mut app, SIZES[0], None);
+        let at = shell.action_rects[0].center();
+        show(&ctx, &mut shell, &mut app, SIZES[0], Some(at));
+        assert!(app.draft.is_some(), "the action still reaches the app");
+        assert!(app.sides.is_empty());
+        assert!(!app.status, "no status bar unless asked for");
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn the_side_column_is_kept_in_the_store() {
+        use crate::store::{self, Store};
+        let dir = tempfile::tempdir().unwrap();
+        let file = Store::at(dir.path().join(store::FILE_NAME));
+        let ctx = egui::Context::default();
+        store::attach(&ctx, file.clone());
+        let (mut shell, mut app) = (notes_shell(), Notes::default());
+        show(&ctx, &mut shell, &mut app, SIZES[0], None);
+        assert_eq!(
+            file.load().and_then(|s| s.side),
+            None,
+            "nothing changed yet"
+        );
+        shell.pane.as_mut().unwrap().set_column(false);
+        show(&ctx, &mut shell, &mut app, SIZES[0], None);
+        assert_eq!(
+            file.load().and_then(|s| s.side).map(|s| s.column),
+            Some(false)
+        );
+
+        // The next start.
+        let ctx = egui::Context::default();
+        store::attach(&ctx, file);
+        let (mut shell, mut app) = (notes_shell(), Notes::default());
+        show(&ctx, &mut shell, &mut app, SIZES[0], None);
+        assert!(!shell.pane.as_ref().unwrap().column());
     }
 
     #[test]

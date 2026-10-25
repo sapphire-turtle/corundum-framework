@@ -1,9 +1,9 @@
-//! The Detail screen: albums in the main view, the picked one's tracks in the detail pane.
+//! The Detail screen: albums in the main view, the picked one's tracks in the app's side
+//! pane.
 
-use corundum_framework::gui::detail::DetailPane;
 use corundum_framework::gui::egui;
 use corundum_framework::gui::i18n::Message;
-use corundum_framework::gui::tr;
+use corundum_framework::gui::{Side, tr};
 
 /// The albums, by title, artist and tracks: names, not translated.
 const ALBUMS: [(&str, &str, &[&str]); 4] = [
@@ -17,58 +17,48 @@ const ALBUMS: [(&str, &str, &[&str]); 4] = [
     ("Garden", "Mika", &["Moss"]),
 ];
 
-/// What the screen keeps: the pane, and the album picked.
+/// What the screen keeps: the album picked.
+#[derive(Default)]
 pub(crate) struct State {
-    pane: DetailPane,
     picked: usize,
 }
 
-impl Default for State {
-    fn default() -> State {
-        State {
-            pane: DetailPane::new("demo_detail"),
-            picked: 0,
-        }
+/// Draw the screen into what the side pane leaves of `ui`, as its root; a pick is logged,
+/// and opens the side pane (on the card, or on a phone in the screen's place).
+pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message, side: &mut Side) {
+    let mut chosen = None;
+    egui::CentralPanel::default().show(ui, |ui| {
+        super::heading(ui, "demo-screen-detail");
+        ui.label(tr!(ui, "demo-detail-intro"));
+        ui.add_space(8.0);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                for (i, (title, artist, _)) in ALBUMS.iter().enumerate() {
+                    if ui
+                        .selectable_label(state.picked == i, format!("{title} — {artist}"))
+                        .clicked()
+                    {
+                        chosen = Some(i);
+                    }
+                }
+            });
+        });
+    });
+    if let Some(i) = chosen {
+        state.picked = i;
+        side.open();
+        *log = Message::new("demo-status-picked").arg("album", ALBUMS[i].0);
     }
 }
 
-/// Draw the screen into what the shell left of `ui`, as its root; a pick is logged.
-pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
-    let State { pane, picked } = state;
-    let mut chosen = None;
-    pane.ui(
-        ui,
-        |ui| {
-            super::heading(ui, "demo-screen-detail");
-            ui.label(tr!(ui, "demo-detail-intro"));
-            ui.add_space(8.0);
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                    for (i, (title, artist, _)) in ALBUMS.iter().enumerate() {
-                        if ui
-                            .selectable_label(*picked == i, format!("{title} — {artist}"))
-                            .clicked()
-                        {
-                            chosen = Some(i);
-                        }
-                    }
-                });
-            });
-        },
-        |ui| {
-            let (title, artist, tracks) = ALBUMS[*picked];
-            ui.heading(title);
-            ui.label(artist);
-            ui.weak(tr!(ui, "demo-detail-tracks", count = tracks.len()));
-            ui.separator();
-            for (n, track) in tracks.iter().enumerate() {
-                ui.label(format!("{}. {track}", n + 1));
-            }
-        },
-    );
-    if let Some(i) = chosen {
-        *picked = i;
-        pane.open();
-        *log = Message::new("demo-status-picked").arg("album", ALBUMS[i].0);
+/// The picked album's tracks, in the side pane.
+pub(super) fn side_ui(ui: &mut egui::Ui, state: &State) {
+    let (title, artist, tracks) = ALBUMS[state.picked];
+    ui.heading(title);
+    ui.label(artist);
+    ui.weak(tr!(ui, "demo-detail-tracks", count = tracks.len()));
+    ui.separator();
+    for (n, track) in tracks.iter().enumerate() {
+        ui.label(format!("{}. {track}", n + 1));
     }
 }
