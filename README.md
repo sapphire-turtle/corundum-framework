@@ -42,7 +42,8 @@ desktops and on phones.
   feature) and installed before the first frame, so the app opens in them. An app that merges settings from elsewhere (a workgroup, a
   server) applies the result there; an app with nothing else to keep them in stores them
   there alone, as the demo does.
-- **Detail pane**: the app's side pane, held once around every screen: what the main
+- **Detail pane**: the app's side pane (`Shell::with_side_pane`, filled by the app's
+  `ShellApp::side_ui`), beside every screen: what the main
   view's item holds (the playlist playing, the journal open) or a new entry begun from the
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.

@@ -36,13 +36,12 @@ fn a_note_stays_open_beside_every_screen() {
     for size in [[1000.0, 700.0], [390.0, 844.0]] {
         let ctx = egui::Context::default();
         let mut app = Demo::new(&ctx);
-        app.draft = Some("groceries".into());
-        app.pane.open();
+        app.app.draft = Some("groceries".into());
         for screen in Screen::ALL {
             app.open(screen);
             render(&ctx, size, &mut app);
             assert_eq!(
-                app.draft.as_deref(),
+                app.app.draft.as_deref(),
                 Some("groceries"),
                 "{screen:?} at {size:?}"
             );
@@ -81,7 +80,7 @@ fn a_look_changed_on_a_screen_is_there_at_the_next_start() {
         Some(Look::default()),
         "saved from the first start"
     );
-    app.theme.contrast = theme::Contrast::High;
+    app.app.theme.contrast = theme::Contrast::High;
     app.open(Screen::Theme);
     render(&ctx, [1000.0, 700.0], &mut app);
     assert_eq!(
@@ -93,7 +92,7 @@ fn a_look_changed_on_a_screen_is_there_at_the_next_start() {
     let ctx = egui::Context::default();
     assert!(corundum_framework::gui::store::attach(&ctx, store));
     let app = Demo::new(&ctx);
-    assert_eq!(app.theme.contrast, theme::Contrast::High);
+    assert_eq!(app.app.theme.contrast, theme::Contrast::High);
     let _ = std::fs::remove_dir_all(dir);
 }
 

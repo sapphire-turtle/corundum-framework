@@ -49,4 +49,4 @@ pub mod window;
 #[cfg(test)]
 mod test_support;
 
-pub use shell::{Action, COMPACT_WIDTH, Destination, RailItem, RailOrder, Shell};
+pub use shell::{Action, COMPACT_WIDTH, Destination, RailItem, RailOrder, Shell, ShellApp, Side};

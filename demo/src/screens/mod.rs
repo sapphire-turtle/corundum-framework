@@ -1,9 +1,9 @@
 //! The demo's screens, one per piece of the framework, and what they keep between frames.
 
-use corundum_framework::gui::egui;
 use corundum_framework::gui::i18n::{self, LanguageSettings, Message};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{ThemeSettings, Tint};
+use corundum_framework::gui::{Side, egui};
 
 mod detail;
 mod fonts;
@@ -68,7 +68,7 @@ pub(crate) struct State {
     selected: bool,
     text: String,
     icon_style: icons::Style,
-    pub(crate) detail: detail::State,
+    detail: detail::State,
     platform: platform::State,
 }
 
@@ -99,11 +99,12 @@ pub(crate) fn ui(
     settings: &mut Settings,
     theme: &mut ThemeSettings,
     language: &mut LanguageSettings,
+    side: &mut Side,
 ) {
     // These two lay out their own panels.
     match screen {
         Screen::Settings => return settings.ui(ui),
-        Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log),
+        Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log, side),
         _ => {}
     }
     egui::CentralPanel::default().show(ui, |ui| {
@@ -122,13 +123,14 @@ pub(crate) fn ui(
 }
 
 /// The app's side pane: the note being written, else the open screen's item (the Detail
-/// screen's album), else a word that there is none. A note saved is put in `saved`.
+/// screen's album), else a word that there is none. A note saved or discarded closes the
+/// pane, where it was open on the card or in the screen's place.
 pub(crate) fn side_ui(
     ui: &mut egui::Ui,
     screen: Screen,
-    picked: usize,
+    state: &mut State,
     draft: &mut Option<String>,
-    saved: &mut Option<String>,
+    side: &mut Side,
 ) {
     if let Some(text) = draft {
         ui.heading(i18n::tr(ui.ctx(), "demo-note-new"));
@@ -146,15 +148,16 @@ pub(crate) fn side_ui(
             })
             .inner;
         if save {
-            *saved = Some(text.trim().to_owned());
+            state.log = Message::new("demo-status-saved").arg("note", text.trim().to_owned());
         }
         if save || discard {
             *draft = None;
+            side.close();
         }
         return;
     }
     match screen {
-        Screen::Detail => detail::side_ui(ui, picked),
+        Screen::Detail => detail::side_ui(ui, &state.detail),
         _ => {
             ui.weak(i18n::tr(ui.ctx(), "demo-pane-empty"));
         }

@@ -1,5 +1,6 @@
 //! What corundum keeps on the device between starts — for now the [look](crate::look) in
-//! effect and the [rail's order](crate::RailOrder) — and the file it is kept in.
+//! effect, the [rail's order](crate::RailOrder) and whether the shell's side column is on —
+//! and the file it is kept in.
 //!
 //! [`attach`] gives the egui context a [`Store`] and puts back what is saved there: the
 //! window does it before the app's first frame
@@ -24,6 +25,9 @@
 //! [rail]
 //! order = ["demo-screen-theme", "demo-screen-overview", "demo-screen-fonts"]
 //! hidden = ["demo-screen-fonts"]
+//!
+//! [side]
+//! column = false
 //! ```
 //!
 //! [`look::apply`]: crate::look::apply
@@ -48,6 +52,22 @@ pub struct Stored {
     pub look: Option<Look>,
     /// The order of the rail's items, and which of them it shows.
     pub rail: Option<RailOrder>,
+    /// The shell's side pane.
+    pub side: Option<SidePane>,
+}
+
+/// What the device keeps of the [`Shell`](crate::Shell)'s side pane.
+#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SidePane {
+    /// Whether the right column is on.
+    pub column: bool,
+}
+
+impl Default for SidePane {
+    fn default() -> SidePane {
+        SidePane { column: true }
+    }
 }
 
 /// Where the device keeps the [`Stored`]: a TOML file, by default [`FILE_NAME`] in the app's
@@ -226,6 +246,7 @@ mod tests {
         let state = Stored {
             look: Some(look()),
             rail: Some(rail()),
+            side: None,
         };
         store.save(&state).unwrap();
         assert_eq!(store.load(), Some(state));
@@ -256,6 +277,7 @@ mod tests {
                         language: LanguageSettings { language },
                     }),
                     rail: None,
+                    side: None,
                 };
                 store.save(&state).unwrap();
                 assert_eq!(store.load(), Some(state));
@@ -304,6 +326,7 @@ mod tests {
         let state = Stored {
             look: Some(look()),
             rail: Some(rail()),
+            side: None,
         };
         store(&dir).save(&state).unwrap();
         let ctx = egui::Context::default();

@@ -3,7 +3,7 @@
 
 use corundum_framework::gui::egui;
 use corundum_framework::gui::i18n::Message;
-use corundum_framework::gui::tr;
+use corundum_framework::gui::{Side, tr};
 
 /// The albums, by title, artist and tracks: names, not translated.
 const ALBUMS: [(&str, &str, &[&str]); 4] = [
@@ -17,16 +17,15 @@ const ALBUMS: [(&str, &str, &[&str]); 4] = [
     ("Garden", "Mika", &["Moss"]),
 ];
 
-/// What the screen keeps: the album picked, and whether a pick asks the pane to open.
+/// What the screen keeps: the album picked.
 #[derive(Default)]
 pub(crate) struct State {
-    pub(crate) picked: usize,
-    pub(crate) opened: bool,
+    picked: usize,
 }
 
-/// Draw the screen into what the pane leaves of `ui`, as its root; a pick is logged, and
-/// asks the app's side pane to open.
-pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
+/// Draw the screen into what the side pane leaves of `ui`, as its root; a pick is logged,
+/// and opens the side pane (on the card, or on a phone in the screen's place).
+pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message, side: &mut Side) {
     let mut chosen = None;
     egui::CentralPanel::default().show(ui, |ui| {
         super::heading(ui, "demo-screen-detail");
@@ -47,14 +46,14 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
     });
     if let Some(i) = chosen {
         state.picked = i;
-        state.opened = true;
+        side.open();
         *log = Message::new("demo-status-picked").arg("album", ALBUMS[i].0);
     }
 }
 
 /// The picked album's tracks, in the side pane.
-pub(crate) fn side_ui(ui: &mut egui::Ui, picked: usize) {
-    let (title, artist, tracks) = ALBUMS[picked];
+pub(super) fn side_ui(ui: &mut egui::Ui, state: &State) {
+    let (title, artist, tracks) = ALBUMS[state.picked];
     ui.heading(title);
     ui.label(artist);
     ui.weak(tr!(ui, "demo-detail-tracks", count = tracks.len()));
