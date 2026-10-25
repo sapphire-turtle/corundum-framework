@@ -1341,14 +1341,14 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn the_rail_order_is_taken_from_the_store_and_saved_there() {
-        use crate::store::{self, UiState, UiStore};
+        use crate::store::{self, Store, Stored};
         let dir = tempfile::tempdir().unwrap();
-        let file = UiStore::at(dir.path().join(store::FILE_NAME));
+        let file = Store::at(dir.path().join(store::FILE_NAME));
         let saved = RailOrder {
             order: vec!["summary".into(), "entries".into()],
             hidden: vec![],
         };
-        file.save(&UiState {
+        file.save(&Stored {
             look: None,
             rail: Some(saved.clone()),
         })

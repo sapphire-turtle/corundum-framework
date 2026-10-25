@@ -1,14 +1,17 @@
-//! What the device keeps of the frameworks' UI between starts — the [look](crate::look) in
+//! What corundum keeps on the device between starts — for now the [look](crate::look) in
 //! effect and the [rail's order](crate::RailOrder) — and the file it is kept in.
 //!
-//! [`attach`] gives the egui context a [`UiStore`] and puts back what is saved there: the
+//! [`attach`] gives the egui context a [`Store`] and puts back what is saved there: the
 //! window does it before the app's first frame
 //! ([`WindowOptions::remember`](crate::window::WindowOptions::remember)), so the app opens in
 //! its look and with its rail as the person left them. From then on [`look::apply`] and the
 //! [`Shell`](crate::Shell)'s menu save each change.
 //!
-//! The file is TOML, by default [`FILE_NAME`] in the app's config directory: a file of
-//! corundum's beside the app's own, which the person can read and edit by hand.
+//! The file is TOML, by default [`FILE_NAME`] in the app's config directory. Named for
+//! corundum, it is told apart from the app's own files there: the app may keep the same
+//! settings elsewhere too (synced, per workgroup), and this is corundum's copy. What
+//! corundum comes to keep beyond the UI goes into it as a further table. The person can read
+//! and edit it by hand.
 //!
 //! ```toml
 //! [look.theme]
@@ -34,69 +37,75 @@ use serde::{Deserialize, Serialize};
 use crate::RailOrder;
 use crate::look::Look;
 
-/// The file a [`UiStore`] keeps the UI in, under the app's config directory.
-pub const FILE_NAME: &str = "ui.toml";
+/// The file a [`Store`] keeps corundum's tables in, under the app's config directory.
+pub const FILE_NAME: &str = "corundum.toml";
 
 /// What the device keeps: each part `None` until it is first set.
 #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(default)]
-pub struct UiState {
+pub struct Stored {
     /// The theme and the language in effect.
     pub look: Option<Look>,
     /// The order of the rail's items, and which of them it shows.
     pub rail: Option<RailOrder>,
 }
 
-/// Where the device keeps the [`UiState`]: a TOML file, by default [`FILE_NAME`] in the app's
+/// Where the device keeps the [`Stored`]: a TOML file, by default [`FILE_NAME`] in the app's
 /// config directory.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct UiStore {
+pub struct Store {
     path: PathBuf,
 }
 
-impl UiStore {
+impl Store {
     /// The store in `dirs`' config directory.
-    pub fn new(dirs: &AppDirs) -> UiStore {
-        UiStore::at(dirs.config().join(FILE_NAME))
+    pub fn new(dirs: &AppDirs) -> Store {
+        Store::at(dirs.config().join(FILE_NAME))
     }
 
     /// The store in `app_name`'s config directory, or `None` where the platform has none
     /// (an Android process without a context, say).
-    pub fn for_app(app_name: &str) -> Option<UiStore> {
-        AppDirs::new(app_name).map(|dirs| UiStore::new(&dirs))
+    pub fn for_app(app_name: &str) -> Option<Store> {
+        AppDirs::new(app_name).map(|dirs| Store::new(&dirs))
     }
 
     /// The store in the file at `path`.
-    pub fn at(path: impl Into<PathBuf>) -> UiStore {
-        UiStore { path: path.into() }
+    pub fn at(path: impl Into<PathBuf>) -> Store {
+        Store { path: path.into() }
     }
 
-    /// The file the UI is kept in.
+    /// The file the tables are kept in.
     pub fn path(&self) -> &Path {
         &self.path
     }
 
     /// What is saved, or `None` when nothing is saved yet or the file cannot be read. A file
-    /// that is not a [`UiState`] is logged and taken as none: the app opens in the defaults.
-    pub fn load(&self) -> Option<UiState> {
+    /// that is not a [`Stored`] is logged and taken as none: the app opens in the defaults.
+    pub fn load(&self) -> Option<Stored> {
         let text = match std::fs::read_to_string(&self.path) {
             Ok(text) => text,
             Err(err) if err.kind() == io::ErrorKind::NotFound => return None,
             Err(err) => {
-                tracing::warn!("could not read the UI from {}: {err}", self.path.display());
+                tracing::warn!(
+                    "could not read corundum's file {}: {err}",
+                    self.path.display()
+                );
                 return None;
             }
         };
         toml::from_str(&text)
             .inspect_err(|err| {
-                tracing::warn!("the UI in {} is not readable: {err}", self.path.display());
+                tracing::warn!(
+                    "corundum's file {} is not readable: {err}",
+                    self.path.display()
+                );
             })
             .ok()
     }
 
     /// Save `state`, creating the directory if needed. The file is replaced whole, so a crash
     /// midway leaves what was saved before.
-    pub fn save(&self, state: &UiState) -> io::Result<()> {
+    pub fn save(&self, state: &Stored) -> io::Result<()> {
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -108,11 +117,11 @@ impl UiStore {
     }
 }
 
-/// What the context holds: the UI as last set, and the store it is saved to.
+/// What the context holds: what was last set, and the store it is saved to.
 #[derive(Clone, Default)]
 struct Held {
-    state: UiState,
-    store: Option<UiStore>,
+    state: Stored,
+    store: Option<Store>,
 }
 
 fn held_id() -> egui::Id {
@@ -128,11 +137,11 @@ fn set_held(ctx: &egui::Context, held: Held) {
     ctx.data_mut(|d| d.insert_temp(held_id(), held));
 }
 
-/// Keep the UI in `store` from now on, and put back what is saved there: the look is
+/// Keep corundum's tables in `store` from now on, and put back what is saved there: the look is
 /// installed, and a [`Shell`](crate::Shell) takes the rail's order on its first frame. `true`
 /// when something was saved. The window calls this before the app's first frame
 /// ([`WindowOptions::remember`](crate::window::WindowOptions::remember)).
-pub fn attach(ctx: &egui::Context, store: UiStore) -> bool {
+pub fn attach(ctx: &egui::Context, store: Store) -> bool {
     let saved = store.load();
     let found = saved.is_some();
     let state = saved.unwrap_or_default();
@@ -149,19 +158,19 @@ pub fn attach(ctx: &egui::Context, store: UiStore) -> bool {
     found
 }
 
-/// The UI as last set (or put back from the store).
-pub fn state(ctx: &egui::Context) -> UiState {
+/// What was last set (or put back from the store).
+pub fn state(ctx: &egui::Context) -> Stored {
     held(ctx).state
 }
 
-/// The store the context saves the UI to, if one is attached.
-pub fn store(ctx: &egui::Context) -> Option<UiStore> {
+/// The store the context saves to, if one is attached.
+pub fn store(ctx: &egui::Context) -> Option<Store> {
     held(ctx).store
 }
 
-/// Change the UI with `change` and, when that changed it, save it to the context's store. A
+/// Change what is kept with `change` and, when that changed it, save it to the context's store. A
 /// failure to save is logged: the change still holds while the app runs.
-pub(crate) fn update(ctx: &egui::Context, change: impl FnOnce(&mut UiState)) {
+pub(crate) fn update(ctx: &egui::Context, change: impl FnOnce(&mut Stored)) {
     let mut held = held(ctx);
     let before = held.state.clone();
     change(&mut held.state);
@@ -171,7 +180,10 @@ pub(crate) fn update(ctx: &egui::Context, change: impl FnOnce(&mut UiState)) {
     if let Some(store) = &held.store
         && let Err(err) = store.save(&held.state)
     {
-        tracing::warn!("could not save the UI to {}: {err}", store.path().display());
+        tracing::warn!(
+            "could not save corundum's file {}: {err}",
+            store.path().display()
+        );
     }
     set_held(ctx, held);
 }
@@ -202,8 +214,8 @@ mod tests {
         }
     }
 
-    fn store(dir: &tempfile::TempDir) -> UiStore {
-        UiStore::at(dir.path().join("app").join(FILE_NAME))
+    fn store(dir: &tempfile::TempDir) -> Store {
+        Store::at(dir.path().join("app").join(FILE_NAME))
     }
 
     #[test]
@@ -211,13 +223,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = store(&dir);
         assert_eq!(store.load(), None, "nothing saved yet");
-        let state = UiState {
+        let state = Stored {
             look: Some(look()),
             rail: Some(rail()),
         };
         store.save(&state).unwrap();
         assert_eq!(store.load(), Some(state));
-        assert!(!dir.path().join("app/ui.toml.tmp").exists());
+        assert!(!dir.path().join("app/corundum.toml.tmp").exists());
     }
 
     #[test]
@@ -235,7 +247,7 @@ mod tests {
         let languages = [Language::System, Language::Explicit("en".into())];
         for accent in accents {
             for language in languages.clone() {
-                let state = UiState {
+                let state = Stored {
                     look: Some(Look {
                         theme: ThemeSettings {
                             accent,
@@ -283,13 +295,13 @@ mod tests {
         let store = store(&dir);
         std::fs::create_dir_all(store.path().parent().unwrap()).unwrap();
         std::fs::write(store.path(), "").unwrap();
-        assert_eq!(store.load(), Some(UiState::default()));
+        assert_eq!(store.load(), Some(Stored::default()));
     }
 
     #[test]
     fn attach_installs_the_saved_look() {
         let dir = tempfile::tempdir().unwrap();
-        let state = UiState {
+        let state = Stored {
             look: Some(look()),
             rail: Some(rail()),
         };
@@ -306,7 +318,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let ctx = egui::Context::default();
         assert!(!attach(&ctx, store(&dir)));
-        assert_eq!(super::state(&ctx), UiState::default());
+        assert_eq!(super::state(&ctx), Stored::default());
         assert!(!crate::theme::is_installed(&ctx));
         assert_eq!(super::store(&ctx), Some(store(&dir)));
     }

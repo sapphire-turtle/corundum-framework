@@ -11,9 +11,9 @@
 //! theme and the language over them. [`detail`] is a main view's detail pane: a right
 //! column beside it, a card over it, or on a phone the screen in its place; its column's
 //! toggle sits at the right end of the shell's status bar. With the `serde` feature,
-//! [`store`] keeps on the device what the person left the UI in — [`look`], the theme and
-//! the language in effect, and the order of the shell's rail — and puts it back before the
-//! app's first frame.
+//! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
+//! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
+//! put back before the app's first frame.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]

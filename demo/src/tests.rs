@@ -51,7 +51,7 @@ fn the_screens_draw_in_japanese() {
 #[test]
 fn a_look_changed_on_a_screen_is_there_at_the_next_start() {
     let dir = std::env::temp_dir().join(format!("corundum-demo-look-{}", std::process::id()));
-    let store = UiStore::at(dir.join(corundum_framework::gui::store::FILE_NAME));
+    let store = Store::at(dir.join(corundum_framework::gui::store::FILE_NAME));
     let _ = std::fs::remove_dir_all(&dir);
 
     let ctx = egui::Context::default();

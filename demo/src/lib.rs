@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use corundum_framework::gui::i18n::{self, LanguageSettings, Resources};
 use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::Settings;
-use corundum_framework::gui::store::UiStore;
+use corundum_framework::gui::store::Store;
 use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, egui, icons};
 
@@ -226,9 +226,9 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
             let family = corundum_framework::gui::fonts::install_system_cjk_fallback(ctx);
             let _ = CJK_FAMILY.set(family);
         });
-    match UiStore::for_app(APP_NAME) {
+    match Store::for_app(APP_NAME) {
         Some(store) => {
-            tracing::info!(path = %store.path().display(), "corundum demo: ui file");
+            tracing::info!(path = %store.path().display(), "corundum demo: corundum file");
             options.remember(store)
         }
         None => {

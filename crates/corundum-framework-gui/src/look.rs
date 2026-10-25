@@ -1,7 +1,7 @@
 //! The look in effect — the theme and the language — kept on the device.
 //!
 //! [`apply`] installs a [`Look`] in the egui context and, when the context has a
-//! [`UiStore`](crate::store::UiStore), saves it there. The window installs the saved look
+//! [`Store`](crate::store::Store), saves it there. The window installs the saved look
 //! before the app's first frame
 //! ([`WindowOptions::remember`](crate::window::WindowOptions::remember)), so the app opens in
 //! it rather than in the defaults.
@@ -46,7 +46,7 @@ pub(crate) fn install(ctx: &egui::Context, look: &Look) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::{self, UiStore};
+    use crate::store::{self, Store};
 
     fn look() -> Look {
         Look {
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn apply_installs_and_saves() {
         let dir = tempfile::tempdir().unwrap();
-        let store = UiStore::at(dir.path().join(store::FILE_NAME));
+        let store = Store::at(dir.path().join(store::FILE_NAME));
         let ctx = egui::Context::default();
         store::attach(&ctx, store.clone());
         apply(&ctx, &look());

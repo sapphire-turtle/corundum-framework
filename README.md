@@ -35,9 +35,9 @@ desktops and on phones.
   in (a device and its workgroup, a client and its server); and an Appearance page, the
   theme and the language over those tabs. The pages store nothing: the app keeps the
   values.
-- **Look**: the theme and the language in effect, kept with the rail's order in a TOML
-  file in the app's config directory (`look` and `store`, with the `serde` feature) and
-  installed before the first frame, so the app opens in them. An app that merges settings from elsewhere (a workgroup, a
+- **Look**: the theme and the language in effect, kept with the rail's order in
+  `corundum.toml` in the app's config directory (`look` and `store`, with the `serde`
+  feature) and installed before the first frame, so the app opens in them. An app that merges settings from elsewhere (a workgroup, a
   server) applies the result there; an app with nothing else to keep them in stores them
   there alone, as the demo does.
 - **Detail pane**: what the main view's item holds (the playlist playing, the journal

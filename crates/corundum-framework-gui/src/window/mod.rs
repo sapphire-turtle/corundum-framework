@@ -48,7 +48,7 @@ pub struct WindowOptions {
     min_inner_size: [f32; 2],
     fonts: Option<InstallFonts>,
     #[cfg(feature = "serde")]
-    store: Option<crate::store::UiStore>,
+    store: Option<crate::store::Store>,
 }
 
 impl WindowOptions {
@@ -83,16 +83,16 @@ impl WindowOptions {
         self
     }
 
-    /// Keep the UI in `store`: the look saved there is installed before the app's first
+    /// Keep corundum's file in `store`: the look saved there is installed before the app's first
     /// frame, and the [`Shell`](crate::Shell) takes the rail's order saved there; from then
     /// on [`look::apply`](crate::look::apply) and the shell's menu save their changes there.
     #[cfg(feature = "serde")]
-    pub fn remember(mut self, store: crate::store::UiStore) -> WindowOptions {
+    pub fn remember(mut self, store: crate::store::Store) -> WindowOptions {
         self.store = Some(store);
         self
     }
 
-    /// `create`, after attaching the UI's store to the context when there is one.
+    /// `create`, after attaching corundum's store to the context when there is one.
     #[cfg_attr(not(feature = "serde"), allow(unused_mut))]
     pub(crate) fn wrap_create<'f>(
         &mut self,
