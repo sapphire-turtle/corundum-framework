@@ -14,10 +14,14 @@ release_always = false
 pr_branch_prefix = "release-plz/"
 pr_labels = ["release"]
 
-# The four move together: the facade re-exports the other three, and the gui crate is built
-# on the platform one.
+# They move together: the facade re-exports the platform, gui and update crates, the gui
+# crate is built on the platform one, and the build crate is an app's build-dependency.
 [[package]]
 name = "corundum-framework-platform"
+version_group = "corundum"
+
+[[package]]
+name = "corundum-framework-build"
 version_group = "corundum"
 
 [[package]]
@@ -39,6 +43,7 @@ changelog_include = [
   "corundum-framework-platform",
   "corundum-framework-gui",
   "corundum-framework-update",
+  "corundum-framework-build",
 ]
 git_tag_enable = true
 git_release_enable = true

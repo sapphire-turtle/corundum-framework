@@ -11,6 +11,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
+| [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
 

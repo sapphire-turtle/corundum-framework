@@ -1,0 +1,17 @@
+[package]
+name = "corundum-framework-build"
+# Versioned on its own, as corundum-framework-gui is.
+version = "0.2.1"
+edition.workspace = true
+description = "Build-time helpers for corundum apps: the app icon embedded in a Windows executable"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["build", "icon", "windows", "build-script", "resource"]
+categories = ["development-tools::build-utils"]
+
+# An app lists this under [build-dependencies]; it renders the icon with the platform crate
+# and hands it to the Windows resource compiler.
+[dependencies]
+corundum-framework-platform = { version = "0.2.1", path = "../corundum-framework-platform" }
+winresource = "0.1"
