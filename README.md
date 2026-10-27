@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="" width="72" height="72">
+
 # corundum-framework
 
 > Language: **English** | [日本語](README.ja.md)
