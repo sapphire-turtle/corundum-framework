@@ -923,6 +923,7 @@ dependencies = [
  "ndk-context",
  "objc2-foundation 0.3.2",
  "sys-locale",
+ "tempfile",
  "tracing",
  "unic-langid",
 ]
