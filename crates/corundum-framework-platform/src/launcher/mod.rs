@@ -14,6 +14,9 @@
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
 ))]
 mod linux;
+// The pure parts are compiled everywhere under test so their tests run on any OS.
+#[cfg(any(windows, test))]
+mod windows;
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -122,9 +125,16 @@ pub fn register_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> io::Result<R
     {
         linux::register(spec, root, exe)
     }
-    #[cfg(not(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    #[cfg(windows)]
+    {
+        windows::register(spec, root, exe)
+    }
+    #[cfg(not(any(
+        all(
+            unix,
+            not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+        ),
+        windows
     )))]
     {
         let _ = (spec, root);
@@ -142,9 +152,16 @@ pub fn unregister_at(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     {
         linux::unregister(spec, root)
     }
-    #[cfg(not(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    #[cfg(windows)]
+    {
+        windows::unregister(spec, root)
+    }
+    #[cfg(not(any(
+        all(
+            unix,
+            not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+        ),
+        windows
     )))]
     {
         let _ = (spec, root);
@@ -162,9 +179,16 @@ pub fn status_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
     {
         linux::status(spec, root, exe)
     }
-    #[cfg(not(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    #[cfg(windows)]
+    {
+        windows::status(spec, root, exe)
+    }
+    #[cfg(not(any(
+        all(
+            unix,
+            not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+        ),
+        windows
     )))]
     {
         let _ = (spec, root, exe);
@@ -191,6 +215,8 @@ pub(crate) fn skipped(exe: &Path, env_set: bool) -> bool {
 
 /// Writes `bytes` to `path`, with its parent directories, unless the file already holds
 /// them; `true` when it wrote.
+// Windows writes its shortcut through COM instead.
+#[cfg_attr(windows, allow(dead_code))]
 pub(crate) fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if std::fs::read(path).is_ok_and(|old| old == bytes) {
         return Ok(false);
