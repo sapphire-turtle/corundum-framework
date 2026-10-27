@@ -59,6 +59,62 @@ pub enum InstallMethod {
     /// A system or package-manager location (`/usr/bin`, the Nix store, Homebrew): the
     /// package manager updates it.
     PackageManager,
+    /// A store's own package (Flatpak, Snap, MSIX, Mac App Store): the store updates it, and
+    /// replacing a file inside it would fail or be undone.
+    Store(StoreKind),
+}
+
+/// The store an app was installed from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StoreKind {
+    /// Flathub, or another Flatpak remote.
+    Flatpak,
+    /// The Snap Store.
+    Snap,
+    /// The Microsoft Store (an MSIX package).
+    Msix,
+    /// The Mac App Store.
+    MacAppStore,
+}
+
+/// What the running process says about the package it runs in: the facts that are not in the
+/// executable's path.
+#[derive(Clone, Debug)]
+pub(crate) struct Probe {
+    /// The file system root, where Flatpak puts `.flatpak-info`.
+    pub root: PathBuf,
+    /// Running as a snap (`$SNAP` is set).
+    pub snap: bool,
+    /// Running with MSIX package identity.
+    pub msix: bool,
+}
+
+impl Probe {
+    /// Ask this process.
+    pub(crate) fn detect() -> Self {
+        Self {
+            root: PathBuf::from("/"),
+            snap: std::env::var_os("SNAP").is_some_and(|v| !v.is_empty()),
+            msix: has_package_identity(),
+        }
+    }
+}
+
+/// Whether the process has MSIX package identity.
+#[cfg(windows)]
+fn has_package_identity() -> bool {
+    use windows::Win32::Foundation::ERROR_INSUFFICIENT_BUFFER;
+    use windows::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+    let mut len = 0u32;
+    // SAFETY: a null buffer with a zero length only asks for the length.
+    let status = unsafe { GetCurrentPackageFullName(&mut len, None) };
+    // With a package the zero length is too small; without one the error is NO_PACKAGE.
+    status == ERROR_INSUFFICIENT_BUFFER
+}
+
+#[cfg(not(windows))]
+fn has_package_identity() -> bool {
+    false
 }
 
 /// Where `cargo binstall` took a crate from, which decides how to run it again.
@@ -77,6 +133,35 @@ pub enum BinstallSource {
 /// `$CARGO_HOME/bin`, by `cargo binstall`'s records. `cargo_home` is `$CARGO_HOME`, or
 /// `~/.cargo` when unset.
 pub fn install_method(exe: &Path, cargo_home: Option<&Path>) -> InstallMethod {
+    install_method_with(exe, cargo_home, &Probe::detect())
+}
+
+/// [`install_method`] with what the process says about its package given as `probe`.
+pub(crate) fn install_method_with(
+    exe: &Path,
+    cargo_home: Option<&Path>,
+    probe: &Probe,
+) -> InstallMethod {
+    if probe.root.join(".flatpak-info").exists() {
+        return InstallMethod::Store(StoreKind::Flatpak);
+    }
+    if probe.snap {
+        return InstallMethod::Store(StoreKind::Snap);
+    }
+    if probe.msix {
+        return InstallMethod::Store(StoreKind::Msix);
+    }
+    // `App.app/Contents/MacOS/<exe>`, with the App Store's receipt beside `MacOS`.
+    if let Some(contents) = exe.parent().and_then(Path::parent)
+        && exe
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|d| d == "MacOS")
+        && contents.file_name().is_some_and(|d| d == "Contents")
+        && contents.join("_MASReceipt").join("receipt").exists()
+    {
+        return InstallMethod::Store(StoreKind::MacAppStore);
+    }
     if let Some(home) = cargo_home
         && exe.starts_with(home.join("bin"))
     {
@@ -294,6 +379,15 @@ pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod)
         (InstallMethod::PackageManager, _) => {
             "installed by a package manager; update it with that".to_owned()
         }
+        (InstallMethod::Store(store), _) => format!(
+            "installed from {}; it updates there",
+            match store {
+                StoreKind::Flatpak => "Flathub",
+                StoreKind::Snap => "the Snap Store",
+                StoreKind::Msix => "the Microsoft Store",
+                StoreKind::MacAppStore => "the Mac App Store",
+            }
+        ),
         (InstallMethod::Release, _) => format!("download it from {}", release.url),
     }
 }
@@ -406,6 +500,56 @@ mod tests {
         );
         assert_eq!(method("/usr/local/bin/app"), InstallMethod::Release);
         assert_eq!(method("/home/u/.local/bin/app"), InstallMethod::Release);
+    }
+
+    fn probe(root: &Path) -> Probe {
+        Probe {
+            root: root.to_owned(),
+            snap: false,
+            msix: false,
+        }
+    }
+
+    #[test]
+    fn an_app_in_a_store_package_is_the_store_s_to_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe = Path::new("/home/u/.local/bin/app");
+        let method = |p: &Probe| install_method_with(exe, None, p);
+        assert_eq!(method(&probe(tmp.path())), InstallMethod::Release);
+
+        std::fs::write(tmp.path().join(".flatpak-info"), "").unwrap();
+        assert_eq!(
+            method(&probe(tmp.path())),
+            InstallMethod::Store(StoreKind::Flatpak)
+        );
+
+        let empty = tempfile::tempdir().unwrap();
+        let snap = Probe {
+            snap: true,
+            ..probe(empty.path())
+        };
+        assert_eq!(method(&snap), InstallMethod::Store(StoreKind::Snap));
+        let msix = Probe {
+            msix: true,
+            ..probe(empty.path())
+        };
+        assert_eq!(method(&msix), InstallMethod::Store(StoreKind::Msix));
+    }
+
+    #[test]
+    fn a_mac_app_store_bundle_is_recognised_by_its_receipt() {
+        let tmp = tempfile::tempdir().unwrap();
+        let contents = tmp.path().join("App.app").join("Contents");
+        std::fs::create_dir_all(contents.join("MacOS")).unwrap();
+        let exe = contents.join("MacOS").join("app");
+        let p = probe(tmp.path());
+        assert_eq!(install_method_with(&exe, None, &p), InstallMethod::Release);
+        std::fs::create_dir(contents.join("_MASReceipt")).unwrap();
+        std::fs::write(contents.join("_MASReceipt").join("receipt"), "").unwrap();
+        assert_eq!(
+            install_method_with(&exe, None, &p),
+            InstallMethod::Store(StoreKind::MacAppStore)
+        );
     }
 
     #[test]
