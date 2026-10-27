@@ -874,6 +874,7 @@ name = "corundum-framework-demo"
 version = "0.0.0"
 dependencies = [
  "corundum-framework",
+ "semver",
  "tracing",
  "tracing-subscriber",
 ]

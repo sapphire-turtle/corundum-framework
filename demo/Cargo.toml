@@ -22,12 +22,13 @@ path = "src/main.rs"
 
 [dependencies]
 tracing.workspace = true
+semver = "1"
 
 # Everywhere but Android, the window is eframe's (`gui::window::run`); on Android it is
 # GameActivity's (`gui::window::run_android`), and eframe's default does not build there.
 [target.'cfg(not(target_os = "android"))'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "serde", "gui-update"] }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["android", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["android", "serde", "gui-update"] }
