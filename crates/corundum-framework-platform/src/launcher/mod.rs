@@ -90,7 +90,7 @@ impl Root {
 /// Registers the running executable, unless it is a cargo build or the variable
 /// `CORUNDUM_NO_LAUNCHER` is set.
 pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
-    let exe = std::env::current_exe()?;
+    let exe = running_exe()?;
     if skipped(&exe, std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some()) {
         return Ok(Registered::Skipped);
     }
@@ -119,9 +119,21 @@ pub fn status(spec: &LauncherSpec) -> Status {
     status_in(
         spec,
         Root::detect(),
-        std::env::current_exe(),
+        running_exe(),
         std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some(),
     )
+}
+
+/// The running executable. macOS gives the path it was started by, which is the bundle's
+/// link when the app is opened from its bundle: the link is followed to the real file, or
+/// the bundle would come to link to itself.
+fn running_exe() -> io::Result<PathBuf> {
+    let exe = std::env::current_exe()?;
+    if cfg!(target_os = "macos") {
+        exe.canonicalize()
+    } else {
+        Ok(exe)
+    }
 }
 
 /// [`status`] for the directories and the executable as found, or not found, and whether
