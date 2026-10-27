@@ -137,7 +137,9 @@ fn order_of(entries: &[RailEntry]) -> RailOrder {
     }
 }
 
+// The shell drawn through its deprecated closures: the page is all these look at.
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use crate::settings::SettingsSection;

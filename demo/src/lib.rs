@@ -85,9 +85,7 @@ impl Demo {
             Screen::Settings,
             icons::settings(),
             "demo-screen-settings",
-        )])
-        .with_side_pane()
-        .with_status_bar();
+        )]);
         Demo {
             shell,
             app: App {
