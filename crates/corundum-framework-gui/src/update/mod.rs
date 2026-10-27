@@ -6,4 +6,6 @@ mod state;
 mod worker;
 
 pub use panel::{AfterUpdate, UpdateTarget, UpdatesPanel};
+/// The version type [`UpdateTarget`] uses for the running version.
+pub use semver;
 pub use state::{RestartOutcome, Retry, RowState, Step};

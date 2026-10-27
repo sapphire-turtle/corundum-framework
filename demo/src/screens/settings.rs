@@ -13,7 +13,9 @@ use corundum_framework::gui::settings::{
 };
 use corundum_framework::gui::store;
 use corundum_framework::gui::tr;
-use corundum_framework::gui::update::{AfterUpdate, UpdateTarget, UpdatesPanel};
+#[cfg(not(target_os = "android"))]
+use corundum_framework::gui::update::{AfterUpdate, UpdateTarget, UpdatesPanel, semver};
+#[cfg(not(target_os = "android"))]
 use corundum_framework::update::ReleaseSource;
 
 /// The one place the demo keeps the look: this device.
@@ -133,11 +135,21 @@ fn file_line(ui: &mut egui::Ui) {
 }
 
 /// The app's name and version, and the update row for the demo itself.
+///
+/// Not on Android, where the app is never updated this way (and the panel's HTTP client
+/// needs the NDK's C toolchain).
 struct About {
+    #[cfg(not(target_os = "android"))]
     updates: UpdatesPanel,
 }
 
 impl About {
+    #[cfg(target_os = "android")]
+    fn new() -> About {
+        About {}
+    }
+
+    #[cfg(not(target_os = "android"))]
     fn new() -> About {
         // The demo is not released as a binary, so the source names no asset: the row
         // shows the newest release and where to download it.
@@ -145,6 +157,7 @@ impl About {
             label: "corundum-framework demo".to_owned(),
             current: semver::Version::parse(env!("CARGO_PKG_VERSION")).ok(),
             source: ReleaseSource::github("sapphire-turtle", "corundum-framework").tag_prefix("v"),
+            // An empty path is harmless: the source has no asset, so nothing is ever replaced.
             exe: std::env::current_exe().unwrap_or_default(),
             after: AfterUpdate::Relaunch,
         };
@@ -166,7 +179,10 @@ impl SettingsSection for About {
             "demo-settings-version",
             version = env!("CARGO_PKG_VERSION")
         ));
-        ui.add_space(8.0);
-        self.updates.ui(ui);
+        #[cfg(not(target_os = "android"))]
+        {
+            ui.add_space(8.0);
+            self.updates.ui(ui);
+        }
     }
 }
