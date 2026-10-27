@@ -10,6 +10,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
+| [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
 
@@ -31,6 +32,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `eframe` | デスクトップウィンドウ（`window::run`）とその wgpu 設定（`gpu`） | 有効 |
 | `android` | Android のウィンドウ（`window::run_android`）、logcat とプラットフォーム呼び出し | 無効 |
 | `serde` | テーマと言語の設定に `Serialize` / `Deserialize` | 無効 |
+| `update` | `update::UpdatesPanel`：設定の「About」で新しいリリースを調べ、その場所を示す行（corundum-framework-update も有効になる） | 無効 |
+| `self-update` | パネルがリリースのダウンロードと実行中のバイナリの置き換えも行う（`update` も有効になる）。ストア版ではストアが更新するため無効にします | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 
@@ -51,6 +54,10 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 |---|---|---|
 | `platform` | `platform`：corundum-framework-platform | はい |
 | `gui` | `gui` と `egui`：eframe を含まない corundum-framework-gui（`platform` も有効になる） | いいえ |
+| `update` | `update`：corundum-framework-update | いいえ |
+| `self-update` | ダウンロードと置き換えを含む `update`（ストア版では無効にします） | いいえ |
+| `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
+| `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |
 | `android` | `gui::window::run_android`：Android のウィンドウ（`gui` も有効になる） | いいえ |
 | `serde` | gui クレートの `serde` | いいえ |

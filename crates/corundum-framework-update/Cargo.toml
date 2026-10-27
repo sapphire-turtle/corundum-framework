@@ -1,0 +1,37 @@
+[package]
+name = "corundum-framework-update"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.2.1"
+edition.workspace = true
+description = "Find newer GitHub releases of an app's binary, and replace it with one"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme.workspace = true
+keywords = ["update", "self-update", "release", "github"]
+categories = ["command-line-utilities"]
+
+# `self-update` (default) is everything that downloads and replaces: without it the crate only
+# looks up releases and words advice, and `self-replace` is not linked. `cli` is the `update`
+# subcommand (`UpdateArgs`, `run`), for a binary that has a command line.
+[features]
+default = ["self-update"]
+self-update = ["dep:self-replace", "dep:tempfile"]
+cli = ["dep:clap"]
+
+[dependencies]
+clap = { workspace = true, optional = true }
+reqwest.workspace = true
+self-replace = { version = "1.5", optional = true }
+semver = "1"
+serde.workspace = true
+serde_json.workspace = true
+tempfile = { version = "3", optional = true }
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_Packaging_Appx"] }

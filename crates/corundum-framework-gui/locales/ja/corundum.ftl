@@ -53,3 +53,29 @@ corundum-settings-rail-intro = よく使う順にドラッグで並べ替えま�
 corundum-settings-rail-drag = ドラッグで並べ替え
 corundum-settings-rail-show = ボタンとして表示
 corundum-settings-rail-reset = 既定の順に戻す
+
+# 更新パネル（`update::UpdatesPanel`）：もう一度調べるボタン、実行中のバージョンが分からないとき、各行の状態。このアプリが入れないリリースは、入手のしかたを示す：実行するコマンド（コピーボタン付き）か、更新するもの。
+corundum-update-check = 更新を確認
+corundum-update-not-running = 実行されていません
+corundum-update-checking = 確認しています…
+corundum-update-up-to-date = 最新です
+corundum-update-newer = { $version } があります
+corundum-update-update = 更新
+corundum-update-release-notes = リリースノート
+corundum-update-downloading = { $version } をダウンロードしています…
+corundum-update-restarting = 再起動しています…
+corundum-update-done = { $version } に更新しました
+corundum-update-restart-by-hand = 更新しました。{ $version } を使うには再起動してください
+corundum-update-failed = 失敗しました：{ $error }
+# バックグラウンドの処理が予期せず止まった行のエラー。
+corundum-update-worker-stopped = 更新の確認または更新が予期せず止まりました
+corundum-update-retry = 再試行
+corundum-update-run = 実行：
+corundum-update-copy = コピー
+corundum-update-by-cargo = { $tool } で更新してください
+corundum-update-by-package-manager = パッケージマネージャーが更新します
+corundum-update-by-flathub = Flathub が更新します
+corundum-update-by-snap = Snap Store が更新します
+corundum-update-by-microsoft-store = Microsoft Store が更新します
+corundum-update-by-mac-app-store = Mac App Store が更新します
+corundum-update-from-release-page = リリースページからダウンロードしてください

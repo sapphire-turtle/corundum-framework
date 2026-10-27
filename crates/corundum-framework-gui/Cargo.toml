@@ -40,6 +40,16 @@ android = [
 # `store`: the look in effect and the rail's order, kept on the device in a TOML file and
 # put back before the app's first frame.
 serde = ["dep:serde", "dep:toml", "egui/serde"]
+# `update`: the Settings → About update panel's states, over corundum-framework-update's
+# lookup and advice. `self-update` adds the download and the replacement; leave it off for a
+# store build, whose store does the updating.
+update = ["dep:corundum-framework-update", "dep:semver", "dep:tokio"]
+self-update = [
+    "update",
+    "corundum-framework-update/self-update",
+    "dep:reqwest",
+    "dep:self-replace",
+]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -55,6 +65,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
     "system_fonts",
     "wgpu",
 ] }
+# Release lookup and advice; the download and replacement come with `self-update`.
+corundum-framework-update = { version = "0.2.1", path = "../corundum-framework-update", optional = true, default-features = false }
 egui = "0.37"
 # The SVG loader for the bundled Lucide icons (assets/icons), and for the apps' own.
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
@@ -64,6 +76,13 @@ fluent-langneg = "0.14"
 # The parsed files' entries, for i18n::check (already a dependency of fluent-bundle).
 fluent-syntax = "0.12"
 fontdb = "0.24"
+# The update panel's HTTP client, made by corundum-framework-update and named by its
+# worker's install (`self-update`).
+reqwest = { workspace = true, optional = true }
+# The running app's executable, replaced in place by the update panel.
+self-replace = { version = "1.5", optional = true }
+semver = { version = "1", optional = true }
+tokio = { workspace = true, features = ["rt"], optional = true }
 ttf-parser = "0.25"
 tracing.workspace = true
 serde = { workspace = true, optional = true }

@@ -20,3 +20,29 @@ jobs:
         cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings
         # The demo's binary links on each desktop (the tests link only its lib).
         cargo build -p corundum-framework-demo --bin corundum-framework-demo --locked
+        # The configurations a store build compiles: no `self-update`.
+        cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
+        cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
+
+  # Without `self-update` the update crate must not link `self-replace`: an app that only
+  # looks releases up carries none of the replacement code.
+  update-no-self-replace:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: self-replace is not linked without self-update
+        run: |
+          # Each tree goes to a file first, so a failing cargo fails the job rather than
+          # passing as an empty tree.
+          for args in \
+            "-p corundum-framework-update --no-default-features" \
+            "-p corundum-framework-gui --no-default-features --features update" \
+            "-p corundum-framework --features gui-update"; do
+            cargo tree --locked --target all $args -e normal > tree.txt
+            # (`! grep` alone would not stop the loop under `set -e`.)
+            if grep -q self-replace tree.txt; then
+              echo "self-replace is linked for: $args"
+              exit 1
+            fi
+          done
