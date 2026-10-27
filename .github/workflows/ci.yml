@@ -30,5 +30,21 @@ jobs:
       - uses: actions/checkout@v7
       - name: self-replace is not linked without self-update
         run: |
-          count=$(cargo tree -p corundum-framework-update --no-default-features -e normal | grep -c self-replace || true)
-          test "$count" = 0
+          # Each tree goes to a file first, so a failing cargo fails the job rather than
+          # passing as an empty tree.
+          for args in \
+            "-p corundum-framework-update --no-default-features" \
+            "-p corundum-framework-gui --no-default-features --features update" \
+            "-p corundum-framework --features gui-update"; do
+            cargo tree --locked $args -e normal > tree.txt
+            # (`! grep` alone would not stop the loop under `set -e`.)
+            if grep -q self-replace tree.txt; then
+              echo "self-replace is linked for: $args"
+              exit 1
+            fi
+          done
+      # The configurations a store build compiles.
+      - name: clippy without self-update
+        run: |
+          cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
+          cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
