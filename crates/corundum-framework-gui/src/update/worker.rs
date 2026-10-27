@@ -3,14 +3,17 @@
 
 #[cfg(feature = "self-update")]
 use std::io;
-#[cfg(feature = "self-update")]
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 
 #[cfg(feature = "self-update")]
-use corundum_framework_update::{InstallMethod, Release};
-use corundum_framework_update::{cargo_home, client, install_method, latest_release};
+use corundum_framework_update::Release;
+use corundum_framework_update::{
+    InstallMethod, cargo_home, client, install_method, latest_release,
+};
+#[cfg(feature = "self-update")]
+use semver::Version;
 
 #[cfg(feature = "self-update")]
 use super::panel::AfterUpdate;
@@ -24,9 +27,10 @@ use super::state::{Event, has_asset};
 pub(crate) enum Job {
     /// Look the row's latest release up.
     Check(usize),
-    /// Download and install the release, then restart.
+    /// Download and install the release over the running version (`None` when unknown),
+    /// then restart.
     #[cfg(feature = "self-update")]
-    Update(usize, Release),
+    Update(usize, Release, Option<Version>),
 }
 
 /// The panel's ends of the worker's channels.
@@ -91,7 +95,7 @@ fn run(
                     (Ok(release), Some(base)) => has_asset(release, base),
                     _ => false,
                 };
-                let method = install_method(&target.exe, cargo_home().as_deref());
+                let method = method_of(&target.exe);
                 reply(
                     index,
                     Event::Checked {
@@ -102,10 +106,12 @@ fn run(
                 );
             }
             #[cfg(feature = "self-update")]
-            Job::Update(index, release) => {
+            Job::Update(index, release, current) => {
                 let target = &targets[index];
                 let installed = match &setup {
-                    Ok((runtime, client)) => install(runtime, client, target, &release),
+                    Ok((runtime, client)) => {
+                        install(runtime, client, target, &release, current.as_ref())
+                    }
                     Err(message) => Err(message.clone()),
                 };
                 let ok = installed.is_ok();
@@ -118,6 +124,17 @@ fn run(
     }
 }
 
+/// `exe` with symlinks resolved, as it is the file behind them that is installed over;
+/// `exe` itself when that fails.
+fn resolved(exe: &Path) -> PathBuf {
+    exe.canonicalize().unwrap_or_else(|_| exe.to_path_buf())
+}
+
+/// How `exe` was installed, looking through symlinks.
+fn method_of(exe: &Path) -> InstallMethod {
+    install_method(&resolved(exe), cargo_home().as_deref())
+}
+
 /// Put `release`'s file in place of `target`'s executable.
 #[cfg(feature = "self-update")]
 fn install(
@@ -125,22 +142,20 @@ fn install(
     client: &reqwest::Client,
     target: &UpdateTarget,
     release: &Release,
+    current: Option<&Version>,
 ) -> Result<(), String> {
     // The panel only offers these; checked again here, where the file is written.
-    let method = install_method(&target.exe, cargo_home().as_deref());
+    let exe = resolved(&target.exe);
+    let method = method_of(&exe);
     if method != InstallMethod::Release {
         return Err(format!(
             "{} was not installed from a release",
-            target.exe.display()
+            exe.display()
         ));
     }
     // An unknown current version (a server not running) installs: there is nothing to
     // downgrade from.
-    if target
-        .current
-        .as_ref()
-        .is_some_and(|current| release.version <= *current)
-    {
+    if current.is_some_and(|current| release.version <= *current) {
         return Err(format!(
             "{} is not newer than the running version",
             release.version
@@ -154,10 +169,10 @@ fn install(
         ))
         .map_err(|e| e.to_string())?;
     match target.after {
-        AfterUpdate::Relaunch => corundum_framework_update::install(&bytes, &target.exe, |new| {
-            self_replace::self_replace(new)
-        }),
-        _ => corundum_framework_update::replace_file(&target.exe, &bytes),
+        AfterUpdate::Relaunch => {
+            corundum_framework_update::install(&bytes, &exe, |new| self_replace::self_replace(new))
+        }
+        _ => corundum_framework_update::replace_file(&exe, &bytes),
     }
     .map_err(|e| e.to_string())
 }
@@ -191,7 +206,6 @@ pub(crate) fn relaunch(exe: &Path) -> io::Result<()> {
 mod tests {
     use super::*;
     use corundum_framework_update::ReleaseSource;
-    use std::path::PathBuf;
 
     #[test]
     fn relaunching_a_missing_file_fails() {
@@ -204,5 +218,34 @@ mod tests {
         };
         assert!(relaunch(&target.exe).is_err());
         assert!(matches!(restart(&target), RestartOutcome::Failed(_)));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod resolve_tests {
+    use super::*;
+
+    #[test]
+    fn a_symlink_into_cargo_bin_is_not_a_release() {
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("cargo/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join("app"), b"x").unwrap();
+        let link = dir.path().join("app");
+        std::os::unix::fs::symlink(bin.join("app"), &link).unwrap();
+        let home = dir.path().join("cargo").canonicalize().unwrap();
+        assert_eq!(install_method(&link, Some(&home)), InstallMethod::Release);
+        assert_eq!(
+            install_method(&resolved(&link), Some(&home)),
+            InstallMethod::Cargo
+        );
+    }
+
+    #[test]
+    fn an_unresolvable_path_stays() {
+        assert_eq!(
+            resolved(Path::new("/nonexistent/app")),
+            PathBuf::from("/nonexistent/app")
+        );
     }
 }

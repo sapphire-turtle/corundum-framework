@@ -58,6 +58,8 @@ pub struct UpdatesPanel {
 
 /// A row's state, and how its executable was installed once known.
 struct Row {
+    /// The version running now; see [`UpdatesPanel::set_current`].
+    current: Option<Version>,
     state: RowState,
     method: Option<InstallMethod>,
 }
@@ -79,7 +81,8 @@ impl UpdatesPanel {
     pub fn new(targets: Vec<UpdateTarget>, user_agent: &str) -> UpdatesPanel {
         let rows = targets
             .iter()
-            .map(|_| Row {
+            .map(|target| Row {
+                current: target.current.clone(),
                 state: RowState::Checking,
                 method: None,
             })
@@ -105,6 +108,16 @@ impl UpdatesPanel {
         let mut panel = UpdatesPanel::new(targets, "test");
         panel.worker = Some(Worker { jobs, results });
         panel
+    }
+
+    /// Set the running version of the target at `index`: call it when the app learns it
+    /// (a server that connected, or reports its new version after an update). It shows from
+    /// the next frame and is what the next check compares with; an `index` out of range does
+    /// nothing.
+    pub fn set_current(&mut self, index: usize, current: Option<Version>) {
+        if let Some(row) = self.rows.get_mut(index) {
+            row.current = current;
+        }
     }
 
     /// The Check button and the rows.
@@ -139,7 +152,7 @@ impl UpdatesPanel {
             .show(ui, |ui| {
                 for (index, (target, row)) in self.targets.iter().zip(&self.rows).enumerate() {
                     ui.label(&target.label);
-                    match &target.current {
+                    match &row.current {
                         Some(version) => ui.label(version.to_string()),
                         None => ui.weak(tr!(ui, "corundum-update-not-running")),
                     };
@@ -184,7 +197,8 @@ impl UpdatesPanel {
             release: release.clone(),
             step: Step::Downloading,
         };
-        self.send(ctx, index, Job::Update(index, release));
+        let current = self.rows[index].current.clone();
+        self.send(ctx, index, Job::Update(index, release, current));
     }
 
     /// Hand `job` to the worker; if it is gone, `index`'s row says so.
@@ -229,7 +243,7 @@ impl UpdatesPanel {
                     has_asset,
                 } if matches!(row.state, RowState::Checking) => {
                     row.state = on_check(
-                        target.current.as_ref(),
+                        row.current.as_ref(),
                         &method,
                         has_asset,
                         CAN_INSTALL,
@@ -496,6 +510,27 @@ mod tests {
     }
 
     #[test]
+    fn a_set_current_is_what_a_check_compares_with() {
+        let mut f = fixture();
+        f.frame(vec![]);
+        f.panel.set_current(1, Some("1.1.0".parse().unwrap()));
+        f.panel.set_current(9, None);
+        // As after an update: the row is done, the app learns the new version, checks again.
+        f.panel.rows[1].state = RowState::Done {
+            version: "1.1.0".parse().unwrap(),
+        };
+        f.panel.check(&f.ctx.clone(), 1);
+        f.results.send((1, newer("1.1.0"))).unwrap();
+        f.frame(vec![]);
+        assert_eq!(
+            f.panel.rows[1].state,
+            RowState::UpToDate {
+                latest: "1.1.0".parse().unwrap()
+            }
+        );
+    }
+
+    #[test]
     fn rows_render() {
         let mut f = fixture();
         crate::test_support::render_in(&f.ctx.clone(), [900.0, 600.0], |ui| f.panel.ui(ui));
@@ -631,6 +666,23 @@ mod tests {
         }
 
         #[test]
+        fn an_update_carries_the_set_version() {
+            let mut f = fixture();
+            f.frame(vec![]);
+            f.sent();
+            f.panel.set_current(0, Some("1.0.5".parse().unwrap()));
+            f.panel.update(&f.ctx.clone(), 0, release("1.1.0"));
+            assert_eq!(
+                f.sent(),
+                vec![Job::Update(
+                    0,
+                    release("1.1.0"),
+                    Some("1.0.5".parse().unwrap())
+                )]
+            );
+        }
+
+        #[test]
         fn a_newer_release_is_offered_and_installed_alone() {
             let mut f = fixture();
             f.frame(vec![]);
@@ -644,7 +696,14 @@ mod tests {
             assert!(f.panel.buttons[1].is_some_and(|(_, enabled)| enabled));
 
             f.click(rect.center());
-            assert_eq!(f.sent(), vec![Job::Update(0, release("1.1.0"))]);
+            assert_eq!(
+                f.sent(),
+                vec![Job::Update(
+                    0,
+                    release("1.1.0"),
+                    Some("1.0.0".parse().unwrap())
+                )]
+            );
             assert!(
                 f.panel.buttons[0].is_none(),
                 "the working row has no button"
