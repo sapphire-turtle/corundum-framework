@@ -11,9 +11,6 @@ use crate::install::stage;
 /// The file operations a replacement makes, so the order they happen in can be tested without
 /// a Windows machine.
 pub(crate) trait Fs {
-    /// Create `path` with `bytes`.
-    #[allow(dead_code)] // part of the file system the replacement sees; staging uses `tempfile`
-    fn write_new(&self, path: &Path, bytes: &[u8]) -> io::Result<()>;
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()>;
     fn remove(&self, path: &Path) -> io::Result<()>;
     fn exists(&self, path: &Path) -> bool;
@@ -22,9 +19,6 @@ pub(crate) trait Fs {
 pub(crate) struct RealFs;
 
 impl Fs for RealFs {
-    fn write_new(&self, path: &Path, bytes: &[u8]) -> io::Result<()> {
-        std::fs::write(path, bytes)
-    }
     fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
         std::fs::rename(from, to)
     }
@@ -80,6 +74,8 @@ fn old_name(path: &Path, n: u32) -> PathBuf {
 /// `path.old` and `path.old.<n>` first; one that cannot be removed is skipped, and the
 /// target goes to the first name that is free.
 pub(crate) fn replace_windows(fs: &dyn Fs, path: &Path, staged: &Path) -> io::Result<()> {
+    // Stops at the first absent `.old*` name; a later leftover is reached once the next update
+    // fills the gap.
     let mut n = 0;
     while fs.exists(&old_name(path, n)) {
         // Still locked by a running copy: leave it and use another name.
@@ -136,9 +132,6 @@ mod tests {
     }
 
     impl Fs for RecordingFs {
-        fn write_new(&self, path: &Path, _: &[u8]) -> io::Result<()> {
-            self.record(format!("write {}", path.display()))
-        }
         fn rename(&self, from: &Path, to: &Path) -> io::Result<()> {
             self.record(format!("rename {} {}", from.display(), to.display()))?;
             let mut present = self.present.borrow_mut();
@@ -236,10 +229,15 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn a_failed_replace_leaves_no_staging_file() {
         let tmp = tempfile::tempdir().unwrap();
-        let f = tmp.path().join("missing").join("f");
-        assert!(replace_file(&f, b"new").is_err());
-        assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
+        // Renaming a file over a directory fails, after the file is staged.
+        let dir = tmp.path().join("d");
+        std::fs::create_dir(&dir).unwrap();
+        assert!(replace_file(&dir, b"new").is_err());
+        let left: Vec<_> = std::fs::read_dir(tmp.path()).unwrap().collect();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].as_ref().unwrap().path(), dir);
     }
 }
