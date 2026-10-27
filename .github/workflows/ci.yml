@@ -20,6 +20,9 @@ jobs:
         cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings
         # The demo's binary links on each desktop (the tests link only its lib).
         cargo build -p corundum-framework-demo --bin corundum-framework-demo --locked
+        # The configurations a store build compiles: no `self-update`.
+        cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
+        cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
@@ -43,8 +46,3 @@ jobs:
               exit 1
             fi
           done
-      # The configurations a store build compiles.
-      - name: clippy without self-update
-        run: |
-          cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
-          cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
