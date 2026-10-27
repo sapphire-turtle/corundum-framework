@@ -111,11 +111,14 @@ mod com {
     use std::path::{Path, PathBuf};
     use windows::Win32::Foundation::RPC_E_CHANGED_MODE;
     use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
-    use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+    use windows::Win32::System::Com::StructuredStorage::{
+        PROPVAR_CHANGE_FLAGS, PROPVARIANT, PropVariantChangeType,
+    };
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
         CoUninitialize, IPersistFile, STGM_READ,
     };
+    use windows::Win32::System::Variant::VT_LPWSTR;
     use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{IShellLinkW, SLGP_RAWPATH, ShellLink};
     use windows::core::{BSTR, HSTRING, Interface, Result};
@@ -159,6 +162,15 @@ mod com {
 
     /// The target and the app id of the shortcut at `path`.
     pub(super) fn read(path: &Path) -> Result<(PathBuf, String)> {
+        let (target, value) = read_raw(path)?;
+        let app_id = BSTR::try_from(&value)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        Ok((target, app_id))
+    }
+
+    /// The target of the shortcut at `path` and its app id property as stored.
+    pub(super) fn read_raw(path: &Path) -> Result<(PathBuf, PROPVARIANT)> {
         let link = shell_link()?;
         // SAFETY: the calls are on live interfaces of one object, with buffers that outlive
         // them; a null find-data pointer is allowed.
@@ -172,11 +184,25 @@ mod com {
             let value = link
                 .cast::<IPropertyStore>()?
                 .GetValue(&PKEY_AppUserModel_ID)?;
-            let app_id = BSTR::try_from(&value)
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            Ok((target, app_id))
+            Ok((target, value))
         }
+    }
+
+    /// `app_id` as the `VT_LPWSTR` value `System.AppUserModel.ID` is declared to hold;
+    /// `PROPVARIANT::from(&str)` alone would make a `VT_BSTR`.
+    fn app_id_value(app_id: &str) -> Result<PROPVARIANT> {
+        let mut value = PROPVARIANT::default();
+        // SAFETY: both values are live and initialised; the conversion allocates the
+        // destination's string, which `PROPVARIANT`'s drop frees.
+        unsafe {
+            PropVariantChangeType(
+                &mut value,
+                &PROPVARIANT::from(app_id),
+                PROPVAR_CHANGE_FLAGS(0),
+                VT_LPWSTR,
+            )?;
+        }
+        Ok(value)
     }
 
     /// Writes a shortcut holding `fields` at `path`, replacing any there.
@@ -190,10 +216,7 @@ mod com {
             link.SetIconLocation(&HSTRING::from(fields.icon.0.as_path()), fields.icon.1)?;
             link.SetDescription(&HSTRING::from(fields.description.as_str()))?;
             let store = link.cast::<IPropertyStore>()?;
-            store.SetValue(
-                &PKEY_AppUserModel_ID,
-                &PROPVARIANT::from(fields.app_id.as_str()),
-            )?;
+            store.SetValue(&PKEY_AppUserModel_ID, &app_id_value(&fields.app_id)?)?;
             store.Commit()?;
             link.cast::<IPersistFile>()?
                 .Save(&HSTRING::from(path), true)?;
@@ -277,6 +300,15 @@ mod tests {
         assert_eq!(status_at(&SPEC, &root, exe), Status::Absent);
         assert_eq!(register_at(&SPEC, &root, exe).unwrap(), Registered::Written);
         assert!(link.is_file());
+        let _com = super::com::Com::init().unwrap();
+        let (_, value) = super::com::read_raw(&link).unwrap();
+        assert_eq!(value.vt(), windows::Win32::System::Variant::VT_LPWSTR);
+        assert_eq!(
+            windows::core::BSTR::try_from(&value).unwrap().to_string(),
+            link_fields(&SPEC, exe).app_id
+        );
+        drop(value);
+        drop(_com);
         assert_eq!(
             register_at(&SPEC, &root, exe).unwrap(),
             Registered::Unchanged
