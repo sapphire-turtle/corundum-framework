@@ -36,7 +36,7 @@ jobs:
             "-p corundum-framework-update --no-default-features" \
             "-p corundum-framework-gui --no-default-features --features update" \
             "-p corundum-framework --features gui-update"; do
-            cargo tree --locked $args -e normal > tree.txt
+            cargo tree --locked --target all $args -e normal > tree.txt
             # (`! grep` alone would not stop the loop under `set -e`.)
             if grep -q self-replace tree.txt; then
               echo "self-replace is linked for: $args"
