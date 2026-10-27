@@ -43,6 +43,8 @@ mod shell;
 #[cfg(feature = "serde")]
 pub mod store;
 pub mod theme;
+#[cfg(feature = "update")]
+pub mod update;
 #[cfg(feature = "eframe")]
 pub mod window;
 
