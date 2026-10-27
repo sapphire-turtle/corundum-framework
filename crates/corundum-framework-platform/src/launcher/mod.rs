@@ -9,6 +9,12 @@
 //! `target` directory, nor when `CORUNDUM_NO_LAUNCHER` is set, and on iOS and Android there
 //! is no app menu to register in.
 
+#[cfg(all(
+    unix,
+    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+))]
+mod linux;
+
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -106,26 +112,65 @@ pub fn status(spec: &LauncherSpec) -> Status {
 
 /// [`register`] for the given directories and executable.
 pub fn register_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> io::Result<Registered> {
-    let _ = (spec, root);
     if skipped(exe, false) {
         return Ok(Registered::Skipped);
     }
-    // Each OS's arm comes with its own module.
-    Ok(Registered::Skipped)
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ))]
+    {
+        linux::register(spec, root, exe)
+    }
+    #[cfg(not(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    )))]
+    {
+        let _ = (spec, root);
+        // Each OS's arm comes with its own module.
+        Ok(Registered::Skipped)
+    }
 }
 
 /// [`unregister`] for the given directories.
 pub fn unregister_at(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
-    let _ = (spec, root);
-    // Each OS's arm comes with its own module.
-    Ok(())
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ))]
+    {
+        linux::unregister(spec, root)
+    }
+    #[cfg(not(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    )))]
+    {
+        let _ = (spec, root);
+        // Each OS's arm comes with its own module.
+        Ok(())
+    }
 }
 
 /// [`status`] for the given directories and executable.
 pub fn status_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
-    let _ = (spec, root, exe);
-    // Each OS's arm comes with its own module.
-    Status::Unsupported
+    #[cfg(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ))]
+    {
+        linux::status(spec, root, exe)
+    }
+    #[cfg(not(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    )))]
+    {
+        let _ = (spec, root, exe);
+        // Each OS's arm comes with its own module.
+        Status::Unsupported
+    }
 }
 
 /// Whether `exe` is not to be registered: a build under cargo's `target` directory
@@ -146,8 +191,6 @@ pub(crate) fn skipped(exe: &Path, env_set: bool) -> bool {
 
 /// Writes `bytes` to `path`, with its parent directories, unless the file already holds
 /// them; `true` when it wrote.
-// Used by the per-OS modules, which come in later.
-#[allow(dead_code)]
 pub(crate) fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if std::fs::read(path).is_ok_and(|old| old == bytes) {
         return Ok(false);
