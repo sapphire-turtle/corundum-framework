@@ -1,6 +1,6 @@
 //! What corundum keeps on the device between starts — for now the [look](crate::look) in
-//! effect, the [rail's order](crate::RailOrder) and whether the shell's side column is on —
-//! and the file it is kept in.
+//! effect, the [rail's order](crate::RailOrder), whether the shell's side column is on and
+//! whether the app is kept in the OS's app menu — and the file it is kept in.
 //!
 //! [`attach`] gives the egui context a [`Store`] and puts back what is saved there: the
 //! window does it before the app's first frame
@@ -30,6 +30,10 @@
 //! column = false
 //! ```
 //!
+//! An app whose window registers it in the OS's app menu
+//! ([`WindowOptions::launcher`](crate::window::WindowOptions::launcher)) also has
+//! `launcher = false` there once the person has taken the entry out.
+//!
 //! [`look::apply`]: crate::look::apply
 
 use std::io;
@@ -54,6 +58,18 @@ pub struct Stored {
     pub rail: Option<RailOrder>,
     /// The shell's side pane.
     pub side: Option<SidePane>,
+    /// Whether the app's entry is kept in the OS's app menu: `false` once the person has
+    /// taken it out ([`LauncherRow`](crate::settings::LauncherRow)), so that the window does
+    /// not write it back. `None`, as in a file written before this was kept, is `true`.
+    pub launcher: Option<bool>,
+}
+
+/// Whether the window registers the app's entry in the OS's app menu as it opens: unless
+/// the person took it out.
+// Read by the window, which is the `eframe` feature's.
+#[cfg_attr(not(feature = "eframe"), allow(dead_code))]
+pub(crate) fn wants_launcher(stored: &Stored) -> bool {
+    stored.launcher != Some(false)
 }
 
 /// What the device keeps of the [`Shell`](crate::Shell)'s side pane.
@@ -247,6 +263,7 @@ mod tests {
             look: Some(look()),
             rail: Some(rail()),
             side: None,
+            launcher: Some(false),
         };
         store.save(&state).unwrap();
         assert_eq!(store.load(), Some(state));
@@ -278,6 +295,7 @@ mod tests {
                     }),
                     rail: None,
                     side: None,
+                    launcher: None,
                 };
                 store.save(&state).unwrap();
                 assert_eq!(store.load(), Some(state));
@@ -300,6 +318,17 @@ mod tests {
         assert_eq!(look.theme.contrast, Contrast::High);
         assert_eq!(look.language.language, Language::Explicit("ja".into()));
         assert_eq!(state.rail.unwrap().order, ["b", "a"]);
+    }
+
+    #[test]
+    fn a_file_without_the_launcher_wants_it() {
+        // A file written before the launcher was kept has no key for it.
+        let stored: Stored = toml::from_str("").unwrap();
+        assert!(wants_launcher(&stored));
+        let stored: Stored = toml::from_str("launcher = true").unwrap();
+        assert!(wants_launcher(&stored));
+        let stored: Stored = toml::from_str("launcher = false").unwrap();
+        assert!(!wants_launcher(&stored));
     }
 
     #[test]
@@ -327,6 +356,7 @@ mod tests {
             look: Some(look()),
             rail: Some(rail()),
             side: None,
+            launcher: None,
         };
         store(&dir).save(&state).unwrap();
         let ctx = egui::Context::default();

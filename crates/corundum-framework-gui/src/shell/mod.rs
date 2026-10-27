@@ -1768,6 +1768,7 @@ mod tests {
             look: None,
             rail: Some(saved.clone()),
             side: None,
+            launcher: None,
         })
         .unwrap();
         let ctx = egui::Context::default();

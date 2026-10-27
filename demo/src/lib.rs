@@ -29,6 +29,18 @@ pub const DEMO: Resources = Resources {
 /// The name the app's directories are kept under.
 pub const APP_NAME: &str = "corundum-framework-demo";
 
+/// The demo's entry in the desktop's app menu: registered at start, and shown on the
+/// Settings About page, where it can be removed and added back.
+pub(crate) const LAUNCHER: corundum_framework::platform::launcher::LauncherSpec =
+    corundum_framework::platform::launcher::LauncherSpec {
+        id: "corundum-demo",
+        name: "Corundum Demo",
+        description: "Every piece corundum-framework shares",
+        category: "Development",
+        icon_svg: include_bytes!("../assets/app-icon.svg"),
+        bundle_prefix: "net.fireturtle.corundum",
+    };
+
 /// The CJK font the window installed at start, for the Fonts screen: `Some(None)` when the
 /// system has none, unset when the app did not start through [`run`].
 static CJK_FAMILY: OnceLock<Option<String>> = OnceLock::new();
@@ -236,6 +248,7 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
     let options = corundum_framework::gui::window::WindowOptions::new("corundum-framework demo")
         .inner_size([960.0, 680.0])
         .min_inner_size([320.0, 400.0])
+        .launcher(LAUNCHER)
         .fonts(|ctx| {
             let family = corundum_framework::gui::fonts::install_system_cjk_fallback(ctx);
             let _ = CJK_FAMILY.set(family);

@@ -26,6 +26,10 @@ cargo run -p corundum-framework-demo
 
 Make the window narrower than 600 points to see the phone layout.
 
+To see the demo in the app menu, install it (`cargo install --path demo`) and run it once.
+A build in a cargo target directory, as `cargo run` makes, adds no entry. Settings, About
+removes the entry and adds it back.
+
 ## iOS simulator
 
 Needs an Apple-silicon Mac with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen)

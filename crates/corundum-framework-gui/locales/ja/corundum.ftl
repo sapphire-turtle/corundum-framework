@@ -79,3 +79,9 @@ corundum-update-by-snap = Snap Store が更新します
 corundum-update-by-microsoft-store = Microsoft Store が更新します
 corundum-update-by-mac-app-store = Mac App Store が更新します
 corundum-update-from-release-page = リリースページからダウンロードしてください
+
+# アプリメニューの行（`settings::LauncherRow`）：ラベル、二つのボタン、クリックが効かなかった理由。
+corundum-launcher-in-menu = アプリメニューに表示
+corundum-launcher-remove = 外す
+corundum-launcher-add = 戻す
+corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }

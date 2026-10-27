@@ -13,6 +13,7 @@ desktops and on phones.
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | The look: the shell, theme, fonts, icons, translations and window | unreleased |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
 | [`corundum-framework-update`](crates/corundum-framework-update) | Newer GitHub releases of an app's binary: finding them, and replacing the binary with one | unreleased |
+| [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
 
@@ -58,6 +59,12 @@ desktops and on phones.
   is put in a scene, which iOS 27 requires (the app's Info.plist declares one with
   `CorundumSceneDelegate` as its delegate: see `window`), and takes the keyboards that
   compose (Japanese, Chinese, Korean), which winit 0.30 alone does not.
+- **App menu entry**: `WindowOptions::launcher(spec)` puts the app in the desktop's app
+  menu at start (and sets the window's app id and icon), and `settings::LauncherRow`, a row
+  for an About page, removes it and adds it back; with a store the removal is kept, and the
+  entry is not written again on the next start. A Windows app also sets
+  `#![cfg_attr(windows, windows_subsystem = "windows")]` in its `main.rs`, or the console
+  opens with it.
 
 | Feature | What it enables | Default |
 |---|---|---|
@@ -82,6 +89,10 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone.
 - **Languages**: `locale::system_languages`, the system's preferred languages (Android's
   whole `LocaleList`, where `sys-locale` gives only one).
+- **Launcher**: `launcher`, the app's entry in the desktop's app menu (a `.desktop` file
+  and icon on Linux, an app bundle on macOS, a Start menu shortcut on Windows), written
+  from a `LauncherSpec`, and the process's Windows taskbar id. Skipped for a build that
+  runs from a cargo target directory.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
