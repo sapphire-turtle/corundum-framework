@@ -82,3 +82,10 @@ corundum-update-by-snap = Updated by the Snap Store
 corundum-update-by-microsoft-store = Updated by the Microsoft Store
 corundum-update-by-mac-app-store = Updated by the Mac App Store
 corundum-update-from-release-page = Download it from the release page
+
+# The app-menu row (`settings::LauncherRow`): its label, its two buttons, and why a click did
+# nothing.
+corundum-launcher-in-menu = In the app menu
+corundum-launcher-remove = Remove
+corundum-launcher-add = Add back
+corundum-launcher-failed = Could not change the app menu: { $error }

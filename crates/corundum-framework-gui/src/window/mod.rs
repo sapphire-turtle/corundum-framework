@@ -38,6 +38,8 @@
 //! }
 //! ```
 
+use corundum_framework_platform::launcher::{self, LauncherSpec};
+
 use crate::gpu;
 
 #[cfg(all(target_os = "android", feature = "android"))]
@@ -61,12 +63,13 @@ pub const IOS_SCENE_DELEGATE: &str = "CorundumSceneDelegate";
 /// Sets the egui context's fonts, once, before the app is built.
 pub type InstallFonts = Box<dyn FnOnce(&egui::Context)>;
 
-/// A desktop window: its title, its size and its fonts.
+/// A desktop window: its title, its size, its fonts and the app's entry in the OS's app menu.
 pub struct WindowOptions {
     title: String,
     inner_size: [f32; 2],
     min_inner_size: [f32; 2],
     fonts: Option<InstallFonts>,
+    launcher: Option<LauncherSpec>,
     #[cfg(feature = "serde")]
     store: Option<crate::store::Store>,
 }
@@ -79,6 +82,7 @@ impl WindowOptions {
             inner_size: [900.0, 600.0],
             min_inner_size: [600.0, 400.0],
             fonts: None,
+            launcher: None,
             #[cfg(feature = "serde")]
             store: None,
         }
@@ -101,6 +105,31 @@ impl WindowOptions {
     pub fn fonts(mut self, install: impl FnOnce(&egui::Context) + 'static) -> WindowOptions {
         self.fonts = Some(Box::new(install));
         self
+    }
+
+    /// Put the app in the OS's app menu as `spec` as the window opens
+    /// ([`launcher::register`]), and give the window `spec`'s id and icon, so the OS matches
+    /// the running window to the entry. With [`remember`](Self::remember), an entry the
+    /// person took out ([`LauncherRow`](crate::settings::LauncherRow)) is not written back.
+    pub fn launcher(mut self, spec: LauncherSpec) -> WindowOptions {
+        self.launcher = Some(spec);
+        self
+    }
+
+    /// The spec the app's entry in the app menu is made from, if one is set.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn launcher_spec(&self) -> Option<&LauncherSpec> {
+        self.launcher.as_ref()
+    }
+
+    /// Whether `run` registers the app's entry: unless the store says the person took it
+    /// out. Without a store it always does.
+    fn wants_launcher(&self) -> bool {
+        #[cfg(feature = "serde")]
+        if let Some(store) = &self.store {
+            return crate::store::wants_launcher(&store.load().unwrap_or_default());
+        }
+        true
     }
 
     /// Keep corundum's file in `store`: the look saved there is installed before the app's first
@@ -139,24 +168,58 @@ pub fn run(
     create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App>,
 ) -> eframe::Result<()> {
     let mut options = options;
+    // Before the store is handed to the context: it is read here for the launcher.
+    let wants_launcher = options.wants_launcher();
     let create = options.wrap_create(create);
     let WindowOptions {
         title,
         inner_size,
         min_inner_size,
         fonts,
+        launcher,
         ..
     } = options;
     gpu::install_panic_hook();
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size(inner_size)
+        .with_min_inner_size(min_inner_size)
+        .with_title(&title);
+    if let Some(spec) = launcher {
+        if wants_launcher && let Err(err) = launcher::register(&spec) {
+            tracing::warn!("could not put {} in the app menu: {err}", spec.id);
+        }
+        viewport = with_launcher_look(viewport, &spec);
+    }
     let native = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size(inner_size)
-            .with_min_inner_size(min_inner_size)
-            .with_title(&title),
+        viewport,
         wgpu_options: gpu::wgpu_options(),
         ..Default::default()
     };
     open(&title, native, fonts, create)
+}
+
+/// `viewport` with `spec`'s id, and its icon where it can be rendered, so the OS matches the
+/// window to the app's entry in the app menu.
+fn with_launcher_look(
+    viewport: egui::ViewportBuilder,
+    spec: &LauncherSpec,
+) -> egui::ViewportBuilder {
+    let viewport = viewport.with_app_id(spec.id);
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        const SIZE: u32 = 256;
+        match corundum_framework_platform::icon::render_rgba(spec.icon_svg, SIZE) {
+            Ok(rgba) => {
+                return viewport.with_icon(std::sync::Arc::new(egui::IconData {
+                    rgba,
+                    width: SIZE,
+                    height: SIZE,
+                }));
+            }
+            Err(err) => tracing::warn!("could not render the icon of {}: {err}", spec.id),
+        }
+    }
+    viewport
 }
 
 /// Run eframe with `native` as the caller built it, building the app with `create` once the
@@ -209,5 +272,23 @@ mod tests {
         assert_eq!(options.inner_size, [1000.0, 640.0]);
         assert_eq!(options.min_inner_size, [720.0, 440.0]);
         assert!(options.fonts.is_some());
+    }
+
+    #[test]
+    fn options_keep_the_launcher_spec() {
+        const SPEC: LauncherSpec = LauncherSpec {
+            id: "net.example.Test",
+            name: "Test",
+            description: "A test app",
+            category: "Utility",
+            icon_svg: b"<svg/>",
+            bundle_prefix: "net.example",
+        };
+        assert!(WindowOptions::new("x").launcher_spec().is_none());
+        let options = WindowOptions::new("x").launcher(SPEC);
+        assert_eq!(
+            options.launcher_spec().map(|s| s.id),
+            Some("net.example.Test")
+        );
     }
 }
