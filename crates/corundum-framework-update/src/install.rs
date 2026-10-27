@@ -152,11 +152,9 @@ pub(crate) fn install_method_with(
         return InstallMethod::Store(StoreKind::Msix);
     }
     // `App.app/Contents/MacOS/<exe>`, with the App Store's receipt beside `MacOS`.
-    if let Some(contents) = exe.parent().and_then(Path::parent)
-        && exe
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|d| d == "MacOS")
+    if let Some(macos) = exe.parent()
+        && let Some(contents) = macos.parent()
+        && macos.file_name().is_some_and(|d| d == "MacOS")
         && contents.file_name().is_some_and(|d| d == "Contents")
         && contents.join("_MASReceipt").join("receipt").exists()
     {
@@ -484,10 +482,19 @@ fn confirm(question: &str) -> Result<bool> {
 mod tests {
     use super::*;
 
+    fn probe(root: &Path) -> Probe {
+        Probe {
+            root: root.to_owned(),
+            snap: false,
+            msix: false,
+        }
+    }
+
     #[test]
     fn a_binary_is_replaced_only_where_it_was_placed_by_hand() {
         let home = Path::new("/home/u/.cargo");
-        let method = |p: &str| install_method(Path::new(p), Some(home));
+        let root = tempfile::tempdir().unwrap();
+        let method = |p: &str| install_method_with(Path::new(p), Some(home), &probe(root.path()));
         assert_eq!(method("/home/u/.cargo/bin/app"), InstallMethod::Cargo);
         assert_eq!(method("/usr/bin/app"), InstallMethod::PackageManager);
         assert_eq!(
@@ -500,14 +507,6 @@ mod tests {
         );
         assert_eq!(method("/usr/local/bin/app"), InstallMethod::Release);
         assert_eq!(method("/home/u/.local/bin/app"), InstallMethod::Release);
-    }
-
-    fn probe(root: &Path) -> Probe {
-        Probe {
-            root: root.to_owned(),
-            snap: false,
-            msix: false,
-        }
     }
 
     #[test]
@@ -589,7 +588,10 @@ mod tests {
             .path()
             .join("bin")
             .join(format!("dx{}", std::env::consts::EXE_SUFFIX));
-        assert_eq!(install_method(&exe, Some(tmp.path())), InstallMethod::Cargo);
+        assert_eq!(
+            install_method_with(&exe, Some(tmp.path()), &probe(tmp.path())),
+            InstallMethod::Cargo
+        );
         std::fs::create_dir(tmp.path().join("binstall")).unwrap();
         std::fs::write(
             tmp.path().join("binstall").join("crates-v1.json"),
@@ -597,7 +599,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            install_method(&exe, Some(tmp.path())),
+            install_method_with(&exe, Some(tmp.path()), &probe(tmp.path())),
             InstallMethod::Binstall {
                 crate_name: "dioxus-cli".to_owned(),
                 source: BinstallSource::Registry,
