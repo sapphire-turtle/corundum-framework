@@ -58,7 +58,8 @@ pub enum Status {
     Stale,
     /// There is no entry.
     Absent,
-    /// There is no app menu to look in: the OS has none, or there is no home directory.
+    /// Nothing to look at: the OS has no app menu, there is no home directory, or this
+    /// executable is one `register` skips (a cargo target directory, `CORUNDUM_NO_LAUNCHER`).
     Unsupported,
 }
 
