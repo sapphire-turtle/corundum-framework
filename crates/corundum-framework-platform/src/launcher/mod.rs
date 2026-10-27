@@ -106,20 +106,48 @@ pub fn unregister(spec: &LauncherSpec) -> io::Result<()> {
 }
 
 /// Whether the app's entry is there and names the running executable. On iOS and Android,
-/// and where there is no home directory or the executable cannot be found, there is no app
-/// menu to look in: [`Status::Unsupported`].
+/// where there is no home directory or the executable cannot be found, and where
+/// [`register`] would skip the executable (a cargo build, or `CORUNDUM_NO_LAUNCHER` set),
+/// there is no entry to look at: [`Status::Unsupported`].
 pub fn status(spec: &LauncherSpec) -> Status {
     if cfg!(any(target_os = "ios", target_os = "android")) {
         return Status::Unsupported;
     }
-    status_in(spec, Root::detect(), std::env::current_exe())
+    status_in(
+        spec,
+        Root::detect(),
+        std::env::current_exe(),
+        std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some(),
+    )
 }
 
-/// [`status`] for the directories and the executable as found, or not found.
-fn status_in(spec: &LauncherSpec, root: Option<Root>, exe: io::Result<PathBuf>) -> Status {
+/// [`status`] for the directories and the executable as found, or not found, and whether
+/// the variable `CORUNDUM_NO_LAUNCHER` is set.
+fn status_in(
+    spec: &LauncherSpec,
+    root: Option<Root>,
+    exe: io::Result<PathBuf>,
+    env_set: bool,
+) -> Status {
     match (root, exe) {
-        (Some(root), Ok(exe)) => status_at(spec, &root, &exe),
+        (Some(root), Ok(exe)) if !skipped(&exe, env_set) => status_at(spec, &root, &exe),
         _ => Status::Unsupported,
+    }
+}
+
+/// Tells the OS that this process is the app `spec` describes, so that its window is grouped
+/// in the taskbar with the app's entry however it was started. Call it before the first
+/// window is created. Only Windows groups by an id the process sets; elsewhere it does
+/// nothing.
+pub fn set_process_app_id(spec: &LauncherSpec) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        windows::set_process_app_id(spec)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = spec;
+        Ok(())
     }
 }
 
@@ -225,8 +253,15 @@ pub(crate) fn skipped(exe: &Path, env_set: bool) -> bool {
 
 /// Writes `bytes` to `path`, with its parent directories, unless the file already holds
 /// them; `true` when it wrote.
-// Windows writes its shortcut through COM instead.
-#[cfg_attr(windows, allow(dead_code))]
+// Only the Linux entry is a file; Windows writes its shortcut through COM instead, and the
+// other OSes have no entry yet.
+#[cfg_attr(
+    not(all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    )),
+    allow(dead_code)
+)]
 pub(crate) fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
     if std::fs::read(path).is_ok_and(|old| old == bytes) {
         return Ok(false);
@@ -259,11 +294,38 @@ mod tests {
             appdata: None,
         };
         assert_eq!(
-            status_in(&spec, None, Ok(PathBuf::from("/usr/bin/app"))),
+            status_in(&spec, None, Ok(PathBuf::from("/usr/bin/app")), false),
             Status::Unsupported
         );
         assert_eq!(
-            status_in(&spec, Some(root), Err(io::Error::other("no exe"))),
+            status_in(&spec, Some(root), Err(io::Error::other("no exe")), false),
+            Status::Unsupported
+        );
+    }
+
+    #[test]
+    fn a_skipped_executable_has_no_entry_to_look_at() {
+        let spec = LauncherSpec {
+            id: "net.example.Test",
+            name: "Test",
+            description: "A test app",
+            category: "Utility",
+            icon_svg: b"<svg/>",
+            bundle_prefix: "net.example",
+        };
+        let root = || Root {
+            home: PathBuf::from("/nonexistent/home"),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        let cargo = || Ok(PathBuf::from("/src/app/target/debug/app"));
+        assert_eq!(
+            status_in(&spec, Some(root()), cargo(), false),
+            Status::Unsupported
+        );
+        // The variable skips any path, so nothing is looked at even for an installed one.
+        assert_eq!(
+            status_in(&spec, Some(root()), Ok(PathBuf::from("/usr/bin/app")), true),
             Status::Unsupported
         );
     }

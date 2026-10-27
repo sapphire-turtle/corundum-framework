@@ -204,6 +204,10 @@ fn with_launcher_look(
     viewport: egui::ViewportBuilder,
     spec: &LauncherSpec,
 ) -> egui::ViewportBuilder {
+    // Before the window exists, so the taskbar groups it with the app's entry.
+    if let Err(err) = launcher::set_process_app_id(spec) {
+        tracing::warn!("could not set the app id of {}: {err}", spec.id);
+    }
     let viewport = viewport.with_app_id(spec.id);
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {

@@ -34,13 +34,14 @@ fn exec_line(exe: &Path) -> String {
 
 /// `path` as one quoted argument of an `Exec=` value. Inside the double quotes `"`, `` ` ``,
 /// `$` and `\` are each preceded by `\`, and as the value is a Desktop Entry string every
-/// `\` is then doubled.
+/// `\` is then doubled. A `%` is written `%%`, as it would else begin a field code.
 pub(crate) fn quote_exec(path: &Path) -> String {
     let mut out = String::from("\"");
     for c in path.to_string_lossy().chars() {
         match c {
             '"' | '`' | '$' => out.push_str("\\\\"),
             '\\' => out.push_str("\\\\\\"),
+            '%' => out.push('%'),
             _ => {}
         }
         out.push(c);
@@ -107,7 +108,8 @@ pub(crate) fn unregister(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     Ok(())
 }
 
-/// Whether the app's entry is there and starts `exe`.
+/// Whether the app's entry is there and starts `exe`. Only the `Exec=` line is compared: a
+/// changed name or icon is not seen as stale, but [`register`] rewrites it on the next start.
 pub(crate) fn status(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
     let Ok(text) = std::fs::read_to_string(entry_path(spec, root)) else {
         return Status::Absent;
@@ -159,6 +161,7 @@ Terminal=false
             quote_exec(Path::new("/a b/$x`y\"z\\w")),
             r#""/a b/\\$x\\`y\\"z\\\\w""#
         );
+        assert_eq!(quote_exec(Path::new("/a/100%/x")), r#""/a/100%%/x""#);
     }
 
     #[test]

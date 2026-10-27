@@ -23,6 +23,12 @@ pub(crate) struct LinkFields {
     pub description: String,
 }
 
+/// The `System.AppUserModel.ID` of the app `spec` describes, which the shortcut holds and the
+/// process sets for itself.
+pub(crate) fn app_id(spec: &LauncherSpec) -> String {
+    format!("{}.{}", spec.bundle_prefix, spec.id)
+}
+
 /// The shortcut that starts `exe` as the app `spec` describes: in the executable's folder,
 /// with the executable's own icon.
 pub(crate) fn link_fields(spec: &LauncherSpec, exe: &Path) -> LinkFields {
@@ -30,7 +36,7 @@ pub(crate) fn link_fields(spec: &LauncherSpec, exe: &Path) -> LinkFields {
         target: exe.to_path_buf(),
         working_dir: exe.parent().unwrap_or(Path::new("")).to_path_buf(),
         icon: (exe.to_path_buf(), 0),
-        app_id: format!("{}.{}", spec.bundle_prefix, spec.id),
+        app_id: app_id(spec),
         description: spec.description.to_owned(),
     }
 }
@@ -47,6 +53,17 @@ pub(crate) fn link_path(spec: &LauncherSpec, root: &Root) -> Option<PathBuf> {
             .join("Programs")
             .join(format!("{}.lnk", spec.name)),
     )
+}
+
+/// Sets the process's explicit AppUserModelID to the shortcut's, so the taskbar groups the
+/// window with it however the process was started.
+#[cfg(windows)]
+pub(crate) fn set_process_app_id(spec: &LauncherSpec) -> io::Result<()> {
+    use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+    use windows::core::HSTRING;
+    // SAFETY: the string is live for the call, which copies it.
+    unsafe { SetCurrentProcessExplicitAppUserModelID(&HSTRING::from(app_id(spec))) }
+        .map_err(io::Error::from)
 }
 
 /// Writes the app's shortcut unless one already starts `exe` with the app's id; `Skipped`

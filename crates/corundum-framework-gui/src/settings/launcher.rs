@@ -11,9 +11,11 @@ use crate::tr;
 ///
 /// The entry is the one [`WindowOptions::launcher`](crate::window::WindowOptions::launcher)
 /// registers as the window opens. With the `serde` feature and a [store](crate::store), the
-/// person's choice is kept there, so a removed entry is not written back on the next start.
+/// person's choice is kept there, so a removed entry is not written back on the next start;
+/// without a store, a removal lasts only for the session.
 /// Where there is no app menu to look in ([`Status::Unsupported`]: on iOS and Android, or
-/// without a home directory) the row shows only its label.
+/// without a home directory, or for a build [`launcher::register`] skips) the row shows only
+/// its label.
 pub struct LauncherRow {
     spec: LauncherSpec,
     /// How the entry's state is found: [`launcher::status`], or a stand-in in the tests.

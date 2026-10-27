@@ -61,7 +61,8 @@ desktops and on phones.
   compose (Japanese, Chinese, Korean), which winit 0.30 alone does not.
 - **App menu entry**: `WindowOptions::launcher(spec)` puts the app in the desktop's app
   menu at start (and sets the window's app id and icon), and `settings::LauncherRow`, a row
-  for an About page, removes it and adds it back. A Windows app also sets
+  for an About page, removes it and adds it back; with a store the removal is kept, and the
+  entry is not written again on the next start. A Windows app also sets
   `#![cfg_attr(windows, windows_subsystem = "windows")]` in its `main.rs`, or the console
   opens with it.
 
@@ -90,7 +91,7 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   whole `LocaleList`, where `sys-locale` gives only one).
 - **Launcher**: `launcher`, the app's entry in the desktop's app menu (a `.desktop` file
   and icon on Linux, an app bundle on macOS, a Start menu shortcut on Windows), written
-  from a `LauncherSpec` and kept off when the user removes it. Skipped for a build that
+  from a `LauncherSpec`, and the process's Windows taskbar id. Skipped for a build that
   runs from a cargo target directory.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
