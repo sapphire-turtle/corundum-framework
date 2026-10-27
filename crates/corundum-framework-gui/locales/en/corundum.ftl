@@ -70,6 +70,8 @@ corundum-update-restarting = Restarting…
 corundum-update-done = Updated to { $version }
 corundum-update-restart-by-hand = Updated; restart it to use { $version }
 corundum-update-failed = Failed: { $error }
+# The error of a row whose background work stopped unexpectedly.
+corundum-update-worker-stopped = the update check stopped unexpectedly
 corundum-update-retry = Retry
 corundum-update-run = Run:
 corundum-update-copy = Copy

@@ -43,8 +43,13 @@ serde = ["dep:serde", "dep:toml", "egui/serde"]
 # `update`: the Settings → About update panel's states, over corundum-framework-update's
 # lookup and advice. `self-update` adds the download and the replacement; leave it off for a
 # store build, whose store does the updating.
-update = ["dep:corundum-framework-update", "dep:reqwest", "dep:semver", "dep:tokio"]
-self-update = ["update", "corundum-framework-update/self-update", "dep:self-replace"]
+update = ["dep:corundum-framework-update", "dep:semver", "dep:tokio"]
+self-update = [
+    "update",
+    "corundum-framework-update/self-update",
+    "dep:reqwest",
+    "dep:self-replace",
+]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -71,7 +76,8 @@ fluent-langneg = "0.14"
 # The parsed files' entries, for i18n::check (already a dependency of fluent-bundle).
 fluent-syntax = "0.12"
 fontdb = "0.24"
-# The update panel's HTTP client, made by corundum-framework-update and named by its worker.
+# The update panel's HTTP client, made by corundum-framework-update and named by its
+# worker's install (`self-update`).
 reqwest = { workspace = true, optional = true }
 # The running app's executable, replaced in place by the update panel.
 self-replace = { version = "1.5", optional = true }

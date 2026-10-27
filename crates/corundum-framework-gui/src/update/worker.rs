@@ -134,6 +134,8 @@ fn install(
             target.exe.display()
         ));
     }
+    // An unknown current version (a server not running) installs: there is nothing to
+    // downgrade from.
     if target
         .current
         .as_ref()
@@ -183,4 +185,24 @@ pub(crate) fn relaunch(exe: &Path) -> io::Result<()> {
         .args(std::env::args_os().skip(1))
         .spawn()
         .map(drop)
+}
+
+#[cfg(all(test, feature = "self-update"))]
+mod tests {
+    use super::*;
+    use corundum_framework_update::ReleaseSource;
+    use std::path::PathBuf;
+
+    #[test]
+    fn relaunching_a_missing_file_fails() {
+        let target = UpdateTarget {
+            label: "App".to_owned(),
+            current: None,
+            source: ReleaseSource::github("o", "r"),
+            exe: PathBuf::from("/nonexistent/app"),
+            after: AfterUpdate::Relaunch,
+        };
+        assert!(relaunch(&target.exe).is_err());
+        assert!(matches!(restart(&target), RestartOutcome::Failed(_)));
+    }
 }

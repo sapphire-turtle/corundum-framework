@@ -67,6 +67,8 @@ corundum-update-restarting = 再起動しています…
 corundum-update-done = { $version } に更新しました
 corundum-update-restart-by-hand = 更新しました。{ $version } を使うには再起動してください
 corundum-update-failed = 失敗しました：{ $error }
+# バックグラウンドの処理が予期せず止まった行のエラー。
+corundum-update-worker-stopped = 更新の処理が予期せず止まりました
 corundum-update-retry = 再試行
 corundum-update-run = 実行：
 corundum-update-copy = コピー

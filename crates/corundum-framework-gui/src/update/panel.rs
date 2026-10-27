@@ -2,10 +2,11 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::mpsc::TryRecvError;
 #[cfg(test)]
 use std::sync::mpsc::{Receiver, Sender};
 
-use corundum_framework_update::{InstallMethod, Release, ReleaseSource, StoreKind};
+use corundum_framework_update::{InstallMethod, Release, ReleaseSource, StoreKind, advice_command};
 use semver::Version;
 
 use super::state::{Event, RestartOutcome, Retry, RowState, Step, on_check, on_event};
@@ -116,12 +117,12 @@ impl UpdatesPanel {
         // Looked up when first shown, not when the app starts.
         if !self.checked {
             self.checked = true;
-            self.check_all();
+            self.check_all(ui.ctx());
         }
         self.receive(ui.ctx());
 
         if ui.button(tr!(ui, "corundum-update-check")).clicked() {
-            self.check_all();
+            self.check_all(ui.ctx());
         }
         ui.add_space(8.0);
         // One install at a time: while a row works, the others' buttons wait.
@@ -142,7 +143,7 @@ impl UpdatesPanel {
                         Some(version) => ui.label(version.to_string()),
                         None => ui.weak(tr!(ui, "corundum-update-not-running")),
                     };
-                    let (asked, _button) = ui.horizontal(|ui| row_ui(ui, row, idle)).inner;
+                    let (asked, _button) = ui.horizontal(|ui| row_ui(ui, target, row, idle)).inner;
                     if let Some(asked) = asked {
                         action = Some((index, asked));
                     }
@@ -155,48 +156,45 @@ impl UpdatesPanel {
             #[cfg(feature = "self-update")]
             Some(
                 (index, Action::Update(release)) | (index, Action::Retry(Retry::Update(release))),
-            ) => self.update(index, release),
+            ) => self.update(ui.ctx(), index, release),
             #[cfg(not(feature = "self-update"))]
-            Some((index, Action::Retry(Retry::Update(_)))) => self.check(index),
-            Some((index, Action::Retry(Retry::Check))) => self.check(index),
+            Some((index, Action::Retry(Retry::Update(_)))) => self.check(ui.ctx(), index),
+            Some((index, Action::Retry(Retry::Check))) => self.check(ui.ctx(), index),
             None => {}
         }
     }
 
     /// Look every row up again but one installing.
-    fn check_all(&mut self) {
+    fn check_all(&mut self, ctx: &egui::Context) {
         for index in 0..self.rows.len() {
             if !matches!(self.rows[index].state, RowState::Working { .. }) {
-                self.check(index);
+                self.check(ctx, index);
             }
         }
     }
 
-    fn check(&mut self, index: usize) {
+    fn check(&mut self, ctx: &egui::Context, index: usize) {
         self.rows[index].state = RowState::Checking;
-        self.send(index, Job::Check(index));
+        self.send(ctx, index, Job::Check(index));
     }
 
     #[cfg(feature = "self-update")]
-    fn update(&mut self, index: usize, release: Release) {
+    fn update(&mut self, ctx: &egui::Context, index: usize, release: Release) {
         self.rows[index].state = RowState::Working {
             release: release.clone(),
             step: Step::Downloading,
         };
-        self.send(index, Job::Update(index, release));
+        self.send(ctx, index, Job::Update(index, release));
     }
 
     /// Hand `job` to the worker; if it is gone, `index`'s row says so.
-    fn send(&mut self, index: usize, job: Job) {
+    fn send(&mut self, ctx: &egui::Context, index: usize, job: Job) {
         let sent = self
             .worker
             .as_ref()
             .is_some_and(|worker| worker.jobs.send(job).is_ok());
         if !sent {
-            self.rows[index].state = RowState::Failed {
-                message: "the update worker stopped".to_owned(),
-                retry: Retry::Check,
-            };
+            self.rows[index].state = stopped(ctx);
         }
     }
 
@@ -205,18 +203,31 @@ impl UpdatesPanel {
         let Some(worker) = &self.worker else {
             return;
         };
-        let results: Vec<_> = worker.results.try_iter().collect();
+        let mut results = Vec::new();
+        let mut gone = false;
+        loop {
+            match worker.results.try_recv() {
+                Ok(result) => results.push(result),
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    gone = true;
+                    break;
+                }
+            }
+        }
         for (index, event) in results {
             let (Some(target), Some(row)) = (self.targets.get(index), self.rows.get_mut(index))
             else {
                 continue;
             };
             match event {
+                // Only a row waiting for it: a late answer to an earlier check must not undo an
+                // install begun since.
                 Event::Checked {
                     found,
                     method,
                     has_asset,
-                } => {
+                } if matches!(row.state, RowState::Checking) => {
                     row.state = on_check(
                         target.current.as_ref(),
                         &method,
@@ -227,6 +238,7 @@ impl UpdatesPanel {
                     );
                     row.method = Some(method);
                 }
+                Event::Checked { .. } => {}
                 event => {
                     let was_working = matches!(row.state, RowState::Working { .. });
                     row.state = on_event(row.state.clone(), event);
@@ -240,12 +252,33 @@ impl UpdatesPanel {
                 }
             }
         }
+        // The worker ended (a restart that panicked, say): what waits on it never comes.
+        if gone {
+            for row in &mut self.rows {
+                if matches!(row.state, RowState::Checking | RowState::Working { .. }) {
+                    row.state = stopped(ctx);
+                }
+            }
+        }
+    }
+}
+
+/// A row whose worker is gone.
+fn stopped(ctx: &egui::Context) -> RowState {
+    RowState::Failed {
+        message: tr!(ctx, "corundum-update-worker-stopped"),
+        retry: Retry::Check,
     }
 }
 
 /// A row's state, button and release-notes link; what its button asked for, and the
 /// button.
-fn row_ui(ui: &mut egui::Ui, row: &Row, idle: bool) -> (Option<Action>, Option<egui::Response>) {
+fn row_ui(
+    ui: &mut egui::Ui,
+    target: &UpdateTarget,
+    row: &Row,
+    idle: bool,
+) -> (Option<Action>, Option<egui::Response>) {
     let mut action = None;
     let mut button = None;
     let newest = |release: &Release| release.version.to_string();
@@ -270,9 +303,9 @@ fn row_ui(ui: &mut egui::Ui, row: &Row, idle: bool) -> (Option<Action>, Option<e
             }
             notes_link(ui, release);
         }
-        RowState::NotHere { release, advice } => {
+        RowState::NotHere { release, .. } => {
             ui.label(tr!(ui, "corundum-update-newer", version = newest(release)));
-            button = how_ui(ui, row.method.as_ref(), advice, idle);
+            button = how_ui(ui, &target.source, row.method.as_ref(), idle);
             notes_link(ui, release);
         }
         RowState::Working { release, step } => {
@@ -316,13 +349,12 @@ fn row_ui(ui: &mut egui::Ui, row: &Row, idle: bool) -> (Option<Action>, Option<e
 /// with a Copy button for a command to run.
 fn how_ui(
     ui: &mut egui::Ui,
+    source: &ReleaseSource,
     method: Option<&InstallMethod>,
-    advice: &str,
     idle: bool,
 ) -> Option<egui::Response> {
-    // `advice` words the command after "run: "; the rest of it is the panel's to word.
-    let command = advice.split_once("run: ").map(|(_, command)| command);
-    let text = match (method, command) {
+    let command = method.and_then(|method| advice_command(source, method));
+    let text = match (method, command.as_deref()) {
         (_, Some(command)) => {
             ui.label(tr!(ui, "corundum-update-run"));
             ui.code(command);
@@ -486,6 +518,69 @@ mod tests {
     }
 
     #[test]
+    fn a_command_to_run_gets_a_copy_button() {
+        let mut f = fixture();
+        f.frame(vec![]);
+        let method = InstallMethod::Binstall {
+            crate_name: "app-crate".to_owned(),
+            source: corundum_framework_update::BinstallSource::Registry,
+        };
+        let event = Event::Checked {
+            found: Ok(release("1.1.0")),
+            method: method.clone(),
+            has_asset: true,
+        };
+        f.results.send((0, event)).unwrap();
+        let store = Event::Checked {
+            found: Ok(release("1.1.0")),
+            method: InstallMethod::PackageManager,
+            has_asset: true,
+        };
+        f.results.send((1, store)).unwrap();
+        f.frame(vec![]);
+        f.frame(vec![]);
+        assert!(matches!(f.panel.rows[0].state, RowState::NotHere { .. }));
+        assert!(f.panel.buttons[0].is_some(), "Copy");
+        assert!(f.panel.buttons[1].is_none(), "nothing to copy");
+    }
+
+    #[test]
+    fn a_late_check_leaves_a_working_row() {
+        let mut f = fixture();
+        f.frame(vec![]);
+        let working = RowState::Working {
+            release: release("1.1.0"),
+            step: crate::update::Step::Downloading,
+        };
+        f.panel.rows[0].state = working.clone();
+        f.results.send((0, newer("1.1.0"))).unwrap();
+        f.frame(vec![]);
+        assert_eq!(f.panel.rows[0].state, working);
+    }
+
+    #[test]
+    fn a_stopped_worker_fails_the_waiting_rows() {
+        let mut f = fixture();
+        f.frame(vec![]);
+        f.panel.rows[0].state = RowState::Working {
+            release: release("1.1.0"),
+            step: crate::update::Step::Restarting,
+        };
+        // The worker's end of the results goes away.
+        f.results = mpsc::channel().0;
+        f.frame(vec![]);
+        for row in &f.panel.rows {
+            assert!(matches!(
+                row.state,
+                RowState::Failed {
+                    retry: Retry::Check,
+                    ..
+                }
+            ));
+        }
+    }
+
+    #[test]
     fn a_failed_restart_keeps_the_window() {
         let mut f = fixture();
         f.frame(vec![]);
@@ -559,12 +654,5 @@ mod tests {
                 "the other rows wait"
             );
         }
-
-        #[test]
-        fn relaunching_a_missing_file_fails() {
-            assert!(crate::update::worker::relaunch(Path::new("/nonexistent/app")).is_err());
-        }
-
-        use std::path::Path;
     }
 }
