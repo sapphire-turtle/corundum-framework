@@ -922,6 +922,7 @@ dependencies = [
  "jni",
  "ndk-context",
  "objc2-foundation 0.3.2",
+ "resvg",
  "sys-locale",
  "tempfile",
  "tracing",

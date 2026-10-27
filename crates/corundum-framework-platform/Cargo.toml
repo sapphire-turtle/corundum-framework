@@ -18,6 +18,10 @@ sys-locale = "0.3"
 tracing.workspace = true
 unic-langid = "0.9"
 
+# Desktop icons: an SVG rendered to PNG, icns and ico. No text feature: icons carry no text.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+resvg = { version = "0.45", default-features = false }
+
 # iOS: the sandbox's directories, from NSFileManager rather than $HOME.
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSFileManager", "NSPathUtilities", "NSString", "NSURL"] }
