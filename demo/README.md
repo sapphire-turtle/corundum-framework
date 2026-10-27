@@ -6,7 +6,7 @@ rest, and never published.
 
 | Screen | What it shows |
 |---|---|
-| Overview | The `Shell`: the rail (a bottom bar below 600 points), the rail's action (counted here), the footer (Settings), the foot slot (the dot), and wide, the status bar (the last event, the dot, the detail pane's toggle) |
+| Overview | corundum's logo (`assets/corundum.svg`: sapphire's hexagon holding asteria's sparkle), and the `Shell`: the rail (a bottom bar below 600 points), the rail's action (counted here), the footer (Settings), the foot slot (the dot), and wide, the status bar (the last event, the dot, the detail pane's toggle) |
 | Theme | `theme::settings_ui`, a `TintPicker` on its own, the palette (every tone by every swatch), widgets in the theme |
 | Fonts | The system's CJK fallback font, with Japanese, Chinese and Korean samples |
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
