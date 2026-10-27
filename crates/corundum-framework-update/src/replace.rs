@@ -218,9 +218,9 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_ne!(
-                std::fs::metadata(&f).unwrap().permissions().mode() & 0o111,
-                0
+            assert_eq!(
+                std::fs::metadata(&f).unwrap().permissions().mode() & 0o777,
+                0o755
             );
         }
         // Windows keeps the old file beside it until the next update.
