@@ -1,8 +1,10 @@
-//! The Platform: the OS, the clipboard, the insets and the app's directories — what
-//! corundum-framework-platform reads, and the window's view of the screen.
+//! The Platform: the OS, the clipboard, the insets, the system's dialogs and the app's
+//! directories — what corundum-framework-platform reads, and the window's view of the
+//! screen.
 
 use std::path::Path;
 
+use corundum_framework::gui::platform::{self, FilePicker, IMAGE_EXTENSIONS};
 use corundum_framework::gui::{egui, tr};
 use corundum_framework::platform::dirs::AppDirs;
 
@@ -16,6 +18,8 @@ pub(crate) struct State {
     clipboard: Option<Option<String>>,
     pasted: String,
     typed: String,
+    /// The files or the folder last picked.
+    picked: Vec<String>,
 }
 
 impl State {
@@ -26,6 +30,7 @@ impl State {
             clipboard: None,
             pasted: String::new(),
             typed: String::new(),
+            picked: Vec::new(),
         }
     }
 
@@ -51,6 +56,9 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State) {
 
     section(ui, "demo-platform-insets");
     insets_ui(ui, state);
+
+    section(ui, "demo-platform-dialogs");
+    dialogs_ui(ui, state);
 
     section(ui, "demo-platform-dirs");
     let none = tr!(ui, "demo-platform-none");
@@ -115,6 +123,47 @@ fn clipboard_ui(ui: &mut egui::Ui, state: &mut State) {
             ui.label(tr!(ui, "demo-platform-clipboard-none"));
         }
         None => {}
+    }
+}
+
+fn dialogs_ui(ui: &mut egui::Ui, state: &mut State) {
+    if !platform::file_picker_available() {
+        ui.weak(tr!(ui, "demo-platform-no-dialogs"));
+        return;
+    }
+    let shown = |paths: Vec<std::path::PathBuf>| -> Vec<String> {
+        paths.iter().map(|p| p.display().to_string()).collect()
+    };
+    ui.horizontal_wrapped(|ui| {
+        if ui.button(tr!(ui, "demo-platform-pick-images")).clicked() {
+            let images = FilePicker::new()
+                .title(tr!(ui, "demo-platform-pick-images"))
+                .filter(tr!(ui, "demo-platform-images"), IMAGE_EXTENSIONS)
+                .pick_files();
+            state.picked = shown(images);
+        }
+        if ui.button(tr!(ui, "demo-platform-pick-file")).clicked() {
+            state.picked = shown(FilePicker::new().pick_file().into_iter().collect());
+        }
+        if ui.button(tr!(ui, "demo-platform-pick-folder")).clicked() {
+            let folder = platform::pick_folder(&tr!(ui, "demo-platform-pick-folder"));
+            state.picked = shown(folder.into_iter().collect());
+        }
+    });
+    for path in &state.picked {
+        ui.horizontal(|ui| {
+            ui.label(path);
+            if platform::file_manager_available()
+                && ui.small_button(tr!(ui, "demo-platform-show")).clicked()
+            {
+                let path = Path::new(path);
+                platform::open_in_file_manager(if path.is_dir() {
+                    path
+                } else {
+                    path.parent().unwrap_or(path)
+                });
+            }
+        });
     }
 }
 

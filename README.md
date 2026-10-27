@@ -47,6 +47,11 @@ desktops and on phones.
   view's item holds (the playlist playing, the journal open) or a new entry begun from the
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.
+- **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
+  to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
+  folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the
+  clipboard and the insets. The dialogs are the desktops' for now: on a phone
+  `file_picker_available` says there are none.
 - **Window**: `window::run` opens a desktop window on wgpu the same way for every app;
   `window::run_android` does the same on an Android phone (GameActivity). On iOS the window
   is put in a scene, which iOS 27 requires (the app's Info.plist declares one with
