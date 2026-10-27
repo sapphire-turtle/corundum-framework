@@ -8,6 +8,64 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.2.1...v0.3.0) - 2026-10-27
+
+### Added
+
+- *(demo)* put the demo in the app menu
+- *(corundum-framework-build)* embed the app icon in a Windows executable
+- *(demo)* the updates panel on About
+- *(corundum-framework-gui)* the update panel's row states
+- *(corundum-framework-update)* move the release lookup and self-update from sapphire-framework
+- *(corundum-framework-gui)* pick files and folders, and show them in the file manager
+- *(corundum-framework-gui)* [**breaking**] every shell has the side pane; draw it with `show`
+- *(corundum-framework-platform)* the macOS app bundle
+- *(corundum-framework-platform)* the Windows Start-menu shortcut
+- *(corundum-framework-platform)* render an app icon to PNG, icns and ico
+- *(corundum-framework-platform)* the Linux desktop entry
+- *(corundum-framework-platform)* the launcher module's spec, results and skip rules
+- *(corundum-framework-gui)* register the launcher entry and match the window to it
+- *(corundum-framework-gui)* the updates panel
+- *(corundum-framework-update)* the advice's command on its own
+- *(corundum-framework-update)* recognise an app installed from a store
+- *(corundum-framework-update)* replace another program's executable
+- *(corundum-framework-gui)* the side pane in the shell, and ShellApp
+- *(corundum-framework-gui)* one side pane for the app, beside every screen
+- *(corundum-framework-gui)* mix actions with screens, More in the footer's place, order in Settings
+- *(corundum-framework-gui)* put what the rail cannot hold in a menu, and keep its order
+- *(corundum-framework-gui)* keep the look in effect on the device
+- *(corundum-framework-gui)* a detail pane, and a status bar to toggle it from
+- *(corundum-framework-gui)* the Settings screen, moved from sapphire-framework-gui
+- add the demo app corundum-framework-demo
+- add the corundum-framework facade crate
+- *(corundum-framework-platform)* a platform crate without egui
+
+### Fixed
+
+- *(corundum-framework-platform)* launcher final-review fixes
+- *(corundum-framework-platform)* leave the macOS launcher out of iOS and Android test builds
+- *(corundum-framework-platform)* follow the bundle's link to the real executable on macOS
+- *(corundum-framework-platform)* report no app menu where there is none
+- *(corundum-framework-platform)* store the shortcut's app id as a wide string
+- *(corundum-framework-gui)* track running versions per row and resolve symlinked executables
+- *(demo)* the updates panel on desktop only
+- *(corundum-framework-gui)* keep an installing row from a late check or a stopped worker
+- *(corundum-framework-update)* tighten replace_file tests
+- *(corundum-framework-gui)* put the iOS window in a scene and take composing keyboards
+- *(corundum-framework-platform)* use the sandbox's roots as a phone app's own dirs
+
+### Other
+
+- Merge pull request #48 from sapphire-turtle/docs/logo
+- add corundum's logo and show it in the README
+- correct the update feature notes and the worker-stopped wording
+- *(corundum-framework-platform)* say when status is Unsupported
+- *(corundum-framework-gui)* pin the row states' edge cases
+- *(corundum-framework-update)* keep install-method tests off the host's store markers
+- *(corundum-framework-update)* check the replaced file's mode exactly
+- *(corundum-framework-gui)* name the file corundum.toml, and the store Store
+- stand alone as sapphire-turtle/corundum-framework
+
 ## [0.2.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.2.0...v0.2.1) - 2026-10-25
 
 ### Fixed

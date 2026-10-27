@@ -1,7 +1,7 @@
 [package]
 name = "corundum-framework"
 # Versioned on its own, as the crates under it are.
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 description = "The application framework shared by sapphire and asteria apps - single-dependency facade over the corundum-framework-* crates"
 license = "MIT OR Apache-2.0"
@@ -48,9 +48,9 @@ gui-update = ["gui", "update", "corundum-framework-gui/update"]
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
 
 [dependencies]
-corundum-framework-platform = { version = "0.2.1", path = "../corundum-framework-platform", optional = true }
+corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.
-corundum-framework-gui = { version = "0.2.1", path = "../corundum-framework-gui", optional = true, default-features = false }
+corundum-framework-gui = { version = "0.3.0", path = "../corundum-framework-gui", optional = true, default-features = false }
 # Without its default `self-update`, which the facade's `self-update` feature turns on: the
 # lookup and the advice, so a store build does not link the replacement.
-corundum-framework-update = { version = "0.2.1", path = "../corundum-framework-update", optional = true, default-features = false }
+corundum-framework-update = { version = "0.3.0", path = "../corundum-framework-update", optional = true, default-features = false }

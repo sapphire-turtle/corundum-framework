@@ -2,7 +2,7 @@
 name = "corundum-framework-gui"
 # Versioned on its own, not with sapphire-framework: asteria uses it too, and should not see a
 # new version with every sapphire release.
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 description = "The look shared by sapphire and asteria apps: egui shell, system fonts, Lucide icons, translations"
 license = "MIT OR Apache-2.0"
@@ -53,7 +53,7 @@ self-update = [
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
-corundum-framework-platform = { version = "0.2.1", path = "../corundum-framework-platform" }
+corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform" }
 # eframe's default features, less `wayland`: since 0.37 it turns on arboard's Wayland
 # clipboard, which arboard pulls in on iOS too and which does not build there. The other
 # targets get the full default from the entry below.
@@ -66,7 +66,7 @@ eframe = { version = "0.37", optional = true, default-features = false, features
     "wgpu",
 ] }
 # Release lookup and advice; the download and replacement come with `self-update`.
-corundum-framework-update = { version = "0.2.1", path = "../corundum-framework-update", optional = true, default-features = false }
+corundum-framework-update = { version = "0.3.0", path = "../corundum-framework-update", optional = true, default-features = false }
 egui = "0.37"
 # The SVG loader for the bundled Lucide icons (assets/icons), and for the apps' own.
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
