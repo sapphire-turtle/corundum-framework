@@ -14,7 +14,11 @@
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
 ))]
 mod linux;
-#[cfg(any(target_os = "macos", all(unix, test)))]
+// Under test on the other desktops too; iOS and Android have no `icon`.
+#[cfg(any(
+    target_os = "macos",
+    all(unix, test, not(any(target_os = "ios", target_os = "android")))
+))]
 mod macos;
 // The pure parts are compiled everywhere under test so their tests run on any OS.
 #[cfg(any(windows, test))]
