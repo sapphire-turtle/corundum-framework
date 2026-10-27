@@ -882,6 +882,7 @@ name = "corundum-framework-demo"
 version = "0.0.0"
 dependencies = [
  "corundum-framework",
+ "corundum-framework-build",
  "tracing",
  "tracing-subscriber",
 ]

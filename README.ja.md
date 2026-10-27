@@ -27,6 +27,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **詳細ペイン**：どのシェルも持ち（`Shell::show`）、どの画面の横にも出すサイドペイン。中身はアプリが `ShellApp::side_ui` で描きます。メインビューで選んだもの（再生中のプレイリスト、開いているジャーナルなど）の詳細や、レールのアクションで書き始めた新しい項目を表示します。広い画面では右カラムに表示し、ステータスバーのボタンで隠せます。隠しているときは画面中央のカードに、スマートフォンではメインビューと切り替えて表示します。
 - **プラットフォーム**：ウィンドウがシステムに求め、egui だけでは得られないもの。ファイルを選ぶダイアログ（`platform::FilePicker`、`IMAGE_EXTENSIONS` などのフィルタ付き）とフォルダを選ぶダイアログ（`pick_folder`）、ファイルマネージャー（`open_in_file_manager`）、Android ではクリップボードとインセット。ダイアログは今のところデスクトップのみで、スマートフォンでは `file_picker_available` が使えないことを返します。
 - **ウィンドウ**：`window::run` はどのアプリでも同じ方法で wgpu のデスクトップウィンドウを開きます。`window::run_android` は Android 端末（GameActivity）で同じことをします。iOS では、iOS 27 が求めるシーンにウィンドウを入れ（アプリの Info.plist でシーンを宣言し、デリゲートに `CorundumSceneDelegate` を指定します。`window` を参照）、winit 0.30 だけでは使えない変換のあるキーボード（日本語、中国語、韓国語）を使えるようにします。
+- **アプリメニューへの登録**：`WindowOptions::launcher(spec)` は起動時にアプリをデスクトップのアプリメニューに載せ（ウィンドウのアプリ ID とアイコンも設定します）、About ページ用の行 `settings::LauncherRow` で削除と再追加ができます。Windows のアプリは `main.rs` に `#![cfg_attr(windows, windows_subsystem = "windows")]` も付けてください。付けないとコンソールが一緒に開きます。
 
 | 機能フラグ | 有効にするもの | デフォルト |
 |---|---|---|
@@ -44,6 +45,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 
 - **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。`AppDirs` はデスクトップでは `<root>/<アプリ名>`、スマートフォンではサンドボックスのディレクトリそのもの。
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
+- **ランチャー**：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、ユーザーが削除したら再登録しません。cargo の target ディレクトリから動かしたビルドでは何もしません。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 

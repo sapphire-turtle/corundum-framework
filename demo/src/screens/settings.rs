@@ -134,11 +134,13 @@ fn file_line(ui: &mut egui::Ui) {
     };
 }
 
-/// The app's name and version, and the update row for the demo itself.
+/// The app's name and version, its entry in the app menu, and the update row for the demo
+/// itself.
 ///
-/// Not on Android or iOS, where the app is never updated this way (and the panel's HTTP
-/// client needs a C toolchain the phones' builds do not have).
+/// The update row is not on Android or iOS, where the app is never updated this way (and the
+/// panel's HTTP client needs a C toolchain the phones' builds do not have).
 struct About {
+    launcher: corundum_framework::gui::settings::LauncherRow,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     updates: UpdatesPanel,
 }
@@ -146,7 +148,9 @@ struct About {
 impl About {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     fn new() -> About {
-        About {}
+        About {
+            launcher: corundum_framework::gui::settings::LauncherRow::new(crate::LAUNCHER),
+        }
     }
 
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -162,6 +166,7 @@ impl About {
             after: AfterUpdate::Relaunch,
         };
         About {
+            launcher: corundum_framework::gui::settings::LauncherRow::new(crate::LAUNCHER),
             updates: UpdatesPanel::new(vec![target], "corundum-framework-demo"),
         }
     }
@@ -179,6 +184,7 @@ impl SettingsSection for About {
             "demo-settings-version",
             version = env!("CARGO_PKG_VERSION")
         ));
+        self.launcher.ui(ui);
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         {
             ui.add_space(8.0);
