@@ -84,7 +84,7 @@ pub enum RestartOutcome {
 /// What happens to a row after a check began.
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
-    /// The lookup finished.
+    /// The lookup finished. The panel turns it into a state with `on_check`, not `on_event`.
     Checked(Result<Release, String>),
     /// The download and replacement finished.
     Downloaded(Result<(), String>),
@@ -395,7 +395,44 @@ mod tests {
             working(Step::Restarting),
             Event::Restarted(RestartOutcome::Failed("no".into())),
         );
-        assert!(matches!(failed, RowState::Failed { ref message, .. } if message == "no"));
+        assert_eq!(
+            failed,
+            RowState::Failed {
+                message: "no".into(),
+                retry: Retry::Check
+            }
+        );
+    }
+
+    #[test]
+    fn unexpected_events_change_nothing() {
+        let cases = [
+            (RowState::Checking, Event::Downloaded(Ok(()))),
+            (
+                working(Step::Downloading),
+                Event::Restarted(RestartOutcome::Restarted),
+            ),
+            (
+                working(Step::Downloading),
+                Event::Checked(Ok(release("2.0.0"))),
+            ),
+            (working(Step::Restarting), Event::Checked(Err("x".into()))),
+        ];
+        for (state, event) in cases {
+            assert_eq!(on_event(state.clone(), event), state);
+        }
+    }
+
+    #[test]
+    fn cargo_with_equal_version_is_up_to_date() {
+        let state = check(
+            Some("1.0.0"),
+            InstallMethod::Cargo,
+            true,
+            true,
+            Ok(release("1.0.0")),
+        );
+        assert_eq!(state, RowState::UpToDate { latest: v("1.0.0") });
     }
 
     #[test]
