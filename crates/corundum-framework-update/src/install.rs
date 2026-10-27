@@ -353,31 +353,39 @@ pub async fn download_asset(
     Ok(bytes)
 }
 
+/// The command that updates a binary installed as `method`, when there is one to run:
+/// `cargo install` or `cargo binstall` with what it was installed from.
+pub fn advice_command(source: &ReleaseSource, method: &InstallMethod) -> Option<String> {
+    match (method, source.crate_name()) {
+        (InstallMethod::Cargo, Some(name)) => Some(format!("cargo install {name} --locked")),
+        (InstallMethod::Binstall { crate_name, source }, _) => match source {
+            BinstallSource::Registry => Some(format!("cargo binstall {crate_name}")),
+            BinstallSource::Git(url) => Some(format!("cargo binstall --git {url} {crate_name}")),
+            BinstallSource::Other => None,
+        },
+        _ => None,
+    }
+}
+
 /// What to tell the user to do about `release` when the binary installed as `method` is not
 /// replaced in place: where to download it, or which package manager to ask.
 pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod) -> String {
-    match (method, source.crate_name()) {
-        (InstallMethod::Cargo, Some(name)) => {
-            format!("installed with cargo; run: cargo install {name} --locked")
+    if let Some(command) = advice_command(source, method) {
+        let tool = match method {
+            InstallMethod::Cargo => "cargo",
+            _ => "cargo binstall",
+        };
+        return format!("installed with {tool}; run: {command}");
+    }
+    match method {
+        InstallMethod::Cargo => "installed with cargo; update it with cargo install".to_owned(),
+        InstallMethod::Binstall { .. } => {
+            "installed with cargo binstall; update it with cargo binstall".to_owned()
         }
-        (InstallMethod::Cargo, None) => {
-            "installed with cargo; update it with cargo install".to_owned()
-        }
-        (InstallMethod::Binstall { crate_name, source }, _) => match source {
-            BinstallSource::Registry => {
-                format!("installed with cargo binstall; run: cargo binstall {crate_name}")
-            }
-            BinstallSource::Git(url) => format!(
-                "installed with cargo binstall; run: cargo binstall --git {url} {crate_name}"
-            ),
-            BinstallSource::Other => {
-                "installed with cargo binstall; update it with cargo binstall".to_owned()
-            }
-        },
-        (InstallMethod::PackageManager, _) => {
+        InstallMethod::PackageManager => {
             "installed by a package manager; update it with that".to_owned()
         }
-        (InstallMethod::Store(store), _) => format!(
+        InstallMethod::Store(store) => format!(
             "installed from {}; it updates there",
             match store {
                 StoreKind::Flatpak => "Flathub",
@@ -386,7 +394,7 @@ pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod)
                 StoreKind::MacAppStore => "the Mac App Store",
             }
         ),
-        (InstallMethod::Release, _) => format!("download it from {}", release.url),
+        InstallMethod::Release => format!("download it from {}", release.url),
     }
 }
 
@@ -488,6 +496,63 @@ mod tests {
             snap: false,
             msix: false,
         }
+    }
+
+    #[test]
+    fn advice_carries_the_command_to_run() {
+        let source = ReleaseSource::github("o", "r").cargo_crate("app-crate");
+        let release = Release {
+            version: "1.0.0".parse().unwrap(),
+            url: "https://example.test/r".to_owned(),
+            assets: vec![],
+        };
+        let binstall = |source| InstallMethod::Binstall {
+            crate_name: "app-crate".to_owned(),
+            source,
+        };
+        let git = binstall(BinstallSource::Git("https://github.com/o/r".to_owned()));
+        let cases = [
+            (
+                InstallMethod::Cargo,
+                Some("cargo install app-crate --locked"),
+                "installed with cargo; run: cargo install app-crate --locked",
+            ),
+            (
+                binstall(BinstallSource::Registry),
+                Some("cargo binstall app-crate"),
+                "installed with cargo binstall; run: cargo binstall app-crate",
+            ),
+            (
+                git,
+                Some("cargo binstall --git https://github.com/o/r app-crate"),
+                "installed with cargo binstall; run: cargo binstall --git https://github.com/o/r app-crate",
+            ),
+            (
+                binstall(BinstallSource::Other),
+                None,
+                "installed with cargo binstall; update it with cargo binstall",
+            ),
+            (
+                InstallMethod::PackageManager,
+                None,
+                "installed by a package manager; update it with that",
+            ),
+            (
+                InstallMethod::Release,
+                None,
+                "download it from https://example.test/r",
+            ),
+        ];
+        for (method, command, words) in cases {
+            assert_eq!(advice_command(&source, &method).as_deref(), command);
+            assert_eq!(advice(&source, &release, &method), words);
+        }
+        let bare = ReleaseSource::github("o", "r");
+        assert_eq!(advice_command(&bare, &InstallMethod::Cargo), None);
+        assert_eq!(
+            advice(&bare, &release, &InstallMethod::Cargo),
+            "installed with cargo; update it with cargo install"
+        );
     }
 
     #[test]

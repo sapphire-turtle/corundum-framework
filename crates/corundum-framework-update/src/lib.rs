@@ -29,8 +29,8 @@ pub use install::UpdateArgs;
 #[cfg(all(feature = "cli", feature = "self-update"))]
 pub use install::run;
 pub use install::{
-    BinstallSource, InstallMethod, StoreKind, advice, asset_name, cargo_home, install_method,
-    platform,
+    BinstallSource, InstallMethod, StoreKind, advice, advice_command, asset_name, cargo_home,
+    install_method, platform,
 };
 #[cfg(feature = "self-update")]
 pub use install::{download_asset, install};
