@@ -14,6 +14,8 @@
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
 ))]
 mod linux;
+#[cfg(any(target_os = "macos", all(unix, test)))]
+mod macos;
 // The pure parts are compiled everywhere under test so their tests run on any OS.
 #[cfg(any(windows, test))]
 mod windows;
@@ -168,12 +170,17 @@ pub fn register_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> io::Result<R
     {
         windows::register(spec, root, exe)
     }
+    #[cfg(target_os = "macos")]
+    {
+        macos::register(spec, root, exe)
+    }
     #[cfg(not(any(
         all(
             unix,
             not(any(target_os = "macos", target_os = "ios", target_os = "android"))
         ),
-        windows
+        windows,
+        target_os = "macos"
     )))]
     {
         let _ = (spec, root);
@@ -195,12 +202,17 @@ pub fn unregister_at(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     {
         windows::unregister(spec, root)
     }
+    #[cfg(target_os = "macos")]
+    {
+        macos::unregister(spec, root)
+    }
     #[cfg(not(any(
         all(
             unix,
             not(any(target_os = "macos", target_os = "ios", target_os = "android"))
         ),
-        windows
+        windows,
+        target_os = "macos"
     )))]
     {
         let _ = (spec, root);
@@ -222,12 +234,17 @@ pub fn status_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
     {
         windows::status(spec, root, exe)
     }
+    #[cfg(target_os = "macos")]
+    {
+        macos::status(spec, root, exe)
+    }
     #[cfg(not(any(
         all(
             unix,
             not(any(target_os = "macos", target_os = "ios", target_os = "android"))
         ),
-        windows
+        windows,
+        target_os = "macos"
     )))]
     {
         let _ = (spec, root, exe);
@@ -254,12 +271,15 @@ pub(crate) fn skipped(exe: &Path, env_set: bool) -> bool {
 
 /// Writes `bytes` to `path`, with its parent directories, unless the file already holds
 /// them; `true` when it wrote.
-// Only the Linux entry is a file; Windows writes its shortcut through COM instead, and the
-// other OSes have no entry yet.
+// The Linux entry and the macOS bundle are files; Windows writes its shortcut through COM
+// instead.
 #[cfg_attr(
-    not(all(
-        unix,
-        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    not(any(
+        all(
+            unix,
+            not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+        ),
+        target_os = "macos"
     )),
     allow(dead_code)
 )]
