@@ -15,7 +15,8 @@
 //! command line (`UpdateArgs`, `run`) behind `cli`; without `self-update` the crate only looks
 //! releases up and words [`advice`].
 //!
-//! Restarting the running server or service afterwards stays with the user.
+//! Restarting afterwards is the caller's: the CLI says so, and the GUI panel restarts the
+//! app, its services or a bridge itself.
 
 #![warn(missing_docs)]
 

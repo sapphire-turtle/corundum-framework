@@ -26,7 +26,8 @@ platform = ["dep:corundum-framework-platform"]
 # The components alone, for an app that renders egui without eframe. corundum-framework-gui
 # is built on corundum-framework-platform, so `gui` brings `platform` along.
 gui = ["dep:corundum-framework-gui", "platform"]
-# Release lookup and self-update, without egui or a window: for an app, or its server.
+# Release lookup and advice (where a newer release is), without egui or a window: for an
+# app, or its server.
 update = ["dep:corundum-framework-update"]
 # The download and the replacement too. A store build leaves it off, as the store updates.
 self-update = ["update", "corundum-framework-update/self-update"]
