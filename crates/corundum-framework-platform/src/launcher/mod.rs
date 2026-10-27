@@ -58,7 +58,7 @@ pub enum Status {
     Stale,
     /// There is no entry.
     Absent,
-    /// This OS has no app menu to look in.
+    /// There is no app menu to look in: the OS has none, or there is no home directory.
     Unsupported,
 }
 
@@ -105,11 +105,21 @@ pub fn unregister(spec: &LauncherSpec) -> io::Result<()> {
     }
 }
 
-/// Whether the app's entry is there and names the running executable.
+/// Whether the app's entry is there and names the running executable. On iOS and Android,
+/// and where there is no home directory or the executable cannot be found, there is no app
+/// menu to look in: [`Status::Unsupported`].
 pub fn status(spec: &LauncherSpec) -> Status {
-    match (Root::detect(), std::env::current_exe()) {
+    if cfg!(any(target_os = "ios", target_os = "android")) {
+        return Status::Unsupported;
+    }
+    status_in(spec, Root::detect(), std::env::current_exe())
+}
+
+/// [`status`] for the directories and the executable as found, or not found.
+fn status_in(spec: &LauncherSpec, root: Option<Root>, exe: io::Result<PathBuf>) -> Status {
+    match (root, exe) {
         (Some(root), Ok(exe)) => status_at(spec, &root, &exe),
-        _ => Status::Absent,
+        _ => Status::Unsupported,
     }
 }
 
@@ -232,6 +242,31 @@ pub(crate) fn write_if_changed(path: &Path, bytes: &[u8]) -> io::Result<bool> {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn without_a_home_or_an_executable_there_is_no_app_menu() {
+        let spec = LauncherSpec {
+            id: "net.example.Test",
+            name: "Test",
+            description: "A test app",
+            category: "Utility",
+            icon_svg: b"<svg/>",
+            bundle_prefix: "net.example",
+        };
+        let root = Root {
+            home: PathBuf::from("/nonexistent/home"),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        assert_eq!(
+            status_in(&spec, None, Ok(PathBuf::from("/usr/bin/app"))),
+            Status::Unsupported
+        );
+        assert_eq!(
+            status_in(&spec, Some(root), Err(io::Error::other("no exe"))),
+            Status::Unsupported
+        );
+    }
 
     #[test]
     fn a_cargo_build_is_skipped() {
