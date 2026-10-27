@@ -20,3 +20,15 @@ jobs:
         cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings
         # The demo's binary links on each desktop (the tests link only its lib).
         cargo build -p corundum-framework-demo --bin corundum-framework-demo --locked
+
+  # Without `self-update` the update crate must not link `self-replace`: an app that only
+  # looks releases up carries none of the replacement code.
+  update-no-self-replace:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: self-replace is not linked without self-update
+        run: |
+          count=$(cargo tree -p corundum-framework-update --no-default-features -e normal | grep -c self-replace || true)
+          test "$count" = 0

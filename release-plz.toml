@@ -1,6 +1,6 @@
 [workspace]
 # The libraries go to crates.io in one version. Only the facade makes the `v{version}` tag
-# and GitHub release, and writes CHANGELOG.md for all three; the others make neither, as in
+# and GitHub release, and writes CHANGELOG.md for all four; the others make neither, as in
 # sapphire-framework.
 changelog_update = false
 dependencies_update = true
@@ -14,7 +14,7 @@ release_always = false
 pr_branch_prefix = "release-plz/"
 pr_labels = ["release"]
 
-# The three move together: the facade re-exports the other two, and the gui crate is built
+# The four move together: the facade re-exports the other three, and the gui crate is built
 # on the platform one.
 [[package]]
 name = "corundum-framework-platform"
@@ -24,14 +24,22 @@ version_group = "corundum"
 name = "corundum-framework-gui"
 version_group = "corundum"
 
+[[package]]
+name = "corundum-framework-update"
+version_group = "corundum"
+
 # The tag, the GitHub release (its notes are the version's CHANGELOG section), and the one
-# changelog at the root, with the other two crates' commits in it.
+# changelog at the root, with the other crates' commits in it.
 [[package]]
 name = "corundum-framework"
 version_group = "corundum"
 changelog_update = true
 changelog_path = "./CHANGELOG.md"
-changelog_include = ["corundum-framework-platform", "corundum-framework-gui"]
+changelog_include = [
+  "corundum-framework-platform",
+  "corundum-framework-gui",
+  "corundum-framework-update",
+]
 git_tag_enable = true
 git_release_enable = true
 git_tag_name = "v{{ version }}"

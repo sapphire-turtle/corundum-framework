@@ -26,6 +26,8 @@ platform = ["dep:corundum-framework-platform"]
 # The components alone, for an app that renders egui without eframe. corundum-framework-gui
 # is built on corundum-framework-platform, so `gui` brings `platform` along.
 gui = ["dep:corundum-framework-gui", "platform"]
+# Release lookup and self-update, without egui or a window: for an app, or its server.
+update = ["dep:corundum-framework-update"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -42,3 +44,5 @@ serde = ["corundum-framework-gui?/serde"]
 corundum-framework-platform = { version = "0.2.1", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.
 corundum-framework-gui = { version = "0.2.1", path = "../corundum-framework-gui", optional = true, default-features = false }
+# With its default `self-update`: the lookup, the download and the replacement.
+corundum-framework-update = { version = "0.2.1", path = "../corundum-framework-update", optional = true }

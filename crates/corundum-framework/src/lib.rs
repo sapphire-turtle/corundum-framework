@@ -19,6 +19,7 @@
 //! |---|---|---|
 //! | `platform` (default) | [`platform`] | `corundum-framework-platform`: the app's directories, the system's languages, the JNI / Objective-C bridging |
 //! | `gui` | [`gui`] | `corundum-framework-gui`: the shell, theme, fonts, icons and translations (brings `platform`) |
+//! | `update` | [`update`] | `corundum-framework-update`: finding newer GitHub releases of an app's binary, and replacing it with one |
 //! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
 //! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
 //! | `serde` | `gui::look`, `gui::store` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `store`: the look in effect and the rail's order, kept on the device in a TOML file and put back before the first frame |
@@ -28,6 +29,9 @@ pub use corundum_framework_platform as platform;
 
 #[cfg(feature = "gui")]
 pub use corundum_framework_gui as gui;
+
+#[cfg(feature = "update")]
+pub use corundum_framework_update as update;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.

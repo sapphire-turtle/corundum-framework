@@ -12,6 +12,7 @@ desktops and on phones.
 |---|---|---|
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | The look: the shell, theme, fonts, icons, translations and window | unreleased |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
+| [`corundum-framework-update`](crates/corundum-framework-update) | Newer GitHub releases of an app's binary: finding them, and replacing the binary with one | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
 
@@ -94,6 +95,7 @@ through to the gui crate.
 |---|---|---|
 | `platform` | `platform`: corundum-framework-platform | yes |
 | `gui` | `gui` and `egui`: corundum-framework-gui without eframe (brings `platform`) | no |
+| `update` | `update`: corundum-framework-update | no |
 | `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
 | `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
 | `serde` | The gui crate's `serde` | no |
