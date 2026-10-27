@@ -84,11 +84,20 @@ pub enum RestartOutcome {
 /// What happens to a row after a check began.
 #[derive(Clone, Debug)]
 pub(crate) enum Event {
-    /// The lookup finished. The panel turns it into a state with `on_check`, not `on_event`.
-    Checked(Result<Release, String>),
-    /// The download and replacement finished.
+    /// The lookup finished, with how the executable was installed and whether the release
+    /// has this platform's file. The panel turns it into a state with `on_check`, not
+    /// `on_event`.
+    Checked {
+        found: Result<Release, String>,
+        method: InstallMethod,
+        has_asset: bool,
+    },
+    /// The download and replacement finished. This and `Restarted` come only from an
+    /// install, which needs `self-update`.
+    #[cfg_attr(not(feature = "self-update"), allow(dead_code))]
     Downloaded(Result<(), String>),
     /// The restart finished.
+    #[cfg_attr(not(feature = "self-update"), allow(dead_code))]
     Restarted(RestartOutcome),
 }
 
@@ -414,9 +423,20 @@ mod tests {
             ),
             (
                 working(Step::Downloading),
-                Event::Checked(Ok(release("2.0.0"))),
+                Event::Checked {
+                    found: Ok(release("2.0.0")),
+                    method: InstallMethod::Release,
+                    has_asset: true,
+                },
             ),
-            (working(Step::Restarting), Event::Checked(Err("x".into()))),
+            (
+                working(Step::Restarting),
+                Event::Checked {
+                    found: Err("x".into()),
+                    method: InstallMethod::Release,
+                    has_asset: false,
+                },
+            ),
         ];
         for (state, event) in cases {
             assert_eq!(on_event(state.clone(), event), state);

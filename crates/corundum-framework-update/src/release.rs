@@ -67,8 +67,8 @@ impl ReleaseSource {
         format!("{}/{}", self.owner, self.repo)
     }
 
-    #[cfg(feature = "self-update")]
-    pub(crate) fn asset_base(&self) -> Option<&str> {
+    /// The release file's name without the platform ([`asset`](Self::asset)), if named.
+    pub fn asset_base(&self) -> Option<&str> {
         self.asset.as_deref()
     }
 

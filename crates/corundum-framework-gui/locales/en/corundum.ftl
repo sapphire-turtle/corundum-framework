@@ -54,3 +54,29 @@ corundum-settings-rail-intro = Drag the items into the order you use them. Untic
 corundum-settings-rail-drag = Drag to reorder
 corundum-settings-rail-show = Show as a button
 corundum-settings-rail-reset = Reset to the default order
+
+# The update panel (`update::UpdatesPanel`): the button that looks again, a row's running
+# version when unknown, and each row's state. A release this app does not install says how
+# it is had instead: the command to run (with a Copy button), or who updates it.
+corundum-update-check = Check for updates
+corundum-update-not-running = Not running
+corundum-update-checking = Checking…
+corundum-update-up-to-date = Up to date
+corundum-update-newer = { $version } is available
+corundum-update-update = Update
+corundum-update-release-notes = Release notes
+corundum-update-downloading = Downloading { $version }…
+corundum-update-restarting = Restarting…
+corundum-update-done = Updated to { $version }
+corundum-update-restart-by-hand = Updated; restart it to use { $version }
+corundum-update-failed = Failed: { $error }
+corundum-update-retry = Retry
+corundum-update-run = Run:
+corundum-update-copy = Copy
+corundum-update-by-cargo = Update it with { $tool }
+corundum-update-by-package-manager = Updated by your package manager
+corundum-update-by-flathub = Updated by Flathub
+corundum-update-by-snap = Updated by the Snap Store
+corundum-update-by-microsoft-store = Updated by the Microsoft Store
+corundum-update-by-mac-app-store = Updated by the Mac App Store
+corundum-update-from-release-page = Download it from the release page
