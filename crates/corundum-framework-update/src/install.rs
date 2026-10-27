@@ -167,6 +167,23 @@ pub fn asset_name(base: &str) -> String {
     format!("{base}-{}{}", platform(), std::env::consts::EXE_SUFFIX)
 }
 
+/// Write `bytes` to a new executable file `.update-*` in `dir`, flushed to disk. It is removed
+/// when the returned file is dropped.
+#[cfg(feature = "self-update")]
+pub(crate) fn stage(dir: &Path, bytes: &[u8]) -> Result<tempfile::NamedTempFile> {
+    let mut staged = tempfile::Builder::new()
+        .prefix(".update-")
+        .tempfile_in(dir)?;
+    staged.write_all(bytes)?;
+    staged.as_file().sync_all()?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(0o755))?;
+    }
+    Ok(staged)
+}
+
 /// Write `bytes` beside `exe` and hand the new file to `replace`, which puts it in `exe`'s
 /// place. The staging file is removed afterwards, whatever `replace` did.
 ///
@@ -184,16 +201,7 @@ pub fn install(
             exe.display()
         )))
     })?;
-    let mut staged = tempfile::Builder::new()
-        .prefix(".update-")
-        .tempfile_in(dir)?;
-    staged.write_all(bytes)?;
-    staged.as_file().sync_all()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(0o755))?;
-    }
+    let staged = stage(dir, bytes)?;
     replace(staged.path())?;
     Ok(())
 }

@@ -21,6 +21,8 @@
 
 mod install;
 mod release;
+#[cfg(feature = "self-update")]
+mod replace;
 
 #[cfg(feature = "cli")]
 pub use install::UpdateArgs;
@@ -32,6 +34,8 @@ pub use install::{
 #[cfg(feature = "self-update")]
 pub use install::{download_asset, install};
 pub use release::{Asset, Release, ReleaseSource, client, latest_release};
+#[cfg(feature = "self-update")]
+pub use replace::replace_file;
 
 /// Errors from finding, fetching or installing a release.
 #[derive(Debug, thiserror::Error)]
