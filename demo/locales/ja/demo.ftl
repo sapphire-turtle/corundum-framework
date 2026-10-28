@@ -10,6 +10,7 @@ demo-screen-fonts = フォント
 demo-screen-icons = アイコン
 demo-screen-language = 言語
 demo-screen-detail = 詳細
+demo-screen-files = ファイル
 demo-screen-platform = プラットフォーム
 demo-screen-settings = 設定
 # レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
@@ -122,3 +123,18 @@ demo-status-ready = 準備完了
 demo-status-writing = 新しいメモを書いています
 demo-status-saved = メモ「{ $note }」を保存しました
 demo-status-picked = { $album } を選びました
+demo-status-opened = { $name } を開きました
+demo-status-moved = { $count } 項目を { $folder } へ移動しました
+demo-status-renamed = { $name } を { $to } に名前を変更しました
+demo-status-failed = 失敗しました: { $error }
+demo-status-files-reset = サンプルのフォルダーを作り直しました
+
+# ファイル画面：サンプルのフォルダー、または選んだフォルダーを、ファイルエクスプローラーで見る。
+demo-files-intro = デモのキャッシュディレクトリにあるサンプルのフォルダーです。項目をフォルダーへドラッグしたり、名前を変えたり（F2 かメニュー）できます。変更は実際にそこで行われます。
+demo-files-picked = { $path }（見るだけ）
+demo-files-no-dir = このシステムには、サンプルのフォルダーを置くキャッシュディレクトリがありません。
+demo-files-reset = サンプルを作り直す
+demo-files-pick = フォルダーを開く…
+demo-files-back = サンプルに戻る
+demo-files-copy = 名前をコピー
+demo-files-show = ファイルマネージャーで表示

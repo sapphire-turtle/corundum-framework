@@ -10,6 +10,7 @@ demo-screen-fonts = Fonts
 demo-screen-icons = Icons
 demo-screen-language = Language
 demo-screen-detail = Detail
+demo-screen-files = Files
 demo-screen-platform = Platform
 demo-screen-settings = Settings
 # The rail's action: a new note, written in the side pane beside whatever screen is open.
@@ -131,3 +132,22 @@ demo-status-ready = Ready
 demo-status-writing = Writing a new note
 demo-status-saved = Saved the note “{ $note }”
 demo-status-picked = Picked { $album }
+demo-status-opened = Opened { $name }
+demo-status-moved =
+    { $count ->
+        [one] Moved 1 item into { $folder }
+       *[other] Moved { $count } items into { $folder }
+    }
+demo-status-renamed = Renamed { $name } to { $to }
+demo-status-failed = Failed: { $error }
+demo-status-files-reset = Made the sample folder again
+
+# The Files screen: the file explorer over a sample folder, or a folder picked.
+demo-files-intro = A sample folder in the demo's cache directory: drag entries into a folder, or rename one (F2, or its menu). The changes are made there for real.
+demo-files-picked = { $path }, to look at only
+demo-files-no-dir = This system gives the demo no cache directory to keep a sample folder in.
+demo-files-reset = Make the sample again
+demo-files-pick = Open a folder…
+demo-files-back = Back to the sample
+demo-files-copy = Copy name
+demo-files-show = Show in file manager

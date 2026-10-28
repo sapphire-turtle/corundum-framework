@@ -89,3 +89,24 @@ corundum-launcher-in-menu = In the app menu
 corundum-launcher-remove = Remove
 corundum-launcher-add = Add back
 corundum-launcher-failed = Could not change the app menu: { $error }
+
+# The file explorer (`explorer::FileExplorer`): its buttons, the list's headings, what shows
+# with no entries, the entry's menu, and a drag of several entries.
+corundum-explorer-up = Up to the folder above
+corundum-explorer-refresh = Refresh
+corundum-explorer-list = List
+corundum-explorer-grid = Grid
+corundum-explorer-name = Name
+corundum-explorer-size = Size
+corundum-explorer-modified = Modified
+corundum-explorer-loading = Loading…
+corundum-explorer-empty = This folder is empty
+corundum-explorer-failed = Could not list this folder: { $error }
+corundum-explorer-retry = Retry
+corundum-explorer-open = Open
+corundum-explorer-rename = Rename
+corundum-explorer-items =
+    { $count ->
+        [one] { $count } item
+       *[other] { $count } items
+    }
