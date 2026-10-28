@@ -78,14 +78,14 @@ impl egui::Widget for QrCode<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         // Kept by the widget's place in the layout, so a code whose text changes as the
         // person types replaces its texture rather than adding one per keystroke.
-        let id = ui.next_auto_id().with("corundum-qr");
+        let id = ui.next_auto_id().with("qr-code");
         let ctx = ui.ctx().clone();
         let drawn = ctx.data_mut(|data| data.get_temp::<Drawn>(id));
         let texture = match drawn {
             Some(drawn) if drawn.text == self.text => drawn.texture,
             _ => {
                 let texture = image(self.text)
-                    .map(|image| ctx.load_texture("corundum-qr", image, TextureOptions::NEAREST));
+                    .map(|image| ctx.load_texture("qr-code", image, TextureOptions::NEAREST));
                 let drawn = Drawn {
                     text: self.text.to_owned(),
                     texture: texture.clone(),
