@@ -47,22 +47,32 @@
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
 ))]
 mod mpris;
-#[cfg(not(all(
-    unix,
-    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+#[cfg(not(any(
+    all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ),
+    windows
 )))]
 mod none;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(all(
     unix,
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
 ))]
 use mpris as imp;
-#[cfg(not(all(
-    unix,
-    not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+#[cfg(not(any(
+    all(
+        unix,
+        not(any(target_os = "macos", target_os = "ios", target_os = "android"))
+    ),
+    windows
 )))]
 use none as imp;
+#[cfg(windows)]
+use windows as imp;
 
 use std::io;
 use std::marker::PhantomData;
