@@ -27,7 +27,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **設定**：設定画面。ページの一覧と開いたページを並べ、アプリやその下のフレームワークがページを差し込みます。設定を保存できる場所（デバイスとワークグループ、クライアントとサーバーなど）ごとのスコープのタブと、それを使ってテーマと言語を設定する外観ページもあります。ページは値を保存しません。保存はアプリが行います。
 - **外観の保存**：実際に効いているテーマと言語を、レールの並び順と一緒に、アプリの設定ディレクトリの `corundum.toml` に保存します（`look` と `store`、`serde` feature）。起動時は最初のフレームより前にこれを適用するので、アプリは保存した外観で開きます。ほかの場所（ワークグループ、サーバーなど）の設定をマージするアプリは、その結果をここに適用します。外観以外に保存先を持たないアプリは、デモのようにここだけに保存します。
 - **詳細ペイン**：どのシェルも持ち（`Shell::show`）、どの画面の横にも出すサイドペイン。中身はアプリが `ShellApp::side_ui` で描きます。メインビューで選んだもの（再生中のプレイリスト、開いているジャーナルなど）の詳細や、レールのアクションで書き始めた新しい項目を表示します。広い画面では右カラムに表示し、ステータスバーのボタンで隠せます。隠しているときは画面中央のカードに、スマートフォンではメインビューと切り替えて表示します。
-- **プラットフォーム**：ウィンドウがシステムに求め、egui だけでは得られないもの。ファイルを選ぶダイアログ（`platform::FilePicker`、`IMAGE_EXTENSIONS` などのフィルタ付き）とフォルダを選ぶダイアログ（`pick_folder`）、ファイルマネージャー（`open_in_file_manager`）、Android ではクリップボードとインセット。ダイアログは今のところデスクトップのみで、スマートフォンでは `file_picker_available` が使えないことを返します。
+- **プラットフォーム**：ウィンドウがシステムに求め、egui だけでは得られないもの。ファイルを選ぶダイアログ（`platform::FilePicker`、`IMAGE_EXTENSIONS` などのフィルタ付き）とフォルダを選ぶダイアログ（`pick_folder`）、ファイルマネージャー（`open_in_file_manager`）、Android ではクリップボードとインセット。ダイアログは今のところデスクトップのみで、スマートフォンでは `file_picker_available` が使えないことを返します。代わりにスマートフォンには写真アルバムがあります。`platform::MediaPicker`（`media-picker` feature）はそこから写真と動画を選びます（iOS は PHPicker、Android は写真選択ツール。デスクトップではファイルダイアログ）。結果は、アプリが毎フレーム調べる `Pending` で受け取ります。
 - **ウィンドウ**：`window::run` はどのアプリでも同じ方法で wgpu のデスクトップウィンドウを開きます。`window::run_android` は Android 端末（GameActivity）で同じことをします。iOS では、iOS 27 が求めるシーンにウィンドウを入れ（アプリの Info.plist でシーンを宣言し、デリゲートに `CorundumSceneDelegate` を指定します。`window` を参照）、winit 0.30 だけでは使えない変換のあるキーボード（日本語、中国語、韓国語）を使えるようにします。
 - **アプリメニューへの登録**：`WindowOptions::launcher(spec)` は起動時にアプリをデスクトップのアプリメニューに載せ（ウィンドウのアプリ ID とアイコンも設定します）、About ページ用の行 `settings::LauncherRow` で削除と再追加ができます（ストアがあれば削除は保たれ、次の起動で書き戻しません）。Windows のアプリは `main.rs` に `#![cfg_attr(windows, windows_subsystem = "windows")]` も付けてください。付けないとコンソールが一緒に開きます。
 
@@ -38,6 +38,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `serde` | テーマと言語の設定に `Serialize` / `Deserialize` | 無効 |
 | `update` | `update::UpdatesPanel`：設定の「About」で新しいリリースを調べ、その場所を示す行（corundum-framework-update も有効になる） | 無効 |
 | `self-update` | パネルがリリースのダウンロードと実行中のバイナリの置き換えも行う（`update` も有効になる）。ストア版ではストアが更新するため無効にします | 無効 |
+| `media-picker` | `platform::MediaPicker`：スマートフォンのアルバムから写真と動画を選ぶ（デスクトップではファイルダイアログ）。Android アプリは Activity の `onActivityResult` を corundum に渡します（`corundum_framework_platform::media::available` を参照）。iOS では Info.plist のキーは要りません | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 
@@ -49,6 +50,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
 - **ランチャー**：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
+- **システムの画面**（feature。既定では無効）：`media`。スマートフォンの写真ピッカー（`media-picker`）。選ばれたファイルはキャッシュにコピーし、`pending::Pending` で返します。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ### corundum-framework
@@ -66,6 +68,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |
 | `android` | `gui::window::run_android`：Android のウィンドウ（`gui` も有効になる） | いいえ |
 | `serde` | gui クレートの `serde` | いいえ |
+| `media-picker` | `gui::platform::MediaPicker`：スマートフォンの写真ピッカー（`gui` も有効になる） | いいえ |
 
 既定では egui を含みません。サーバーや CLI はそのまま使えます。デスクトップのアプリは `eframe` を、Android のアプリは `android` を有効にします。
 
