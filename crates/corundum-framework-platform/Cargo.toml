@@ -19,6 +19,11 @@ categories = ["os"]
 # `media-picker` is `media`, the phone's photo picker: PhotosUI on iOS (no Info.plist key);
 # on Android the Photo Picker or ACTION_GET_CONTENT (no permission), whose result the app's
 # activity must forward (`media::available` has the code).
+#
+# `qr-scan` is `qr`, the phone's QR code scanner: AVFoundation's camera on iOS, which needs
+# NSCameraUsageDescription and is linked only with this feature; on Android Google's code
+# scanner, which needs the app's play-services-code-scanner dependency and no permission
+# (`qr::available` has both).
 [features]
 media-picker = [
     "dep:block2",
@@ -31,6 +36,25 @@ media-picker = [
     "objc2-foundation/NSItemProvider",
     "objc2-foundation/NSProgress",
     "objc2-foundation/NSSet",
+]
+qr-scan = [
+    "dep:dispatch2",
+    "dep:objc2",
+    "dep:objc2-av-foundation",
+    "dep:objc2-core-foundation",
+    "dep:objc2-quartz-core",
+    "dep:objc2-ui-kit",
+    "objc2-foundation/NSBundle",
+    "objc2-foundation/NSEnumerator",
+    "objc2-foundation/NSError",
+    "objc2-foundation/NSSet",
+    "objc2-ui-kit?/objc2-core-foundation",
+    "objc2-ui-kit?/objc2-quartz-core",
+    "objc2-ui-kit?/UIButton",
+    "objc2-ui-kit?/UIColor",
+    "objc2-ui-kit?/UIControl",
+    "objc2-ui-kit?/UIGeometry",
+    "objc2-ui-kit?/UIImage",
 ]
 
 [dependencies]
@@ -62,6 +86,27 @@ objc2-ui-kit = { version = "0.3.2", optional = true, default-features = false, f
     "UIWindow",
     "UIWindowScene",
 ] }
+# `qr-scan`: a capture session whose metadata output reads QR codes, its preview layer in a
+# full-screen view controller. AVFoundation is linked only with this feature, as App Store
+# review asks an app that links the camera's API for NSCameraUsageDescription.
+dispatch2 = { version = "0.3", optional = true }
+objc2-av-foundation = { version = "0.3.2", optional = true, default-features = false, features = [
+    "std",
+    "dispatch2",
+    "objc2-core-foundation",
+    "objc2-quartz-core",
+    "AVAnimation",
+    "AVCaptureDevice",
+    "AVCaptureInput",
+    "AVCaptureMetadataOutput",
+    "AVCaptureOutputBase",
+    "AVCaptureSession",
+    "AVCaptureVideoPreviewLayer",
+    "AVMediaFormat",
+    "AVMetadataObject",
+] }
+objc2-core-foundation = { version = "0.3.2", optional = true, default-features = false, features = ["std", "CFCGTypes"] }
+objc2-quartz-core = { version = "0.3.2", optional = true, default-features = false, features = ["std", "objc2-core-foundation", "CALayer"] }
 
 # Android: the language list, the directories, the clipboard and the insets, read from the
 # JVM through the context android-activity (or any host) leaves in ndk-context.

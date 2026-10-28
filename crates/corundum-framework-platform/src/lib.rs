@@ -10,8 +10,8 @@
 //! The system's screens an app opens and waits for are behind features, off by default:
 //! they need declarations of the app (an Info.plist key, a manifest entry, a Gradle
 //! dependency, code in its activity) and link frameworks an app without them should not.
-//! `media-picker` is [`media`], the phone's photo picker. Each answers through a
-//! [`pending::Pending`] the app polls.
+//! `media-picker` is [`media`], the phone's photo picker; `qr-scan` is [`qr`], its QR
+//! code scanner. Each answers through a [`pending::Pending`] the app polls.
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -20,11 +20,13 @@ pub mod dirs;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod icon;
 pub mod insets;
-#[cfg(all(target_os = "ios", feature = "media-picker"))]
+#[cfg(all(target_os = "ios", any(feature = "media-picker", feature = "qr-scan")))]
 mod ios;
 pub mod launcher;
 pub mod locale;
 #[cfg(feature = "media-picker")]
 pub mod media;
-#[cfg(feature = "media-picker")]
+#[cfg(any(feature = "media-picker", feature = "qr-scan"))]
 pub mod pending;
+#[cfg(feature = "qr-scan")]
+pub mod qr;
