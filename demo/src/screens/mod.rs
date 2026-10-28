@@ -9,6 +9,7 @@ mod detail;
 mod fonts;
 pub(crate) mod icons;
 mod language;
+pub(crate) mod media;
 mod overview;
 mod platform;
 pub(crate) mod settings;
@@ -31,13 +32,15 @@ pub enum Screen {
     Detail,
     /// The clipboard, the insets and the app's directories.
     Platform,
+    /// A made-up player under the OS's media keys and in its "now playing".
+    Media,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 8] = [
+    pub const ALL: [Screen; 9] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
@@ -45,6 +48,7 @@ impl Screen {
         Screen::Language,
         Screen::Detail,
         Screen::Platform,
+        Screen::Media,
         Screen::Settings,
     ];
 }
@@ -70,6 +74,7 @@ pub(crate) struct State {
     icon_style: icons::Style,
     detail: detail::State,
     platform: platform::State,
+    pub(crate) media: media::State,
 }
 
 impl State {
@@ -87,6 +92,7 @@ impl State {
             icon_style: icons::Style::Text,
             detail: detail::State::default(),
             platform: platform::State::read(),
+            media: media::State::new(),
         }
     }
 }
@@ -117,6 +123,7 @@ pub(crate) fn ui(
                 Screen::Icons => icons::ui(ui, &mut state.icon_style),
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
+                Screen::Media => media::ui(ui, &mut state.media),
                 Screen::Settings | Screen::Detail => unreachable!("drawn above"),
             });
     });

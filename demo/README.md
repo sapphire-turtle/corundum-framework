@@ -13,10 +13,35 @@ rest, and never published.
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
 | Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
+| Media | A made-up player (a clock over three tracks; no sound) under the OS's media keys and in its "now playing", through the media session: its controls, its progress bar, whether the OS sees it, and the last event the OS sent |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 
 The demo logs the window's rects and the safe area whenever they change (`corundum demo:
 window`), so a CI log shows what the insets did.
+
+## The OS's features
+
+The demo turns on every feature of corundum that its OS has an implementation of, so that
+each can be tried from the demo as built, with no flags: today that is the media session
+(`media-session`) on Linux, macOS, Windows and iOS. Android has no media session yet;
+there the Media screen says so, and its player runs without the OS.
+
+To try the media session, open Media and press Play, then:
+
+- Linux: the keyboard's media keys; GNOME's media panel (in the clock's menu) or KDE's
+  media widget, which show the track and its cover; or `playerctl -p corundum_demo
+  status|play-pause|next|position 30`. `busctl --user introspect
+  org.mpris.MediaPlayer2.corundum_demo /org/mpris/MediaPlayer2` shows the player as D-Bus
+  sees it.
+- Windows: the keyboard's media keys, and the media flyout over the volume (Windows 10)
+  or in the quick settings (Windows 11), with the track, the cover and the seek bar.
+- macOS: the keyboard's media keys, and Now Playing in the Control Centre.
+- iOS: the lock screen and the Control Centre, and headphones' buttons. The player plays
+  silence while it plays, since iOS shows only a player that plays sound; the Info.plist
+  lists `audio` under `UIBackgroundModes`, so it plays on with the screen locked. A call
+  or pulling the headphones out pauses it.
+
+The screen shows the last event the OS sent, by name.
 
 ## Desktops (Linux, macOS, Windows)
 

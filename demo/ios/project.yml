@@ -54,6 +54,10 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default
                 UISceneDelegateClassName: CorundumSceneDelegate
+        # The Media screen's player (corundum's media session) plays on with the screen
+        # locked, and its controls are on the lock screen.
+        UIBackgroundModes:
+          - audio
     preBuildScripts:
       - name: Build the Rust staticlib
         script: ./build-rust.sh
@@ -68,6 +72,10 @@ targets:
       - sdk: CoreGraphics.framework
       - sdk: CoreText.framework
       - sdk: CoreFoundation.framework
+      # The media session: the now-playing info and remote commands, and the audio
+      # session and the Media screen's silent player.
+      - sdk: MediaPlayer.framework
+      - sdk: AVFAudio.framework
 schemes:
   CorundumDemo:
     build:

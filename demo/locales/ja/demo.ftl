@@ -11,6 +11,7 @@ demo-screen-icons = アイコン
 demo-screen-language = 言語
 demo-screen-detail = 詳細
 demo-screen-platform = プラットフォーム
+demo-screen-media = メディア
 demo-screen-settings = 設定
 # レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
 demo-action-new = 新しいメモ
@@ -90,6 +91,25 @@ demo-platform-data = データ：{ $path }
 demo-platform-cache = キャッシュ：{ $path }
 demo-platform-none = なし
 demo-platform-refresh = 読み直す
+
+# メディア画面：OS のメディアキーと「再生中」の表示に連動する、架空のプレイヤー。
+demo-media-intro = 何も鳴らさないプレイヤーです。架空の3曲の上で時計を進めます。再生してから、キーボードのメディアキー、システムのメディアパネル、ロック画面を試してください。どの画面を開いていても従います。
+demo-media-session = OS のメディアセッション
+demo-media-connected = 接続済み：OS がこのプレイヤーを表示し、メディアキーを送ります。
+demo-media-disconnected = 接続していません：{ $error }
+demo-media-unsupported = この OS には、corundum のメディアセッションがまだありません。プレイヤーは動きますが、OS は表示もせず、何も送りません。
+demo-media-last-event = OS から最後に来たもの：{ $event }
+demo-media-no-event = まだありません
+demo-media-ios-silence = iOS は音を鳴らしているプレイヤーしか表示しないので、このプレイヤーは再生中に無音を鳴らします。
+demo-media-player = プレイヤー
+demo-media-play = 再生
+demo-media-pause = 一時停止
+demo-media-stop = 停止
+demo-media-next = 次へ
+demo-media-previous = 前へ
+demo-media-playing = 再生中
+demo-media-paused = 一時停止中
+demo-media-stopped = 停止中
 
 # 設定画面：corundum のもので、デモのページを差し込んだもの。
 demo-settings-demo = デモ
