@@ -19,6 +19,10 @@
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
 //! opens a desktop window on wgpu the same way for every app, set up by [`gpu`]; an app that
 //! renders egui without eframe turns default features off.
+//!
+//! With the `media-session` feature, `media_session` puts a music player under the OS's
+//! media keys and in its "now playing", and `media_session::start` makes one for an eframe
+//! window.
 
 /// The egui this crate renders with. Apps should use this re-export so their egui is
 /// always the one the components were built against.
@@ -37,6 +41,8 @@ pub mod icons;
 pub mod logcat;
 #[cfg(feature = "serde")]
 pub mod look;
+#[cfg(feature = "media-session")]
+pub mod media_session;
 pub mod platform;
 pub mod settings;
 mod shell;
