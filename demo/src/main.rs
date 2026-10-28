@@ -4,6 +4,9 @@
 
 #[cfg(not(target_os = "android"))]
 fn main() -> corundum_framework::eframe::Result<()> {
+    // Velopack's hooks start the executable and expect it to exit at once: first of all.
+    #[cfg(feature = "velopack")]
+    corundum_demo::velopack::startup();
     corundum_demo::run()
 }
 

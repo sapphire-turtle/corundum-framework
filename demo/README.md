@@ -30,6 +30,15 @@ To see the demo in the app menu, install it (`cargo install --path demo`) and ru
 A build in a cargo target directory, as `cargo run` makes, adds no entry. Settings, About
 removes the entry and adds it back.
 
+### As a Velopack package
+
+The `velopack` feature builds the demo for the Velopack spike (corundum-framework#51,
+`docs/superpowers/spikes/2026-10-28-velopack.md`): it handles Velopack's start, adds a
+Settings › Velopack page (the package's paths, updates from the repository's
+pre-releases, a daemon to start) and a second binary, `corundum-framework-demo-daemon`.
+Pushing a tag `demo-v<x.y.z>` packages it on each desktop (`demo-release.yml`) and puts the
+installers on that pre-release.
+
 ## iOS simulator
 
 Needs an Apple-silicon Mac with Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen)

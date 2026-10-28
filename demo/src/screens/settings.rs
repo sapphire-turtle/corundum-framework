@@ -37,7 +37,16 @@ pub(crate) fn settings() -> Settings {
             ])
             .titled("demo-settings-general"),
         )
-        .with_group(SettingsGroup::new(vec![Box::new(About::new())]))
+        .with_group(SettingsGroup::new(about_pages()))
+}
+
+/// About, and with the `velopack` feature the spike's page beside it.
+fn about_pages() -> Vec<Box<dyn SettingsSection>> {
+    #[allow(unused_mut)]
+    let mut pages: Vec<Box<dyn SettingsSection>> = vec![Box::new(About::new())];
+    #[cfg(feature = "velopack")]
+    pages.push(Box::new(crate::velopack::Page::new()));
+    pages
 }
 
 /// A page of the app's own: a name, applied with a button, the entry marked until then.

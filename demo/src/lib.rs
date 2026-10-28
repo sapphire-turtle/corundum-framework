@@ -14,6 +14,8 @@ use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, icons};
 
 mod screens;
+#[cfg(feature = "velopack")]
+pub mod velopack;
 
 pub use screens::Screen;
 
