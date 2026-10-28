@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use corundum_framework::gui::platform::{
     self, FilePicker, IMAGE_EXTENSIONS, MediaKind, MediaPicker, Pending,
 };
+use corundum_framework::gui::qr::QrCode;
 use corundum_framework::gui::{egui, tr};
 use corundum_framework::platform::dirs::AppDirs;
 
@@ -28,6 +29,12 @@ pub(crate) struct State {
     media_request: Option<Pending<Vec<PathBuf>>>,
     /// The photos and videos last picked: on a phone, their copies in the cache.
     media: Vec<String>,
+    /// The text shown as a QR code.
+    qr_text: String,
+    /// The scanner's request, while it is open.
+    scan: Option<Pending<Option<String>>>,
+    /// What the scanner last answered: `Some(None)` when it read nothing.
+    scanned: Option<Option<String>>,
 }
 
 impl State {
@@ -41,6 +48,9 @@ impl State {
             picked: Vec::new(),
             media_request: None,
             media: Vec::new(),
+            qr_text: String::from("https://github.com/sapphire-turtle/corundum-framework"),
+            scan: None,
+            scanned: None,
         }
     }
 
@@ -72,6 +82,9 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State) {
 
     section(ui, "demo-platform-media");
     media_ui(ui, state);
+
+    section(ui, "demo-platform-qr");
+    qr_ui(ui, state);
 
     section(ui, "demo-platform-dirs");
     let none = tr!(ui, "demo-platform-none");
@@ -227,6 +240,50 @@ fn media_ui(ui: &mut egui::Ui, state: &mut State) {
             path = path.as_str(),
             size = size as f64
         ));
+    }
+}
+
+fn qr_ui(ui: &mut egui::Ui, state: &mut State) {
+    ui.add(
+        egui::TextEdit::singleline(&mut state.qr_text).hint_text(tr!(ui, "demo-platform-qr-text")),
+    );
+    ui.add(QrCode::new(&state.qr_text).side(200.0));
+    if !platform::qr_scanner_available() {
+        ui.weak(tr!(ui, "demo-platform-no-scanner"));
+        return;
+    }
+    if let Some(request) = &mut state.scan {
+        match request.poll() {
+            Some(read) => {
+                state.scanned = Some(read);
+                state.scan = None;
+            }
+            None => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(tr!(ui, "demo-platform-scanning"));
+                });
+                return;
+            }
+        }
+    }
+    if ui.button(tr!(ui, "demo-platform-scan")).clicked() {
+        state.scan = Some(platform::scan_qr(ui.ctx()));
+    }
+    match &state.scanned {
+        Some(Some(text)) => {
+            ui.label(tr!(ui, "demo-platform-scanned", text = text.as_str()));
+            if ui
+                .small_button(tr!(ui, "demo-platform-show-scanned"))
+                .clicked()
+            {
+                state.qr_text = text.clone();
+            }
+        }
+        Some(None) => {
+            ui.weak(tr!(ui, "demo-platform-scanned-none"));
+        }
+        None => {}
     }
 }
 

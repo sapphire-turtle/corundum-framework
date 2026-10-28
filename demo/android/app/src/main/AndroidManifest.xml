@@ -5,6 +5,12 @@
         android:label="Corundum Demo"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
+        <!-- Google Play installs the code scanner's module (`qr-scan`) with the app, rather
+             than at the first scan. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <!-- Turning, resizing and the keyboard are handled in the app (winit and the Rust
              side), not by recreating the activity. -->
         <activity

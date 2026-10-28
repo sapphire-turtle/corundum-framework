@@ -46,6 +46,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSupportsIndirectInputEvents: true
+        # The camera, for the QR code scanner (`qr-scan`): iOS ends an app that opens it
+        # without saying why.
+        NSCameraUsageDescription: The demo reads QR codes with the camera.
         # A scene, which iOS 27 requires of an app built with its SDK. corundum's window
         # puts winit's in it (corundum_framework_gui::window::IOS_SCENE_DELEGATE).
         UIApplicationSceneManifest:
@@ -68,6 +71,9 @@ targets:
       - sdk: CoreGraphics.framework
       - sdk: CoreText.framework
       - sdk: CoreFoundation.framework
+      # `media-picker` and `qr-scan`: the photo picker and the camera.
+      - sdk: PhotosUI.framework
+      - sdk: AVFoundation.framework
 schemes:
   CorundumDemo:
     build:
