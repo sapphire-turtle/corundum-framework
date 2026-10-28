@@ -102,3 +102,11 @@ corundum-explorer-retry = 再試行
 corundum-explorer-open = 開く
 corundum-explorer-rename = 名前を変更
 corundum-explorer-items = { $count } 項目
+
+# デスクトップで写真や動画を選ぶダイアログ（`platform::MediaPicker`）：フィルタ。
+corundum-media-images-and-videos = 画像と動画
+corundum-media-images = 画像
+corundum-media-videos = 動画
+
+# QR コード（`qr::QrCode`）：文字列が長すぎて QR コードにできないとき。
+corundum-qr-too-long = 長すぎて QR コードにできません。

@@ -13,21 +13,37 @@ rest, and never published.
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
 | Files | `explorer::FileExplorer` over a sample folder tree in the demo's cache directory (made again with a button): drag entries into a folder (or onto the trail), rename with F2 or the menu — done for real there — page through Many files; on a desktop, any folder picked, to look at only |
-| Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
+| Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, the file dialogs, the photo picker (`MediaPicker`), QR codes (`QrCode` for typed text, and `scan_qr`), and the app's directories and the system's languages from corundum-framework-platform |
 | Media | A made-up player (a clock over three tracks; no sound) under the OS's media keys and in its "now playing", through the media session: its controls, its progress bar, whether the OS sees it, and the last event the OS sent |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 
-The demo logs the window's rects and the safe area whenever they change (`corundum demo:
-window`), so a CI log shows what the insets did.
+## The OS features it turns on
 
-## The OS's features
+corundum's OS features are off by default, as each asks an app for declarations of its
+own. The demo turns on every one its OS has, with no flag to pass, and declares what they
+need, so a build as it is tries them all on a device. Where an OS has none, the screen
+says so: the Platform screen in the feature's section, the Media screen for the media
+session.
 
-The demo turns on every feature of corundum that its OS has an implementation of, so that
-each can be tried from the demo as built, with no flags: today that is the media session
-(`media-session`) on Linux, macOS, Windows and iOS. Android has no media session yet;
-there the Media screen says so, and its player runs without the OS.
+| Feature | Desktops | iOS | Android | What the demo declares for it |
+|---|---|---|---|---|
+| `media-picker` | the file dialog | PHPicker | the Photo Picker (`ACTION_GET_CONTENT` before Android 11) | Android: `MainActivity` forwards `onActivityResult` to `corundumActivityResult`. iOS: nothing |
+| `qr-code` | yes | yes | yes | nothing |
+| `qr-scan` | none | the camera (AVFoundation) | Google's code scanner | iOS: `NSCameraUsageDescription` in `project.yml`. Android: `play-services-code-scanner` in `app/build.gradle.kts`, and the `com.google.mlkit.vision.DEPENDENCIES` meta-data in the manifest, so Play installs the scanner with the app |
+| `media-session` | MPRIS (Linux), the media flyout (Windows), Now Playing (macOS) | the lock screen and Control Centre | none yet | iOS: `UIBackgroundModes: audio` in `project.yml`, and MediaPlayer and AVFAudio linked |
 
-To try the media session, open Media and press Play, then:
+On a device, from the Platform screen:
+
+- **Photos and videos**: pick photos, one video, and up to five of either. Each pick is
+  listed with its size, as copied into the cache directory (shown below it). Cancelling
+  lists nothing; the screen keeps drawing while the picker is open.
+- **QR codes**: type in the field and watch the code change; scan it from another phone or
+  the desktop demo's screen with **Scan a QR code**. The first scan on Android may wait for
+  Play to download the scanner; iOS asks for the camera the first time. A simulator and an
+  emulator have no camera worth scanning with: try these on a device.
+
+To try the media session, open Media and press Play, then (on Android, which has no media
+session yet, the Media screen says so and its player runs without the OS):
 
 - Linux: the keyboard's media keys; GNOME's media panel (in the clock's menu) or KDE's
   media widget, which show the track and its cover; or `playerctl -p corundum_demo
@@ -43,6 +59,9 @@ To try the media session, open Media and press Play, then:
   or pulling the headphones out pauses it.
 
 The screen shows the last event the OS sent, by name.
+
+The demo logs the window's rects and the safe area whenever they change (`corundum demo:
+window`), so a CI log shows what the insets did.
 
 ## Desktops (Linux, macOS, Windows)
 
@@ -101,7 +120,9 @@ adb logcat -s corundum-demo
 ```
 
 `build-rust.sh` builds the cdylib and puts it in `app/src/main/jniLibs`; the app is
-GameActivity as it is (`MainActivity`), loading it and calling its `android_main`. Open
+GameActivity (`MainActivity`), loading it and calling its `android_main`, with the one
+addition corundum's pickers need: it forwards `onActivityResult` to the native
+`corundumActivityResult`, which corundum registers when the window starts. Open
 `demo/android` in Android Studio to run it from there instead.
 
 A debug build runs because the workspace's `Cargo.toml` builds android-activity without

@@ -46,6 +46,16 @@ serde = ["corundum-framework-gui?/serde"]
 gui-update = ["gui", "update", "corundum-framework-gui/update"]
 # ... with the download and the replacement.
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
+# `gui::platform::MediaPicker`: photos and videos from the phone's album, the file dialog on
+# a desktop. On Android the app's activity must forward its result
+# (`platform::media::available` has the code); iOS needs no Info.plist key.
+media-picker = ["gui", "corundum-framework-gui/media-picker"]
+# `gui::platform::scan_qr`: a QR code read by the phone's camera. iOS needs
+# NSCameraUsageDescription; Android the app's play-services-code-scanner dependency
+# (`platform::qr::available` has both).
+qr-scan = ["gui", "corundum-framework-gui/qr-scan"]
+# `gui::qr`: a QR code drawn from text.
+qr-code = ["gui", "corundum-framework-gui/qr-code"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,

@@ -7,6 +7,12 @@
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
 //! activity a window draws in. [`icon`] renders an app's SVG to PNG, icns and ico. [`launcher`] puts a desktop app in the OS's app menu.
 //!
+//! The system's screens an app opens and waits for are behind features, off by default:
+//! they need declarations of the app (an Info.plist key, a manifest entry, a Gradle
+//! dependency, code in its activity) and link frameworks an app without them should not.
+//! `media-picker` is [`media`], the phone's photo picker; `qr-scan` is [`qr`], its QR
+//! code scanner. Each answers through a [`pending::Pending`] the app polls.
+//!
 //! With the `media-session` feature, `media_session` is the OS's media keys and its "now
 //! playing", for a music player.
 
@@ -17,7 +23,15 @@ pub mod dirs;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod icon;
 pub mod insets;
+#[cfg(all(target_os = "ios", any(feature = "media-picker", feature = "qr-scan")))]
+mod ios;
 pub mod launcher;
 pub mod locale;
+#[cfg(feature = "media-picker")]
+pub mod media;
 #[cfg(feature = "media-session")]
 pub mod media_session;
+#[cfg(any(feature = "media-picker", feature = "qr-scan"))]
+pub mod pending;
+#[cfg(feature = "qr-scan")]
+pub mod qr;

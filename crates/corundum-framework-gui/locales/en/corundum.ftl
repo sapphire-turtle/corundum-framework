@@ -110,3 +110,11 @@ corundum-explorer-items =
         [one] { $count } item
        *[other] { $count } items
     }
+
+# The desktop's photo and video dialog (`platform::MediaPicker`): its filters.
+corundum-media-images-and-videos = Images and videos
+corundum-media-images = Images
+corundum-media-videos = Videos
+
+# A QR code (`qr::QrCode`) whose text is too long for one.
+corundum-qr-too-long = Too long to show as a QR code.

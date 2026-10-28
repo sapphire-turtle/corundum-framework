@@ -29,11 +29,12 @@ corundum-framework-build = { version = "0.3.0", path = "../crates/corundum-frame
 # Everywhere but Android, the window is eframe's (`gui::window::run`); on Android it is
 # GameActivity's (`gui::window::run_android`), and eframe's default does not build there.
 #
-# The demo turns on every feature its OS has an implementation of, so that each can be tried
-# from the demo as built: the media session on the desktops and iOS. Android has none yet,
-# and the Media screen says so.
+# The demo turns on every OS feature its OS has an implementation of, so a build as it is
+# tries all the OS has (the Platform and Media screens say which it has not); the apps
+# around it (ios/, android/) declare what each needs (README.md has the list). Android has
+# no media session yet.
 [target.'cfg(not(target_os = "android"))'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "media-session", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "media-picker", "media-session", "qr-code", "qr-scan", "serde"] }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 # The updates panel replaces the running executable, which a phone's app never does (and its
@@ -49,4 +50,4 @@ objc2-avf-audio = { version = "0.3.2", default-features = false, features = ["st
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData", "NSError", "NSString"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["android", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["android", "media-picker", "qr-code", "qr-scan", "serde"] }
