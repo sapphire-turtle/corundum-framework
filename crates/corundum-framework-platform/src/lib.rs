@@ -6,6 +6,9 @@
 //! [`insets`] are what a window needs and its toolkit cannot give it on a phone. On
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
 //! activity a window draws in. [`icon`] renders an app's SVG to PNG, icns and ico. [`launcher`] puts a desktop app in the OS's app menu.
+//!
+//! With the `media-session` feature, `media_session` is the OS's media keys and its "now
+//! playing", for a music player.
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -16,3 +19,5 @@ pub mod icon;
 pub mod insets;
 pub mod launcher;
 pub mod locale;
+#[cfg(feature = "media-session")]
+pub mod media_session;
