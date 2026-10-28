@@ -28,8 +28,11 @@ corundum-framework-build = { version = "0.3.0", path = "../crates/corundum-frame
 
 # Everywhere but Android, the window is eframe's (`gui::window::run`); on Android it is
 # GameActivity's (`gui::window::run_android`), and eframe's default does not build there.
+#
+# The demo turns on every OS feature its OS has, so a build as it is tries them all; the
+# apps around it (ios/, android/) declare what each needs (README.md has the list).
 [target.'cfg(not(target_os = "android"))'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "media-picker", "serde"] }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 # The updates panel replaces the running executable, which a phone's app never does (and its
@@ -38,4 +41,4 @@ tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 corundum-framework = { path = "../crates/corundum-framework", features = ["gui-update"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["android", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["android", "media-picker", "serde"] }

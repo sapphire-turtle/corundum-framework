@@ -12,8 +12,25 @@ rest, and never published.
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
-| Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
+| Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, the file dialogs, the photo picker (`MediaPicker`), and the app's directories and the system's languages from corundum-framework-platform |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
+
+## The OS features it turns on
+
+corundum's OS features are off by default, as each asks an app for declarations of its
+own. The demo turns on every one its OS has, with no flag to pass, and declares what they
+need, so a build as it is tries them all on a device. Where an OS has none, the Platform
+screen says so in the feature's section.
+
+| Feature | Desktops | iOS | Android | What the demo declares for it |
+|---|---|---|---|---|
+| `media-picker` | the file dialog | PHPicker | the Photo Picker (`ACTION_GET_CONTENT` before Android 11) | Android: `MainActivity` forwards `onActivityResult` to `corundumActivityResult`. iOS: nothing |
+
+On a device, from the Platform screen:
+
+- **Photos and videos**: pick photos, one video, and up to five of either. Each pick is
+  listed with its size, as copied into the cache directory (shown below it). Cancelling
+  lists nothing; the screen keeps drawing while the picker is open.
 
 The demo logs the window's rects and the safe area whenever they change (`corundum demo:
 window`), so a CI log shows what the insets did.
@@ -75,7 +92,9 @@ adb logcat -s corundum-demo
 ```
 
 `build-rust.sh` builds the cdylib and puts it in `app/src/main/jniLibs`; the app is
-GameActivity as it is (`MainActivity`), loading it and calling its `android_main`. Open
+GameActivity (`MainActivity`), loading it and calling its `android_main`, with the one
+addition corundum's pickers need: it forwards `onActivityResult` to the native
+`corundumActivityResult`, which corundum registers when the window starts. Open
 `demo/android` in Android Studio to run it from there instead.
 
 A debug build runs because the workspace's `Cargo.toml` builds android-activity without
