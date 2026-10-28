@@ -23,6 +23,11 @@ jobs:
         # The configurations a store build compiles: no `self-update`.
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
         cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
+        # Each of the system's screens (off by default) alone, so none comes to need another.
+        for f in media-picker; do
+          cargo clippy -p corundum-framework-platform --all-targets --features $f --locked -- -D warnings || exit 1
+          cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
+        done
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
