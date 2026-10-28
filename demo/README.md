@@ -12,6 +12,7 @@ rest, and never published.
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
+| Files | `explorer::FileExplorer` over a sample folder tree in the demo's cache directory (made again with a button): drag entries into a folder (or onto the trail), rename with F2 or the menu — done for real there — page through Many files; on a desktop, any folder picked, to look at only |
 | Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, and the app's directories and the system's languages from corundum-framework-platform |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 
