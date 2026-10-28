@@ -12,6 +12,27 @@ categories = ["os"]
 
 # No egui here: the crates without a window (workspace, server, bridge, CLI) need the
 # directories too. corundum-framework-gui builds on this one.
+#
+# The system's screens an app opens (pickers, scanners) are off by default: each asks the
+# app for declarations of its own and, on iOS, links a framework App Store review looks at.
+#
+# `media-picker` is `media`, the phone's photo picker: PhotosUI on iOS (no Info.plist key);
+# on Android the Photo Picker or ACTION_GET_CONTENT (no permission), whose result the app's
+# activity must forward (`media::available` has the code).
+[features]
+media-picker = [
+    "dep:block2",
+    "dep:objc2",
+    "dep:objc2-photos-ui",
+    "dep:objc2-ui-kit",
+    "objc2-foundation/block2",
+    "objc2-foundation/NSError",
+    "objc2-foundation/NSEnumerator",
+    "objc2-foundation/NSItemProvider",
+    "objc2-foundation/NSProgress",
+    "objc2-foundation/NSSet",
+]
+
 [dependencies]
 dirs = "7"
 sys-locale = "0.3"
@@ -25,6 +46,22 @@ resvg = { version = "0.45", default-features = false }
 # iOS: the sandbox's directories, from NSFileManager rather than $HOME.
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSArray", "NSFileManager", "NSPathUtilities", "NSString", "NSURL"] }
+# `media-picker`: PHPickerViewController, presented over the window's root view controller,
+# and the files it hands over, copied in a block before they go.
+block2 = { version = "0.6", optional = true }
+objc2 = { version = "0.6.4", optional = true }
+objc2-photos-ui = { version = "0.3.2", optional = true, default-features = false, features = ["std", "PHPicker"] }
+objc2-ui-kit = { version = "0.3.2", optional = true, default-features = false, features = [
+    "std",
+    "block2",
+    "UIApplication",
+    "UIResponder",
+    "UIScene",
+    "UIView",
+    "UIViewController",
+    "UIWindow",
+    "UIWindowScene",
+] }
 
 # Android: the language list, the directories, the clipboard and the insets, read from the
 # JVM through the context android-activity (or any host) leaves in ndk-context.
