@@ -86,6 +86,7 @@ impl Demo {
             Destination::new(Screen::Icons, icons::images(), "demo-screen-icons").into(),
             Destination::new(Screen::Language, icons::tag(), "demo-screen-language").into(),
             Destination::new(Screen::Detail, icons::list_music(), "demo-screen-detail").into(),
+            Destination::new(Screen::Files, icons::folder(), "demo-screen-files").into(),
             Destination::new(
                 Screen::Platform,
                 icons::monitor_smartphone(),

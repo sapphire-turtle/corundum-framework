@@ -10,7 +10,8 @@
 //! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
 //! theme and the language over them. [`detail`] is the app's side pane: a right column
 //! beside every screen, a card over it, or on a phone the screen in its place; its column's
-//! toggle sits at the right end of the shell's status bar. With the `serde` feature,
+//! toggle sits at the right end of the shell's status bar. [`explorer`] is a folder's
+//! contents the app hands in, to browse, pick, move and rename. With the `serde` feature,
 //! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
 //! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
 //! put back before the app's first frame.
@@ -33,6 +34,7 @@ pub use egui;
 pub use eframe;
 
 pub mod detail;
+pub mod explorer;
 pub mod fonts;
 #[cfg(feature = "eframe")]
 pub mod gpu;

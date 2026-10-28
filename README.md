@@ -51,6 +51,13 @@ desktops and on phones.
   view's item holds (the playlist playing, the journal open) or a new entry begun from the
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.
+- **File explorer**: `explorer::FileExplorer`, a folder's contents the app lists and hands
+  in (a page at a time if it likes) — under a trail of the folders above, as a list sorted
+  by a column's heading or a grid of thumbnails, and on a phone as tall rows a finger can
+  tap. Entries are picked with clicks, Ctrl and Shift, and the keys; a right click (a long
+  press) opens Open, Rename and the app's own items; picked entries dragged onto a folder
+  ask to be moved, and F2 renames in place. The explorer touches no files: it returns
+  `ExplorerEvent`s, and the app moves, renames and opens.
 - **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
   to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
   folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the

@@ -141,6 +141,26 @@ pub fn chevron_down() -> egui::ImageSource<'static> {
     icon!("chevron-down")
 }
 
+/// A column sorted in ascending order, or a menu to fold away.
+pub fn chevron_up() -> egui::ImageSource<'static> {
+    icon!("chevron-up")
+}
+
+/// Up, to the folder above.
+pub fn arrow_up() -> egui::ImageSource<'static> {
+    icon!("arrow-up")
+}
+
+/// Items shown as a list, in rows.
+pub fn list() -> egui::ImageSource<'static> {
+    icon!("list")
+}
+
+/// Items shown as a grid of tiles.
+pub fn layout_grid() -> egui::ImageSource<'static> {
+    icon!("layout-grid")
+}
+
 /// Done, or a success.
 pub fn circle_check() -> egui::ImageSource<'static> {
     icon!("circle-check")
@@ -159,6 +179,16 @@ pub fn folder() -> egui::ImageSource<'static> {
 /// A text file or document.
 pub fn file_text() -> egui::ImageSource<'static> {
     icon!("file-text")
+}
+
+/// A file of no kind in particular.
+pub fn file() -> egui::ImageSource<'static> {
+    icon!("file")
+}
+
+/// A video.
+pub fn film() -> egui::ImageSource<'static> {
+    icon!("film")
 }
 
 /// An arrow turning back: reset to the default.
@@ -272,7 +302,7 @@ mod tests {
 
     type Icon = fn() -> egui::ImageSource<'static>;
 
-    const ALL: [(&str, Icon); 37] = [
+    const ALL: [(&str, Icon); 43] = [
         ("settings", settings),
         ("arrow_left", arrow_left),
         ("x", x),
@@ -285,10 +315,16 @@ mod tests {
         ("grip_vertical", grip_vertical),
         ("chevron_right", chevron_right),
         ("chevron_down", chevron_down),
+        ("chevron_up", chevron_up),
+        ("arrow_up", arrow_up),
+        ("list", list),
+        ("layout_grid", layout_grid),
         ("circle_check", circle_check),
         ("circle_x", circle_x),
         ("folder", folder),
         ("file_text", file_text),
+        ("file", file),
+        ("film", film),
         ("rotate_ccw", rotate_ccw),
         ("dice_5", dice_5),
         ("picture", picture),
