@@ -42,6 +42,8 @@
 //! - Linux: a session bus, which every desktop session has. `desktop_entry` names the
 //!   app's `.desktop` file, from which a media panel takes the icon.
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod apple;
 #[cfg(all(
     unix,
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
@@ -52,12 +54,16 @@ mod mpris;
         unix,
         not(any(target_os = "macos", target_os = "ios", target_os = "android"))
     ),
-    windows
+    windows,
+    target_os = "macos",
+    target_os = "ios"
 )))]
 mod none;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use apple as imp;
 #[cfg(all(
     unix,
     not(any(target_os = "macos", target_os = "ios", target_os = "android"))
@@ -68,7 +74,9 @@ use mpris as imp;
         unix,
         not(any(target_os = "macos", target_os = "ios", target_os = "android"))
     ),
-    windows
+    windows,
+    target_os = "macos",
+    target_os = "ios"
 )))]
 use none as imp;
 #[cfg(windows)]
