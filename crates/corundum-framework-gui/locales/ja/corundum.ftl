@@ -85,3 +85,8 @@ corundum-launcher-in-menu = アプリメニューに表示
 corundum-launcher-remove = 外す
 corundum-launcher-add = 戻す
 corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }
+
+# デスクトップで写真や動画を選ぶダイアログ（`platform::MediaPicker`）：フィルタ。
+corundum-media-images-and-videos = 画像と動画
+corundum-media-images = 画像
+corundum-media-videos = 動画

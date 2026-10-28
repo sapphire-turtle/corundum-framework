@@ -50,6 +50,14 @@ self-update = [
     "dep:reqwest",
     "dep:self-replace",
 ]
+# The system's screens an app opens and waits for, off by default: each asks the app for
+# declarations of its own (corundum-framework-platform's features say which) and, on iOS,
+# links a framework App Store review looks at.
+#
+# `platform::MediaPicker`: photos and videos from the phone's album (PhotosUI on iOS, the
+# Photo Picker on Android, whose activity must forward its result), the file dialog on a
+# desktop.
+media-picker = ["corundum-framework-platform/media-picker"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.

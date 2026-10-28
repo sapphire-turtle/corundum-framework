@@ -46,6 +46,10 @@ serde = ["corundum-framework-gui?/serde"]
 gui-update = ["gui", "update", "corundum-framework-gui/update"]
 # ... with the download and the replacement.
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
+# `gui::platform::MediaPicker`: photos and videos from the phone's album, the file dialog on
+# a desktop. On Android the app's activity must forward its result
+# (`platform::media::available` has the code); iOS needs no Info.plist key.
+media-picker = ["gui", "corundum-framework-gui/media-picker"]
 
 [dependencies]
 corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", optional = true }

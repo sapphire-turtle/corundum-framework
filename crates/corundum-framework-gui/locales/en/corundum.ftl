@@ -89,3 +89,8 @@ corundum-launcher-in-menu = In the app menu
 corundum-launcher-remove = Remove
 corundum-launcher-add = Add back
 corundum-launcher-failed = Could not change the app menu: { $error }
+
+# The desktop's photo and video dialog (`platform::MediaPicker`): its filters.
+corundum-media-images-and-videos = Images and videos
+corundum-media-images = Images
+corundum-media-videos = Videos

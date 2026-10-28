@@ -7,6 +7,11 @@
 //! the file manager are the desktops' (rfd's dialogs, and `explorer`, `open` or
 //! `xdg-open`); on a phone there are none yet, which [`file_picker_available`] and its kin
 //! say, so a view offers something else there.
+//!
+//! What a phone offers instead of a file dialog is its photo album: with the
+//! `media-picker` feature, [`MediaPicker`] picks photos and videos there, and from the file
+//! dialog on a desktop. The phone's picker answers later, through a [`Pending`] the app
+//! polls each frame.
 
 use std::path::{Path, PathBuf};
 
@@ -156,6 +161,154 @@ impl FilePicker {
     }
 }
 
+/// What a [`MediaPicker`] offers: images, videos, or both.
+#[cfg(feature = "media-picker")]
+pub use corundum_framework_platform::media::MediaKind;
+/// A request the system answers later, polled each frame: a [`MediaPicker`]'s.
+#[cfg(feature = "media-picker")]
+pub use corundum_framework_platform::pending::Pending;
+
+/// Can the person pick photos and videos with [`MediaPicker`] here? On the desktops, and on
+/// iOS; on Android, when the app's activity forwards the picker's result
+/// (`corundum_framework_platform::media::available` has the code it needs).
+#[cfg(feature = "media-picker")]
+pub fn media_picker_available() -> bool {
+    DESKTOP || corundum_framework_platform::media::available()
+}
+
+/// Photos and videos to attach or upload: the system's photo picker on a phone, and on a
+/// desktop the file dialog, filtered to [`IMAGE_EXTENSIONS`] and [`VIDEO_EXTENSIONS`].
+///
+/// A phone's picker answers in a callback while the app goes on drawing, so [`pick`]
+/// returns a [`Pending`] at once, which the app polls each frame until it answers: the
+/// paths picked, in order, or none when the person cancels. The window is asked for a frame
+/// when the answer arrives, so an app that draws only on input sees it too. A desktop's
+/// dialog holds the frame until it closes, as [`FilePicker`]'s does, and its request has
+/// answered by the time `pick` returns.
+///
+/// On a phone the paths are copies in the app's cache directory, under `media-picker/`
+/// (neither an Android `content://` URI nor iOS's temporary file can be read later): move
+/// or delete them once used. On a desktop they are the files themselves.
+///
+/// What the app must declare (corundum-framework-platform's `media` has the details): on
+/// iOS nothing (PHPickerViewController needs no Info.plist key); on Android, its activity
+/// forwards `onActivityResult` to corundum, as [`media_picker_available`] says.
+///
+/// ```no_run
+/// use corundum_framework_gui::egui;
+/// use corundum_framework_gui::platform::{MediaKind, MediaPicker, Pending};
+/// # use std::path::PathBuf;
+///
+/// struct Attach {
+///     request: Option<Pending<Vec<PathBuf>>>,
+///     attached: Vec<PathBuf>,
+/// }
+///
+/// fn ui(ui: &mut egui::Ui, attach: &mut Attach) {
+///     if ui.button("Attach photos").clicked() {
+///         let picker = MediaPicker::new().kind(MediaKind::Images).limit(4);
+///         attach.request = Some(picker.pick(ui.ctx()));
+///     }
+///     if let Some(picked) = attach.request.as_mut().and_then(Pending::poll) {
+///         attach.attached.extend(picked);
+///         attach.request = None;
+///     }
+/// }
+/// ```
+///
+/// [`pick`]: MediaPicker::pick
+#[cfg(feature = "media-picker")]
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MediaPicker {
+    kind: MediaKind,
+    limit: usize,
+    title: Option<String>,
+}
+
+#[cfg(feature = "media-picker")]
+impl MediaPicker {
+    /// A picker for any number of images and videos.
+    pub fn new() -> MediaPicker {
+        MediaPicker::default()
+    }
+
+    /// Offer `kind`: images, videos, or both.
+    pub fn kind(mut self, kind: MediaKind) -> MediaPicker {
+        self.kind = kind;
+        self
+    }
+
+    /// Let the person pick up to `limit` items; 0, the default, for as many as the system
+    /// allows. A phone's picker stops at the limit; the desktop's dialog cannot, and the
+    /// first `limit` files are kept.
+    pub fn limit(mut self, limit: usize) -> MediaPicker {
+        self.limit = limit;
+        self
+    }
+
+    /// Title the desktop's dialog `title`. A phone's picker has the system's title.
+    pub fn title(mut self, title: impl Into<String>) -> MediaPicker {
+        self.title = Some(title.into());
+        self
+    }
+
+    /// Open the picker, and return the request to poll each frame. `ctx` is asked for a
+    /// frame when the answer arrives. Where there is no picker
+    /// ([`media_picker_available`]), the request answers at once, with nothing.
+    pub fn pick(self, ctx: &egui::Context) -> Pending<Vec<PathBuf>> {
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            Pending::ready(self.pick_on_desktop(ctx))
+        }
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        {
+            let ctx = ctx.clone();
+            corundum_framework_platform::media::pick(self.kind, self.limit, move || {
+                ctx.request_repaint()
+            })
+        }
+    }
+
+    /// The file dialog, filtered to the kind's extensions: both kinds together first, then
+    /// each alone.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn pick_on_desktop(self, ctx: &egui::Context) -> Vec<PathBuf> {
+        let mut dialog = FilePicker::new();
+        if let Some(title) = self.title {
+            dialog = dialog.title(title);
+        }
+        let images = crate::i18n::tr(ctx, "corundum-media-images");
+        let videos = crate::i18n::tr(ctx, "corundum-media-videos");
+        dialog = match self.kind {
+            MediaKind::Images => dialog.filter(images, IMAGE_EXTENSIONS),
+            MediaKind::Videos => dialog.filter(videos, VIDEO_EXTENSIONS),
+            MediaKind::ImagesAndVideos => {
+                let both: Vec<&str> = IMAGE_EXTENSIONS
+                    .iter()
+                    .chain(VIDEO_EXTENSIONS)
+                    .copied()
+                    .collect();
+                dialog
+                    .filter(
+                        crate::i18n::tr(ctx, "corundum-media-images-and-videos"),
+                        &both,
+                    )
+                    .filter(images, IMAGE_EXTENSIONS)
+                    .filter(videos, VIDEO_EXTENSIONS)
+            }
+        };
+        let mut picked = if self.limit == 1 {
+            dialog.pick_file().into_iter().collect()
+        } else {
+            dialog.pick_files()
+        };
+        if self.limit > 0 {
+            picked.truncate(self.limit);
+        }
+        picked
+    }
+}
+
 /// Can [`open_in_file_manager`] show a folder here (a desktop)?
 pub fn file_manager_available() -> bool {
     DESKTOP
@@ -211,5 +364,23 @@ mod tests {
         assert_eq!(names, ["Images", "Audio"]);
         assert_eq!(picker.filters[1].1, ["mp3"]);
         assert_eq!(picker.directory, Some(PathBuf::from("/tmp")));
+    }
+
+    #[cfg(feature = "media-picker")]
+    #[test]
+    fn the_media_picker_takes_any_number_of_both_kinds_by_default() {
+        let picker = MediaPicker::new();
+        assert_eq!(picker.kind, MediaKind::ImagesAndVideos);
+        assert_eq!(picker.limit, 0);
+        let picker = picker.kind(MediaKind::Videos).limit(1).title("Video");
+        assert_eq!(picker.kind, MediaKind::Videos);
+        assert_eq!(picker.limit, 1);
+        assert_eq!(picker.title.as_deref(), Some("Video"));
+    }
+
+    #[cfg(all(feature = "media-picker", not(target_os = "ios")))]
+    #[test]
+    fn a_desktop_has_the_media_picker() {
+        assert!(media_picker_available());
     }
 }
