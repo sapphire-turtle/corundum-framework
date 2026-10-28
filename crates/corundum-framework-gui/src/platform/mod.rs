@@ -9,8 +9,8 @@
 //! say, so a view offers something else there.
 //!
 //! What a phone offers instead of a file dialog is its photo album: with the
-//! `media-picker` feature, [`MediaPicker`] picks photos and videos there, and from the file
-//! dialog on a desktop. The phone's picker answers later, through a [`Pending`] the app
+//! `media-picker` feature, `MediaPicker` picks photos and videos there, and from the file
+//! dialog on a desktop. The phone's picker answers later, through a `Pending` the app
 //! polls each frame.
 
 use std::path::{Path, PathBuf};
