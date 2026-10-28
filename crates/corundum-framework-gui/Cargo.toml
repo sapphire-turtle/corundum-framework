@@ -58,6 +58,12 @@ self-update = [
 # Photo Picker on Android, whose activity must forward its result), the file dialog on a
 # desktop.
 media-picker = ["corundum-framework-platform/media-picker"]
+# `platform::scan_qr`: a QR code read by the phone's camera (AVFoundation on iOS, which needs
+# NSCameraUsageDescription; Google's code scanner on Android, which needs the app's
+# play-services-code-scanner dependency). Nothing on a desktop.
+qr-scan = ["corundum-framework-platform/qr-scan"]
+# `qr`: a QR code drawn from text, for a phone to read off the screen. Declares nothing.
+qr-code = ["dep:qrcode"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -84,6 +90,8 @@ fluent-langneg = "0.14"
 # The parsed files' entries, for i18n::check (already a dependency of fluent-bundle).
 fluent-syntax = "0.12"
 fontdb = "0.24"
+# The QR codes `qr` draws (`qr-code`); the encoder alone, without its image renderers.
+qrcode = { version = "0.14", optional = true, default-features = false }
 # The update panel's HTTP client, made by corundum-framework-update and named by its
 # worker's install (`self-update`).
 reqwest = { workspace = true, optional = true }

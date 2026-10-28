@@ -90,3 +90,6 @@ corundum-launcher-failed = アプリメニューを変更できませんでし�
 corundum-media-images-and-videos = 画像と動画
 corundum-media-images = 画像
 corundum-media-videos = 動画
+
+# QR コード（`qr::QrCode`）：文字列が長すぎて QR コードにできないとき。
+corundum-qr-too-long = 長すぎて QR コードにできません。

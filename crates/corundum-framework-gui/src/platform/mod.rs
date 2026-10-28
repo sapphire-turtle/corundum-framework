@@ -10,8 +10,9 @@
 //!
 //! What a phone offers instead of a file dialog is its photo album: with the
 //! `media-picker` feature, `MediaPicker` picks photos and videos there, and from the file
-//! dialog on a desktop. The phone's picker answers later, through a `Pending` the app
-//! polls each frame.
+//! dialog on a desktop. With `qr-scan`, `scan_qr` reads a QR code with the phone's
+//! camera. A phone's picker and scanner answer later, through a `Pending` the app polls
+//! each frame.
 
 use std::path::{Path, PathBuf};
 
@@ -164,8 +165,9 @@ impl FilePicker {
 /// What a [`MediaPicker`] offers: images, videos, or both.
 #[cfg(feature = "media-picker")]
 pub use corundum_framework_platform::media::MediaKind;
-/// A request the system answers later, polled each frame: a [`MediaPicker`]'s.
-#[cfg(feature = "media-picker")]
+/// A request the system answers later, polled each frame: a `MediaPicker`'s, or
+/// `scan_qr`'s.
+#[cfg(any(feature = "media-picker", feature = "qr-scan"))]
 pub use corundum_framework_platform::pending::Pending;
 
 /// Can the person pick photos and videos with [`MediaPicker`] here? On the desktops, and on
@@ -309,6 +311,41 @@ impl MediaPicker {
     }
 }
 
+/// Can [`scan_qr`] open a QR code scanner here? On iOS with a camera and
+/// `NSCameraUsageDescription` in the Info.plist; on Android with Google Play services and
+/// the app's play-services-code-scanner dependency
+/// (`corundum_framework_platform::qr::available` has what to add). Never on a desktop,
+/// which shows codes (`qr`, with the `qr-code` feature) rather than reads them.
+#[cfg(feature = "qr-scan")]
+pub fn qr_scanner_available() -> bool {
+    corundum_framework_platform::qr::available()
+}
+
+/// Open the phone's QR code scanner, and return the request to poll each frame, as a
+/// [`MediaPicker`]'s: the first QR code's text, or `None` when the person closes the scanner
+/// or it fails (which is logged). `ctx` is asked for a frame when the answer arrives. Where
+/// there is no scanner ([`qr_scanner_available`]), the request answers `None` at once.
+///
+/// ```no_run
+/// use corundum_framework_gui::egui;
+/// use corundum_framework_gui::platform::{self, Pending};
+///
+/// fn ui(ui: &mut egui::Ui, scan: &mut Option<Pending<Option<String>>>, ticket: &mut String) {
+///     if platform::qr_scanner_available() && ui.button("Scan the invite").clicked() {
+///         *scan = Some(platform::scan_qr(ui.ctx()));
+///     }
+///     if let Some(read) = scan.as_mut().and_then(Pending::poll) {
+///         *ticket = read.unwrap_or_default();
+///         *scan = None;
+///     }
+/// }
+/// ```
+#[cfg(feature = "qr-scan")]
+pub fn scan_qr(ctx: &egui::Context) -> Pending<Option<String>> {
+    let ctx = ctx.clone();
+    corundum_framework_platform::qr::scan(move || ctx.request_repaint())
+}
+
 /// Can [`open_in_file_manager`] show a folder here (a desktop)?
 pub fn file_manager_available() -> bool {
     DESKTOP
@@ -382,5 +419,13 @@ mod tests {
     #[test]
     fn a_desktop_has_the_media_picker() {
         assert!(media_picker_available());
+    }
+
+    #[cfg(all(feature = "qr-scan", not(target_os = "ios")))]
+    #[test]
+    fn a_desktop_has_no_qr_scanner_and_answers_at_once() {
+        assert!(!qr_scanner_available());
+        let ctx = egui::Context::default();
+        assert_eq!(scan_qr(&ctx).poll(), Some(None));
     }
 }

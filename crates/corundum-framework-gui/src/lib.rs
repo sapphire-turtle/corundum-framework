@@ -13,7 +13,8 @@
 //! toggle sits at the right end of the shell's status bar. With the `serde` feature,
 //! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
 //! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
-//! put back before the app's first frame.
+//! put back before the app's first frame. With the `qr-code` feature, [`qr`] draws text as
+//! a QR code, for a phone to read off the screen.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -38,6 +39,8 @@ pub mod logcat;
 #[cfg(feature = "serde")]
 pub mod look;
 pub mod platform;
+#[cfg(feature = "qr-code")]
+pub mod qr;
 pub mod settings;
 mod shell;
 #[cfg(feature = "serde")]
