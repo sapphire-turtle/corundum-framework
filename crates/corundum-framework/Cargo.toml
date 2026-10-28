@@ -57,6 +57,17 @@ qr-scan = ["gui", "corundum-framework-gui/qr-scan"]
 # `gui::qr`: a QR code drawn from text.
 qr-code = ["gui", "corundum-framework-gui/qr-code"]
 
+# ── platform passthrough ─────────────────────────────────────────────────────
+# `platform::media_session`: the OS's media keys and its "now playing", for a music player,
+# and with `gui`, `gui::media_session::start` for an eframe window. Off unless asked for: it
+# builds D-Bus (Linux) and MediaPlayer (Apple) bindings, and an iOS app that turns it on
+# declares background audio in its Info.plist.
+media-session = [
+    "platform",
+    "corundum-framework-platform/media-session",
+    "corundum-framework-gui?/media-session",
+]
+
 [dependencies]
 corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.

@@ -51,6 +51,13 @@ desktops and on phones.
   view's item holds (the playlist playing, the journal open) or a new entry begun from the
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.
+- **File explorer**: `explorer::FileExplorer`, a folder's contents the app lists and hands
+  in (a page at a time if it likes) — under a trail of the folders above, as a list sorted
+  by a column's heading or a grid of thumbnails, and on a phone as tall rows a finger can
+  tap. Entries are picked with clicks, Ctrl and Shift, and the keys; a right click (a long
+  press) opens Open, Rename and the app's own items; picked entries dragged onto a folder
+  ask to be moved, and F2 renames in place. The explorer touches no files: it returns
+  `ExplorerEvent`s, and the app moves, renames and opens.
 - **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
   to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
   folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the
@@ -84,6 +91,7 @@ desktops and on phones.
 | `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
+| `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not
@@ -109,6 +117,16 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
 - **The system's screens** (features, off by default): `media`, the phone's photo picker
   (`media-picker`), its picks copied into the cache, and `qr`, its QR code scanner
   (`qr-scan`), each answering through a `pending::Pending`.
+- **Media session** (feature `media-session`, off by default): `media_session::MediaSession`,
+  a music player under the OS's media keys and in its "now playing": the app tells it the
+  track (title, artist, album, length, a cover as a file or bytes) and whether it plays and
+  where, and reads back play, pause, toggle, stop, next, previous and seeks as events,
+  without holding its frame. An MPRIS player over zbus on Linux (no libdbus), the window's
+  SystemMediaTransportControls on Windows, MediaPlayer's now-playing and remote commands
+  on macOS and iOS, with the audio session on iOS (interruptions, headphones pulled out).
+  Android has none yet: there the session does nothing. An iOS app that turns it on lists
+  `audio` under `UIBackgroundModes` in its Info.plist, and is shown only while it plays
+  sound.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
 
@@ -132,6 +150,7 @@ through to the gui crate.
 | `media-picker` | `gui::platform::MediaPicker`, the phone's photo picker (brings `gui`) | no |
 | `qr-scan` | `gui::platform::scan_qr`, the phone's QR code scanner (brings `gui`) | no |
 | `qr-code` | `gui::qr`, QR codes drawn from text (brings `gui`) | no |
+| `media-session` | `platform::media_session`, and `gui::media_session` with `gui` | no |
 
 The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
 Android app `android`.

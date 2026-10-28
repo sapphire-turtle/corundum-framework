@@ -6,9 +6,11 @@ use corundum_framework::gui::theme::{ThemeSettings, Tint};
 use corundum_framework::gui::{Side, egui};
 
 mod detail;
+mod files;
 mod fonts;
 pub(crate) mod icons;
 mod language;
+pub(crate) mod media;
 mod overview;
 mod platform;
 pub(crate) mod settings;
@@ -29,22 +31,28 @@ pub enum Screen {
     Language,
     /// The side pane: albums, and the picked one's tracks.
     Detail,
+    /// The file explorer, over a sample folder tree.
+    Files,
     /// The clipboard, the insets and the app's directories.
     Platform,
+    /// A made-up player under the OS's media keys and in its "now playing".
+    Media,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 8] = [
+    pub const ALL: [Screen; 10] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
         Screen::Icons,
         Screen::Language,
         Screen::Detail,
+        Screen::Files,
         Screen::Platform,
+        Screen::Media,
         Screen::Settings,
     ];
 }
@@ -69,7 +77,9 @@ pub(crate) struct State {
     text: String,
     icon_style: icons::Style,
     detail: detail::State,
+    files: files::State,
     platform: platform::State,
+    pub(crate) media: media::State,
 }
 
 impl State {
@@ -86,7 +96,9 @@ impl State {
             text: String::new(),
             icon_style: icons::Style::Text,
             detail: detail::State::default(),
+            files: files::State::default(),
             platform: platform::State::read(),
+            media: media::State::new(),
         }
     }
 }
@@ -101,10 +113,11 @@ pub(crate) fn ui(
     language: &mut LanguageSettings,
     side: &mut Side,
 ) {
-    // These two lay out their own panels.
+    // These lay out their own panels; the explorer scrolls by itself.
     match screen {
         Screen::Settings => return settings.ui(ui),
         Screen::Detail => return detail::ui(ui, &mut state.detail, &mut state.log, side),
+        Screen::Files => return files::ui(ui, &mut state.files, &mut state.log),
         _ => {}
     }
     egui::CentralPanel::default().show(ui, |ui| {
@@ -117,7 +130,10 @@ pub(crate) fn ui(
                 Screen::Icons => icons::ui(ui, &mut state.icon_style),
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
-                Screen::Settings | Screen::Detail => unreachable!("drawn above"),
+                Screen::Media => media::ui(ui, &mut state.media),
+                Screen::Settings | Screen::Detail | Screen::Files => {
+                    unreachable!("drawn above")
+                }
             });
     });
 }

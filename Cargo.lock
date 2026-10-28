@@ -883,6 +883,9 @@ version = "0.0.0"
 dependencies = [
  "corundum-framework",
  "corundum-framework-build",
+ "objc2 0.6.5",
+ "objc2-avf-audio",
+ "objc2-foundation 0.3.2",
  "tracing",
  "tracing-subscriber",
 ]
@@ -934,18 +937,23 @@ dependencies = [
  "jni",
  "ndk-context",
  "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
  "objc2-av-foundation",
+ "objc2-avf-audio",
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
+ "objc2-media-player",
  "objc2-photos-ui",
  "objc2-quartz-core 0.3.2",
  "objc2-ui-kit 0.3.2",
+ "raw-window-handle",
  "resvg",
  "sys-locale",
  "tempfile",
  "tracing",
  "unic-langid",
  "windows",
+ "zbus",
 ]
 
 [[package]]
@@ -2703,6 +2711,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-avf-audio"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13a380031deed8e99db00065c45937da434ca987c034e13b87e4441f9e4090be"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+]
+
+[[package]]
 name = "objc2-cloud-kit"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2848,6 +2867,20 @@ dependencies = [
  "objc2 0.5.3",
  "objc2-app-kit 0.2.2",
  "objc2-foundation 0.2.2",
+]
+
+[[package]]
+name = "objc2-media-player"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85f2a98483f6e76313cb85a5a185eaa3cda86a177b13a8852d56cbd0085bf635"
+dependencies = [
+ "bitflags 2.13.2",
+ "block2 0.6.2",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]

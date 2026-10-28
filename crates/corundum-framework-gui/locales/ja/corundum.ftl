@@ -86,6 +86,23 @@ corundum-launcher-remove = 外す
 corundum-launcher-add = 戻す
 corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }
 
+# ファイルエクスプローラー（`explorer::FileExplorer`）：ボタン、一覧の見出し、中身がないときの表示、
+# 項目のメニュー、複数の項目のドラッグ。
+corundum-explorer-up = 上のフォルダーへ
+corundum-explorer-refresh = 再読み込み
+corundum-explorer-list = 一覧
+corundum-explorer-grid = グリッド
+corundum-explorer-name = 名前
+corundum-explorer-size = サイズ
+corundum-explorer-modified = 更新日時
+corundum-explorer-loading = 読み込み中…
+corundum-explorer-empty = このフォルダーは空です
+corundum-explorer-failed = このフォルダーを読み込めませんでした: { $error }
+corundum-explorer-retry = 再試行
+corundum-explorer-open = 開く
+corundum-explorer-rename = 名前を変更
+corundum-explorer-items = { $count } 項目
+
 # デスクトップで写真や動画を選ぶダイアログ（`platform::MediaPicker`）：フィルタ。
 corundum-media-images-and-videos = 画像と動画
 corundum-media-images = 画像

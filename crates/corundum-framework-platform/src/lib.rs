@@ -12,6 +12,9 @@
 //! dependency, code in its activity) and link frameworks an app without them should not.
 //! `media-picker` is [`media`], the phone's photo picker; `qr-scan` is [`qr`], its QR
 //! code scanner. Each answers through a [`pending::Pending`] the app polls.
+//!
+//! With the `media-session` feature, `media_session` is the OS's media keys and its "now
+//! playing", for a music player.
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -26,6 +29,8 @@ pub mod launcher;
 pub mod locale;
 #[cfg(feature = "media-picker")]
 pub mod media;
+#[cfg(feature = "media-session")]
+pub mod media_session;
 #[cfg(any(feature = "media-picker", feature = "qr-scan"))]
 pub mod pending;
 #[cfg(feature = "qr-scan")]

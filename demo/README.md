@@ -12,21 +12,25 @@ rest, and never published.
 | Icons | Every bundled Lucide icon, in the theme's colours and in a button's states (normal, selected, disabled) |
 | Language | `i18n::settings_ui` (system, English, Japanese), switched in place; the demo's own messages, plurals included |
 | Detail | `detail::DetailPane`: albums, and the picked one's tracks in the right column (hidden with the button at the status bar's right end), on a card over the screen with it hidden, or in the list's place on a phone |
+| Files | `explorer::FileExplorer` over a sample folder tree in the demo's cache directory (made again with a button): drag entries into a folder (or onto the trail), rename with F2 or the menu — done for real there — page through Many files; on a desktop, any folder picked, to look at only |
 | Platform | The clipboard (copy, read, and Android's Paste button), the safe area and window insets, the screen's rects, the file dialogs, the photo picker (`MediaPicker`), QR codes (`QrCode` for typed text, and `scan_qr`), and the app's directories and the system's languages from corundum-framework-platform |
+| Media | A made-up player (a clock over three tracks; no sound) under the OS's media keys and in its "now playing", through the media session: its controls, its progress bar, whether the OS sees it, and the last event the OS sent |
 | Settings | An app's Settings screen (`settings::Settings`): a page of the demo's own (marked in the list until applied), Appearance over two scopes (a server's look and this device's own, which wins), and About |
 
 ## The OS features it turns on
 
 corundum's OS features are off by default, as each asks an app for declarations of its
 own. The demo turns on every one its OS has, with no flag to pass, and declares what they
-need, so a build as it is tries them all on a device. Where an OS has none, the Platform
-screen says so in the feature's section.
+need, so a build as it is tries them all on a device. Where an OS has none, the screen
+says so: the Platform screen in the feature's section, the Media screen for the media
+session.
 
 | Feature | Desktops | iOS | Android | What the demo declares for it |
 |---|---|---|---|---|
 | `media-picker` | the file dialog | PHPicker | the Photo Picker (`ACTION_GET_CONTENT` before Android 11) | Android: `MainActivity` forwards `onActivityResult` to `corundumActivityResult`. iOS: nothing |
 | `qr-code` | yes | yes | yes | nothing |
 | `qr-scan` | none | the camera (AVFoundation) | Google's code scanner | iOS: `NSCameraUsageDescription` in `project.yml`. Android: `play-services-code-scanner` in `app/build.gradle.kts`, and the `com.google.mlkit.vision.DEPENDENCIES` meta-data in the manifest, so Play installs the scanner with the app |
+| `media-session` | MPRIS (Linux), the media flyout (Windows), Now Playing (macOS) | the lock screen and Control Centre | none yet | iOS: `UIBackgroundModes: audio` in `project.yml`, and MediaPlayer and AVFAudio linked |
 
 On a device, from the Platform screen:
 
@@ -37,6 +41,24 @@ On a device, from the Platform screen:
   the desktop demo's screen with **Scan a QR code**. The first scan on Android may wait for
   Play to download the scanner; iOS asks for the camera the first time. A simulator and an
   emulator have no camera worth scanning with: try these on a device.
+
+To try the media session, open Media and press Play, then (on Android, which has no media
+session yet, the Media screen says so and its player runs without the OS):
+
+- Linux: the keyboard's media keys; GNOME's media panel (in the clock's menu) or KDE's
+  media widget, which show the track and its cover; or `playerctl -p corundum_demo
+  status|play-pause|next|position 30`. `busctl --user introspect
+  org.mpris.MediaPlayer2.corundum_demo /org/mpris/MediaPlayer2` shows the player as D-Bus
+  sees it.
+- Windows: the keyboard's media keys, and the media flyout over the volume (Windows 10)
+  or in the quick settings (Windows 11), with the track, the cover and the seek bar.
+- macOS: the keyboard's media keys, and Now Playing in the Control Centre.
+- iOS: the lock screen and the Control Centre, and headphones' buttons. The player plays
+  silence while it plays, since iOS shows only a player that plays sound; the Info.plist
+  lists `audio` under `UIBackgroundModes`, so it plays on with the screen locked. A call
+  or pulling the headphones out pauses it.
+
+The screen shows the last event the OS sent, by name.
 
 The demo logs the window's rects and the safe area whenever they change (`corundum demo:
 window`), so a CI log shows what the insets did.

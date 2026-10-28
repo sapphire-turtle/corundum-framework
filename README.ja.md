@@ -27,6 +27,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **設定**：設定画面。ページの一覧と開いたページを並べ、アプリやその下のフレームワークがページを差し込みます。設定を保存できる場所（デバイスとワークグループ、クライアントとサーバーなど）ごとのスコープのタブと、それを使ってテーマと言語を設定する外観ページもあります。ページは値を保存しません。保存はアプリが行います。
 - **外観の保存**：実際に効いているテーマと言語を、レールの並び順と一緒に、アプリの設定ディレクトリの `corundum.toml` に保存します（`look` と `store`、`serde` feature）。起動時は最初のフレームより前にこれを適用するので、アプリは保存した外観で開きます。ほかの場所（ワークグループ、サーバーなど）の設定をマージするアプリは、その結果をここに適用します。外観以外に保存先を持たないアプリは、デモのようにここだけに保存します。
 - **詳細ペイン**：どのシェルも持ち（`Shell::show`）、どの画面の横にも出すサイドペイン。中身はアプリが `ShellApp::side_ui` で描きます。メインビューで選んだもの（再生中のプレイリスト、開いているジャーナルなど）の詳細や、レールのアクションで書き始めた新しい項目を表示します。広い画面では右カラムに表示し、ステータスバーのボタンで隠せます。隠しているときは画面中央のカードに、スマートフォンではメインビューと切り替えて表示します。
+- **ファイルエクスプローラー**：`explorer::FileExplorer`。アプリが一覧して渡す（必要ならページごとに）フォルダーの中身を、上の階層をたどるパンくずリストの下に、列見出しで並べ替える一覧か、サムネイルのグリッドで表示します。スマートフォンでは指で押しやすい高さの行になります。クリック、Ctrl・Shift、キーボードで選び、右クリック（長押し）で「開く」「名前を変更」とアプリ独自の項目のメニューを出します。選んだ項目をフォルダーへドラッグすると移動を、F2 でその場で名前の変更を求めます。エクスプローラー自身はファイルに触れず、`ExplorerEvent` を返すだけで、移動・名前の変更・開く処理はアプリが行います。
 - **プラットフォーム**：ウィンドウがシステムに求め、egui だけでは得られないもの。ファイルを選ぶダイアログ（`platform::FilePicker`、`IMAGE_EXTENSIONS` などのフィルタ付き）とフォルダを選ぶダイアログ（`pick_folder`）、ファイルマネージャー（`open_in_file_manager`）、Android ではクリップボードとインセット。ダイアログは今のところデスクトップのみで、スマートフォンでは `file_picker_available` が使えないことを返します。代わりにスマートフォンには写真アルバムがあります。`platform::MediaPicker`（`media-picker` feature）はそこから写真と動画を選びます（iOS は PHPicker、Android は写真選択ツール。デスクトップではファイルダイアログ）。結果は、アプリが毎フレーム調べる `Pending` で受け取ります。`platform::scan_qr`（`qr-scan`）は、同じ形でスマートフォンのカメラから QR コードを読みます。
 - **QR コード**：`qr::QrCode`（`qr-code` feature）は文字列を QR コードとして描きます。デスクトップの画面からスマートフォンで読み取るためのものです（招待チケット、トークンなど）。
 - **ウィンドウ**：`window::run` はどのアプリでも同じ方法で wgpu のデスクトップウィンドウを開きます。`window::run_android` は Android 端末（GameActivity）で同じことをします。iOS では、iOS 27 が求めるシーンにウィンドウを入れ（アプリの Info.plist でシーンを宣言し、デリゲートに `CorundumSceneDelegate` を指定します。`window` を参照）、winit 0.30 だけでは使えない変換のあるキーボード（日本語、中国語、韓国語）を使えるようにします。
@@ -42,6 +43,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `media-picker` | `platform::MediaPicker`：スマートフォンのアルバムから写真と動画を選ぶ（デスクトップではファイルダイアログ）。Android アプリは Activity の `onActivityResult` を corundum に渡します（`corundum_framework_platform::media::available` を参照）。iOS では Info.plist のキーは要りません | 無効 |
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
+| `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 
@@ -54,6 +56,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **ランチャー**：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **システムの画面**（feature。既定では無効）：`media`。スマートフォンの写真ピッカー（`media-picker`）。選ばれたファイルはキャッシュにコピーします。`qr`。スマートフォンの QR コードスキャナー（`qr-scan`）。どちらも `pending::Pending` で結果を返します。
+- **メディアセッション**（feature `media-session`、既定では無効）：`media_session::MediaSession`。音楽プレイヤーを OS のメディアキーと「再生中」の表示に連動させます。アプリは曲（曲名、アーティスト、アルバム、長さ、ファイルかバイト列のジャケット）と、再生中かどうか・再生位置を渡し、再生、一時停止、切り替え、停止、次、前、シークをイベントとして受け取ります。フレームは止めません。Linux は zbus による MPRIS（libdbus に依存しない）、Windows はウィンドウの SystemMediaTransportControls、macOS と iOS は MediaPlayer の Now Playing とリモートコマンド、iOS ではさらにオーディオセッション（着信などによる中断、イヤホンを抜いたとき）。Android はまだなく、何もしません。有効にする iOS アプリは Info.plist の `UIBackgroundModes` に `audio` を入れます。また、音を鳴らしている間だけ表示されます。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ### corundum-framework
@@ -74,6 +77,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `media-picker` | `gui::platform::MediaPicker`：スマートフォンの写真ピッカー（`gui` も有効になる） | いいえ |
 | `qr-scan` | `gui::platform::scan_qr`：スマートフォンの QR コードスキャナー（`gui` も有効になる） | いいえ |
 | `qr-code` | `gui::qr`：文字列から描く QR コード（`gui` も有効になる） | いいえ |
+| `media-session` | `platform::media_session`、`gui` があれば `gui::media_session` も | いいえ |
 
 既定では egui を含みません。サーバーや CLI はそのまま使えます。デスクトップのアプリは `eframe` を、Android のアプリは `android` を有効にします。
 
