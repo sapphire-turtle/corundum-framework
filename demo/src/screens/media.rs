@@ -23,7 +23,8 @@ struct Track {
     album: &'static str,
     seconds: u64,
     /// Whether the OS is given a cover for it: the last track has none, to see the last
-    /// one's taken away.
+    /// one's taken away. Android has no session to give it to.
+    #[cfg_attr(target_os = "android", allow(dead_code))]
     cover: bool,
 }
 
