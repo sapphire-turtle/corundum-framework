@@ -12,6 +12,7 @@ demo-screen-language = Language
 demo-screen-detail = Detail
 demo-screen-files = Files
 demo-screen-platform = Platform
+demo-screen-media = Media
 demo-screen-settings = Settings
 # The rail's action: a new note, written in the side pane beside whatever screen is open.
 demo-action-new = New note
@@ -97,6 +98,25 @@ demo-platform-data = Data: { $path }
 demo-platform-cache = Cache: { $path }
 demo-platform-none = none
 demo-platform-refresh = Read again
+
+# The Media screen: a made-up player under the OS's media keys and in its "now playing".
+demo-media-intro = A player that plays nothing: a clock over three made-up tracks. Play it, then try the keyboard's media keys, the system's media panel or its lock screen. It follows them from every screen.
+demo-media-session = The OS's media session
+demo-media-connected = Connected: the OS shows this player and sends it its media keys.
+demo-media-disconnected = Not connected: { $error }
+demo-media-unsupported = This OS has no media session in corundum yet: the player runs, but the OS neither shows it nor sends it anything.
+demo-media-last-event = Last from the OS: { $event }
+demo-media-no-event = nothing yet
+demo-media-ios-silence = iOS shows a player only while it plays sound: this one plays silence while it plays.
+demo-media-player = Player
+demo-media-play = Play
+demo-media-pause = Pause
+demo-media-stop = Stop
+demo-media-next = Next
+demo-media-previous = Previous
+demo-media-playing = Playing
+demo-media-paused = Paused
+demo-media-stopped = Stopped
 
 # The Settings screen: corundum's, with the demo's pages in it.
 demo-settings-demo = Demo

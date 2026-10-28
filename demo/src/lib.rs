@@ -93,6 +93,7 @@ impl Demo {
                 "demo-screen-platform",
             )
             .into(),
+            Destination::new(Screen::Media, icons::music(), "demo-screen-media").into(),
         ])
         .with_footer(vec![Destination::new(
             Screen::Settings,
@@ -126,6 +127,9 @@ impl Demo {
     /// Draw the app into the window's root `ui`.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.log_rects(ui);
+        // The player follows the OS's media keys from every screen.
+        let on_screen = self.shell.current() == Some(Screen::Media);
+        self.app.state.media.update(ui.ctx(), on_screen);
         self.shell.show(ui, &mut self.app);
         if let Some(screen) = self.app.state.open.take() {
             self.shell.open(screen);
@@ -278,7 +282,12 @@ pub fn run() -> corundum_framework::eframe::Result<()> {
         .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug"));
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
     tracing::info!("corundum demo: start");
-    corundum_framework::gui::window::run(window_options(), |cc| Box::new(Demo::new(&cc.egui_ctx)))
+    corundum_framework::gui::window::run(window_options(), |cc| {
+        let mut demo = Demo::new(&cc.egui_ctx);
+        // The media session belongs to the window, which exists from here.
+        demo.app.state.media.connect(cc);
+        Box::new(demo)
+    })
 }
 
 /// The iOS app's entry: `main.m` in ios/ hands the main thread to this.

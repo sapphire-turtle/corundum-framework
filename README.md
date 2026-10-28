@@ -82,6 +82,7 @@ desktops and on phones.
 | `serde` | `Serialize` / `Deserialize` on the theme and language settings | no |
 | `update` | `update::UpdatesPanel`, the Settings → About rows that look for a newer release and say where it is (brings corundum-framework-update) | no |
 | `self-update` | The panel also downloads the release and replaces the running binary (brings `update`). A store build leaves it off, as the store updates the app | no |
+| `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not
@@ -104,6 +105,16 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   runs from a cargo target directory.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
+- **Media session** (feature `media-session`, off by default): `media_session::MediaSession`,
+  a music player under the OS's media keys and in its "now playing": the app tells it the
+  track (title, artist, album, length, a cover as a file or bytes) and whether it plays and
+  where, and reads back play, pause, toggle, stop, next, previous and seeks as events,
+  without holding its frame. An MPRIS player over zbus on Linux (no libdbus), the window's
+  SystemMediaTransportControls on Windows, MediaPlayer's now-playing and remote commands
+  on macOS and iOS, with the audio session on iOS (interruptions, headphones pulled out).
+  Android has none yet: there the session does nothing. An iOS app that turns it on lists
+  `audio` under `UIBackgroundModes` in its Info.plist, and is shown only while it plays
+  sound.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
 
@@ -124,6 +135,7 @@ through to the gui crate.
 | `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
 | `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
 | `serde` | The gui crate's `serde` | no |
+| `media-session` | `platform::media_session`, and `gui::media_session` with `gui` | no |
 
 The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
 Android app `android`.

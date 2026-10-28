@@ -50,6 +50,11 @@ self-update = [
     "dep:reqwest",
     "dep:self-replace",
 ]
+# `media_session`: the OS's media keys and its "now playing", for a music player, with
+# `media_session::start` making one for an eframe window. Off by default, as the platform
+# crate's is: it builds D-Bus and MediaPlayer bindings, and on iOS the app must declare
+# background audio (see corundum-framework-platform's `media_session`).
+media-session = ["corundum-framework-platform/media-session"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.

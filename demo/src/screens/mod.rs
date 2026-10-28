@@ -10,6 +10,7 @@ mod files;
 mod fonts;
 pub(crate) mod icons;
 mod language;
+pub(crate) mod media;
 mod overview;
 mod platform;
 pub(crate) mod settings;
@@ -34,13 +35,15 @@ pub enum Screen {
     Files,
     /// The clipboard, the insets and the app's directories.
     Platform,
+    /// A made-up player under the OS's media keys and in its "now playing".
+    Media,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 9] = [
+    pub const ALL: [Screen; 10] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
@@ -49,6 +52,7 @@ impl Screen {
         Screen::Detail,
         Screen::Files,
         Screen::Platform,
+        Screen::Media,
         Screen::Settings,
     ];
 }
@@ -75,6 +79,7 @@ pub(crate) struct State {
     detail: detail::State,
     files: files::State,
     platform: platform::State,
+    pub(crate) media: media::State,
 }
 
 impl State {
@@ -93,6 +98,7 @@ impl State {
             detail: detail::State::default(),
             files: files::State::default(),
             platform: platform::State::read(),
+            media: media::State::new(),
         }
     }
 }
@@ -124,6 +130,7 @@ pub(crate) fn ui(
                 Screen::Icons => icons::ui(ui, &mut state.icon_style),
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
+                Screen::Media => media::ui(ui, &mut state.media),
                 Screen::Settings | Screen::Detail | Screen::Files => {
                     unreachable!("drawn above")
                 }

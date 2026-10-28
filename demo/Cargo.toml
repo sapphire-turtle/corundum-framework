@@ -28,14 +28,25 @@ corundum-framework-build = { version = "0.3.0", path = "../crates/corundum-frame
 
 # Everywhere but Android, the window is eframe's (`gui::window::run`); on Android it is
 # GameActivity's (`gui::window::run_android`), and eframe's default does not build there.
+#
+# The demo turns on every feature its OS has an implementation of, so that each can be tried
+# from the demo as built: the media session on the desktops and iOS. Android has none yet,
+# and the Media screen says so.
 [target.'cfg(not(target_os = "android"))'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "serde"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["eframe", "media-session", "serde"] }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 # The updates panel replaces the running executable, which a phone's app never does (and its
 # HTTP client's TLS does not build for them), so neither Android nor iOS turns it on.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 corundum-framework = { path = "../crates/corundum-framework", features = ["gui-update"] }
+
+# iOS shows a player in its now-playing only while the player's audio session plays sound:
+# the Media screen's player plays silence through AVAudioPlayer while it plays.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6.4"
+objc2-avf-audio = { version = "0.3.2", default-features = false, features = ["std", "AVAudioPlayer"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData", "NSError", "NSString"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 corundum-framework = { path = "../crates/corundum-framework", features = ["android", "serde"] }

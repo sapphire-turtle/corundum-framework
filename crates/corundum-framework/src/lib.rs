@@ -25,6 +25,7 @@
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
 //! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
 //! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
+//! | `media-session` | `platform::media_session`, `gui::media_session` | the OS's media keys and its "now playing", for a music player; `gui::media_session::start` makes one for an eframe window (brings `platform`). An iOS app adds `UIBackgroundModes` `audio` to its Info.plist |
 //! | `serde` | `gui::look`, `gui::store` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `store`: the look in effect and the rail's order, kept on the device in a TOML file and put back before the first frame |
 
 #[cfg(feature = "platform")]

@@ -39,6 +39,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `serde` | テーマと言語の設定に `Serialize` / `Deserialize` | 無効 |
 | `update` | `update::UpdatesPanel`：設定の「About」で新しいリリースを調べ、その場所を示す行（corundum-framework-update も有効になる） | 無効 |
 | `self-update` | パネルがリリースのダウンロードと実行中のバイナリの置き換えも行う（`update` も有効になる）。ストア版ではストアが更新するため無効にします | 無効 |
+| `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 
@@ -50,6 +51,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
 - **ランチャー**：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
+- **メディアセッション**（feature `media-session`、既定では無効）：`media_session::MediaSession`。音楽プレイヤーを OS のメディアキーと「再生中」の表示に連動させます。アプリは曲（曲名、アーティスト、アルバム、長さ、ファイルかバイト列のジャケット）と、再生中かどうか・再生位置を渡し、再生、一時停止、切り替え、停止、次、前、シークをイベントとして受け取ります。フレームは止めません。Linux は zbus による MPRIS（libdbus に依存しない）、Windows はウィンドウの SystemMediaTransportControls、macOS と iOS は MediaPlayer の Now Playing とリモートコマンド、iOS ではさらにオーディオセッション（着信などによる中断、イヤホンを抜いたとき）。Android はまだなく、何もしません。有効にする iOS アプリは Info.plist の `UIBackgroundModes` に `audio` を入れます。また、音を鳴らしている間だけ表示されます。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ### corundum-framework
@@ -67,6 +69,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |
 | `android` | `gui::window::run_android`：Android のウィンドウ（`gui` も有効になる） | いいえ |
 | `serde` | gui クレートの `serde` | いいえ |
+| `media-session` | `platform::media_session`、`gui` があれば `gui::media_session` も | いいえ |
 
 既定では egui を含みません。サーバーや CLI はそのまま使えます。デスクトップのアプリは `eframe` を、Android のアプリは `android` を有効にします。
 
