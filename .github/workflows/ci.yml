@@ -24,10 +24,18 @@ jobs:
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
         cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
         # Each of the system's screens (off by default) alone, so none comes to need another.
-        for f in media-picker; do
+        for f in media-picker qr-scan; do
           cargo clippy -p corundum-framework-platform --all-targets --features $f --locked -- -D warnings || exit 1
+        done
+        for f in media-picker qr-scan qr-code; do
           cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
         done
+        # Without `qr-scan` an iOS app links no camera API (AVFoundation), which App Store
+        # review would ask an NSCameraUsageDescription for.
+        if cargo tree -p corundum-framework-gui --target aarch64-apple-ios -e normal --locked \
+            --features media-picker,qr-code | grep -q objc2-av-foundation; then
+          echo "AVFoundation is linked on iOS without qr-scan"; exit 1
+        fi
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
