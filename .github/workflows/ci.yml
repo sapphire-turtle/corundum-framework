@@ -23,6 +23,10 @@ jobs:
         # The configurations a store build compiles: no `self-update`.
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
         cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
+        # The media session is off by default; on, alone and through the facade.
+        cargo clippy -p corundum-framework-platform --all-targets --locked -- -D warnings
+        cargo clippy -p corundum-framework-platform --all-targets --features media-session --locked -- -D warnings
+        cargo clippy -p corundum-framework --all-targets --features media-session --locked -- -D warnings
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
@@ -43,6 +47,25 @@ jobs:
             # (`! grep` alone would not stop the loop under `set -e`.)
             if grep -q self-replace tree.txt; then
               echo "self-replace is linked for: $args"
+              exit 1
+            fi
+          done
+
+  # Without `media-session` the platform crate, and the facade's default, must not build zbus
+  # (or MediaPlayer): an app that plays nothing carries no D-Bus.
+  media-session-off:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: zbus is not built without media-session
+        run: |
+          for args in \
+            "-p corundum-framework-platform" \
+            "-p corundum-framework"; do
+            cargo tree --locked --target all $args -e normal > tree.txt
+            if grep -qE '(zbus|objc2-media-player|objc2-avf-audio) v' tree.txt; then
+              echo "the media session's dependencies are built for: $args"
               exit 1
             fi
           done
