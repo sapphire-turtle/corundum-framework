@@ -8,6 +8,11 @@
 //! that register another program. Nothing is registered for a build under cargo's
 //! `target` directory, nor when `CORUNDUM_NO_LAUNCHER` is set, and on iOS and Android there
 //! is no app menu to register in.
+//!
+//! Inside a Velopack package the installer owns the entry on Windows and macOS, so
+//! [`register`] writes none there and removes what it wrote before the app was packaged
+//! ([`in_package`]); in an AppImage the entry starts the AppImage file, not the executable
+//! inside its temporary mount.
 
 #[cfg(all(
     unix,
@@ -24,6 +29,7 @@ mod macos;
 #[cfg(any(windows, test))]
 mod windows;
 
+use crate::package::{self, PackageKind, PackageLayout};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -91,17 +97,68 @@ impl Root {
     }
 }
 
+/// Where the app's entry is to come from, as [`in_package`] decides.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Placement {
+    /// The launcher writes the entry, starting this executable.
+    Register(PathBuf),
+    /// The package's installer writes the entry; the launcher writes none.
+    StepAside,
+}
+
+/// Where the entry comes from for the package `layout` the app runs from: the running
+/// executable outside a package, the AppImage file in an AppImage (the executable is in a
+/// mount that is gone once the app exits), and the installer's own entry in a Windows or
+/// macOS package, which makes a Start menu shortcut and is itself the bundle.
+pub fn in_package(layout: Option<&PackageLayout>) -> io::Result<Placement> {
+    match layout {
+        None => running_exe().map(Placement::Register),
+        Some(layout) => Ok(match layout.kind {
+            PackageKind::AppImage => Placement::Register(layout.root.clone()),
+            PackageKind::Windows | PackageKind::MacBundle => Placement::StepAside,
+        }),
+    }
+}
+
 /// Registers the running executable, unless it is a cargo build or the variable
-/// `CORUNDUM_NO_LAUNCHER` is set.
+/// `CORUNDUM_NO_LAUNCHER` is set. In a Windows or macOS package it registers nothing and
+/// removes the entry an earlier, unpackaged run left, which would double the installer's.
 pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
-    let exe = running_exe()?;
-    if skipped(&exe, std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some()) {
+    let env_set = std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some();
+    if env_set {
         return Ok(Registered::Skipped);
     }
-    match Root::detect() {
-        Some(root) => register_at(spec, &root, &exe),
-        None => Ok(Registered::Skipped),
+    let layout = package::current();
+    let Some(root) = Root::detect() else {
+        return Ok(Registered::Skipped);
+    };
+    match in_package(layout.as_ref())? {
+        Placement::Register(exe) if skipped(&exe, env_set) => Ok(Registered::Skipped),
+        Placement::Register(exe) => register_at(spec, &root, &exe),
+        Placement::StepAside => {
+            if let Some(layout) = &layout {
+                step_aside(spec, &root, layout)?;
+            }
+            Ok(Registered::Skipped)
+        }
     }
+}
+
+/// Removes what the launcher wrote before the app ran from the package `layout`: on
+/// Windows its Start Menu shortcut, on macOS the bundle it generated under the app's name,
+/// never the bundle the app runs from.
+fn step_aside(spec: &LauncherSpec, root: &Root, layout: &PackageLayout) -> io::Result<()> {
+    #[cfg(windows)]
+    if layout.kind == PackageKind::Windows {
+        return windows::unregister(spec, root);
+    }
+    #[cfg(target_os = "macos")]
+    if layout.kind == PackageKind::MacBundle {
+        return macos::remove_generated(spec, root, &layout.root);
+    }
+    // Another OS's layout found here is nothing this OS's launcher wrote.
+    let _ = (spec, root, layout);
+    Ok(())
 }
 
 /// Removes the app's entry, if there is one.
@@ -112,10 +169,11 @@ pub fn unregister(spec: &LauncherSpec) -> io::Result<()> {
     }
 }
 
-/// Whether the app's entry is there and names the running executable. On iOS and Android,
-/// where there is no home directory or the executable cannot be found, and where
-/// [`register`] would skip the executable (a cargo build, or `CORUNDUM_NO_LAUNCHER` set),
-/// there is no entry to look at: [`Status::Unsupported`].
+/// Whether the app's entry is there and names the running executable, or the AppImage file
+/// in an AppImage. On iOS and Android, where there is no home directory or the executable
+/// cannot be found, where [`register`] would skip the executable (a cargo build, or
+/// `CORUNDUM_NO_LAUNCHER` set), and in a Windows or macOS package, whose installer owns the
+/// entry, there is no entry to look at: [`Status::Unsupported`].
 pub fn status(spec: &LauncherSpec) -> Status {
     if cfg!(any(target_os = "ios", target_os = "android")) {
         return Status::Unsupported;
@@ -123,7 +181,7 @@ pub fn status(spec: &LauncherSpec) -> Status {
     status_in(
         spec,
         Root::detect(),
-        running_exe(),
+        in_package(package::current().as_ref()),
         std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some(),
     )
 }
@@ -140,16 +198,18 @@ fn running_exe() -> io::Result<PathBuf> {
     }
 }
 
-/// [`status`] for the directories and the executable as found, or not found, and whether
+/// [`status`] for the directories and the placement as found, or not found, and whether
 /// the variable `CORUNDUM_NO_LAUNCHER` is set.
 fn status_in(
     spec: &LauncherSpec,
     root: Option<Root>,
-    exe: io::Result<PathBuf>,
+    placement: io::Result<Placement>,
     env_set: bool,
 ) -> Status {
-    match (root, exe) {
-        (Some(root), Ok(exe)) if !skipped(&exe, env_set) => status_at(spec, &root, &exe),
+    match (root, placement) {
+        (Some(root), Ok(Placement::Register(exe))) if !skipped(&exe, env_set) => {
+            status_at(spec, &root, &exe)
+        }
         _ => Status::Unsupported,
     }
 }
@@ -331,11 +391,75 @@ mod tests {
             appdata: None,
         };
         assert_eq!(
-            status_in(&spec, None, Ok(PathBuf::from("/usr/bin/app")), false),
+            status_in(
+                &spec,
+                None,
+                Ok(Placement::Register(PathBuf::from("/usr/bin/app"))),
+                false
+            ),
             Status::Unsupported
         );
         assert_eq!(
             status_in(&spec, Some(root), Err(io::Error::other("no exe")), false),
+            Status::Unsupported
+        );
+    }
+
+    #[test]
+    fn placement_by_layout() {
+        let layout = |kind, root: &str| PackageLayout {
+            kind,
+            root: PathBuf::from(root),
+            bin_dir: PathBuf::from(root).join("bin"),
+        };
+        assert_eq!(
+            in_package(None).unwrap(),
+            Placement::Register(running_exe().unwrap())
+        );
+        // Inside an AppImage the executable is a temporary mount; the AppImage file stays.
+        assert_eq!(
+            in_package(Some(&layout(
+                PackageKind::AppImage,
+                "/home/u/Apps/Demo.AppImage"
+            )))
+            .unwrap(),
+            Placement::Register(PathBuf::from("/home/u/Apps/Demo.AppImage"))
+        );
+        assert_eq!(
+            in_package(Some(&layout(
+                PackageKind::Windows,
+                "C:/Users/u/AppData/Local/Demo"
+            )))
+            .unwrap(),
+            Placement::StepAside
+        );
+        assert_eq!(
+            in_package(Some(&layout(
+                PackageKind::MacBundle,
+                "/Applications/Demo.app"
+            )))
+            .unwrap(),
+            Placement::StepAside
+        );
+    }
+
+    #[test]
+    fn a_package_that_owns_its_entry_has_none_to_look_at() {
+        let spec = LauncherSpec {
+            id: "net.example.Test",
+            name: "Test",
+            description: "A test app",
+            category: "Utility",
+            icon_svg: b"<svg/>",
+            bundle_prefix: "net.example",
+        };
+        let root = Root {
+            home: PathBuf::from("/nonexistent/home"),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        assert_eq!(
+            status_in(&spec, Some(root), Ok(Placement::StepAside), false),
             Status::Unsupported
         );
     }
@@ -355,14 +479,23 @@ mod tests {
             xdg_data_home: None,
             appdata: None,
         };
-        let cargo = || Ok(PathBuf::from("/src/app/target/debug/app"));
+        let cargo = || {
+            Ok(Placement::Register(PathBuf::from(
+                "/src/app/target/debug/app",
+            )))
+        };
         assert_eq!(
             status_in(&spec, Some(root()), cargo(), false),
             Status::Unsupported
         );
         // The variable skips any path, so nothing is looked at even for an installed one.
         assert_eq!(
-            status_in(&spec, Some(root()), Ok(PathBuf::from("/usr/bin/app")), true),
+            status_in(
+                &spec,
+                Some(root()),
+                Ok(Placement::Register(PathBuf::from("/usr/bin/app"))),
+                true
+            ),
             Status::Unsupported
         );
     }

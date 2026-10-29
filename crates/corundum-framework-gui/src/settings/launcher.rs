@@ -14,8 +14,8 @@ use crate::tr;
 /// person's choice is kept there, so a removed entry is not written back on the next start;
 /// without a store, a removal lasts only for the session.
 /// Where there is no app menu to look in ([`Status::Unsupported`]: on iOS and Android, or
-/// without a home directory, or for a build [`launcher::register`] skips) the row shows only
-/// its label.
+/// without a home directory, or for a build [`launcher::register`] skips) and in a Windows
+/// or macOS package, whose installer owns the entry, the row draws nothing.
 pub struct LauncherRow {
     spec: LauncherSpec,
     /// How the entry's state is found: [`launcher::status`], or a stand-in in the tests.
@@ -63,21 +63,25 @@ impl LauncherRow {
         let status = *self
             .status
             .get_or_insert_with(|| (self.status_of)(&self.spec));
-        let act = match status {
-            Status::Registered | Status::Stale => Some((Act::Remove, "corundum-launcher-remove")),
-            Status::Absent => Some((Act::Add, "corundum-launcher-add")),
-            Status::Unsupported => None,
+        let (act, id) = match status {
+            Status::Registered | Status::Stale => (Act::Remove, "corundum-launcher-remove"),
+            Status::Absent => (Act::Add, "corundum-launcher-add"),
+            Status::Unsupported => {
+                #[cfg(test)]
+                {
+                    self.shown = None;
+                }
+                return;
+            }
         };
         #[cfg(test)]
         {
-            self.shown = act.map(|(_, id)| id);
+            self.shown = Some(id);
         }
         let mut clicked = None;
         ui.horizontal(|ui| {
             ui.label(tr!(ui, "corundum-launcher-in-menu"));
-            if let Some((act, id)) = act
-                && ui.button(tr!(ui, id)).clicked()
-            {
+            if ui.button(tr!(ui, id)).clicked() {
                 clicked = Some(act);
             }
         });
@@ -151,6 +155,22 @@ mod tests {
     #[test]
     fn without_an_app_menu_there_is_no_button() {
         assert_eq!(shown(|_| Status::Unsupported), None);
+    }
+
+    #[test]
+    fn without_an_app_menu_the_row_is_not_drawn() {
+        let drawn = |status_of: fn(&LauncherSpec) -> Status| {
+            let mut row = LauncherRow::with_status(SPEC, status_of);
+            let mut moved = false;
+            render([600.0, 400.0], |ui| {
+                let before = ui.cursor().min;
+                row.ui(ui);
+                moved = ui.cursor().min != before;
+            });
+            moved
+        };
+        assert!(drawn(|_| Status::Absent));
+        assert!(!drawn(|_| Status::Unsupported));
     }
 
     #[test]

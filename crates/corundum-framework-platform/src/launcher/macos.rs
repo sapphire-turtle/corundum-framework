@@ -116,6 +116,37 @@ pub(crate) fn unregister(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     }
 }
 
+/// Whether `bundle` is one [`register`] wrote: its executable is a link, and it holds none
+/// of the `sq.version` files a Velopack package's bundle has.
+pub(crate) fn is_generated(spec: &LauncherSpec, bundle: &Path) -> bool {
+    let contents = bundle.join("Contents");
+    std::fs::symlink_metadata(contents.join("MacOS").join(spec.id))
+        .is_ok_and(|m| m.file_type().is_symlink())
+        && !contents.join("MacOS/sq.version").exists()
+        && !contents.join("Resources/sq.version").exists()
+}
+
+/// Removes the bundle [`register`] wrote under the app's name, as a package's installer
+/// now provides the app's bundle. A bundle that is not a generated one is left, and so is
+/// one that is, or holds, `running`, the bundle the app runs from: paths are compared
+/// once links and `..` are resolved, and when either cannot be resolved nothing is removed.
+pub(crate) fn remove_generated(spec: &LauncherSpec, root: &Root, running: &Path) -> io::Result<()> {
+    let bundle = bundle_dir(spec, root);
+    if !is_generated(spec, &bundle) {
+        return Ok(());
+    }
+    let (Ok(bundle), Ok(running)) = (bundle.canonicalize(), running.canonicalize()) else {
+        return Ok(());
+    };
+    if running.starts_with(&bundle) || bundle.starts_with(&running) {
+        return Ok(());
+    }
+    match std::fs::remove_dir_all(bundle) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 /// Whether the app's bundle is there and its launcher links to `exe`. Only the link is
 /// compared: a changed name or icon is not seen as stale, but [`register`] rewrites it on
 /// the next start.
@@ -221,6 +252,83 @@ mod tests {
         assert!(!dir.path().join("Applications/Corundum Demo.app").exists());
         assert_eq!(status(&SPEC, &root, b), Status::Absent);
         unregister(&SPEC, &root).unwrap();
+    }
+
+    /// A bundle as a Velopack package lays it out: the real executable, the updater and
+    /// the version file.
+    fn package_bundle(at: &Path) {
+        let macos = at.join("Contents/MacOS");
+        std::fs::create_dir_all(&macos).unwrap();
+        std::fs::create_dir_all(at.join("Contents/Resources")).unwrap();
+        std::fs::write(macos.join("corundum-demo"), b"binary").unwrap();
+        std::fs::write(macos.join("UpdateMac"), b"updater").unwrap();
+        std::fs::write(macos.join("sq.version"), b"<package/>").unwrap();
+    }
+
+    #[test]
+    fn a_generated_bundle_is_told_from_a_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = root(dir.path());
+        register(&SPEC, &root, Path::new("/opt/a/corundum-demo")).unwrap();
+        assert!(is_generated(&SPEC, &bundle_dir(&SPEC, &root)));
+        let package = dir.path().join("Package/Corundum Demo.app");
+        package_bundle(&package);
+        assert!(!is_generated(&SPEC, &package));
+        // A bundle holding only the version file is still a package's.
+        let half = dir.path().join("Half/Corundum Demo.app");
+        std::fs::create_dir_all(half.join("Contents/MacOS")).unwrap();
+        std::os::unix::fs::symlink("/opt/a/x", half.join("Contents/MacOS/corundum-demo")).unwrap();
+        std::fs::create_dir_all(half.join("Contents/Resources")).unwrap();
+        std::fs::write(half.join("Contents/Resources/sq.version"), b"").unwrap();
+        assert!(!is_generated(&SPEC, &half));
+        assert!(!is_generated(&SPEC, &dir.path().join("Missing.app")));
+    }
+
+    #[test]
+    fn stepping_aside_removes_a_generated_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = root(dir.path());
+        register(&SPEC, &root, Path::new("/opt/a/corundum-demo")).unwrap();
+        let running = dir.path().join("Elsewhere/Corundum Demo.app");
+        package_bundle(&running);
+        remove_generated(&SPEC, &root, &running).unwrap();
+        assert!(!bundle_dir(&SPEC, &root).exists());
+        assert!(running.is_dir());
+        // Nothing there is no error.
+        remove_generated(&SPEC, &root, &running).unwrap();
+    }
+
+    #[test]
+    fn stepping_aside_never_removes_a_package() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = root(dir.path());
+        let installed = bundle_dir(&SPEC, &root);
+        package_bundle(&installed);
+        let running = dir.path().join("Elsewhere/Corundum Demo.app");
+        package_bundle(&running);
+        remove_generated(&SPEC, &root, &running).unwrap();
+        assert!(installed.join("Contents/MacOS/UpdateMac").is_file());
+    }
+
+    #[test]
+    fn stepping_aside_never_removes_the_running_bundle() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = root(dir.path());
+        // A bundle at the generated one's path that looks generated, and is the one running.
+        register(&SPEC, &root, Path::new("/opt/a/corundum-demo")).unwrap();
+        let bundle = bundle_dir(&SPEC, &root);
+        assert!(is_generated(&SPEC, &bundle));
+        remove_generated(&SPEC, &root, &bundle).unwrap();
+        assert!(bundle.join("Contents/Info.plist").is_file());
+        // The same bundle by another spelling of its path: through a link and with a `..`.
+        let alias = dir.path().join("Alias");
+        std::os::unix::fs::symlink(dir.path(), &alias).unwrap();
+        let spelled = alias.join("Applications/../Applications/Corundum Demo.app");
+        remove_generated(&SPEC, &root, &spelled).unwrap();
+        assert!(bundle.join("Contents/Info.plist").is_file());
+        // An executable inside it, as a path from the running process might be.
+        remove_generated(&SPEC, &root, &spelled.join("Contents/MacOS")).unwrap();
+        assert!(bundle.join("Contents/Info.plist").is_file());
     }
 
     #[test]

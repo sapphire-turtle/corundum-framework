@@ -175,6 +175,31 @@ Terminal=false
     }
 
     #[test]
+    fn an_appimage_entry_execs_the_appimage() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = Root {
+            home: dir.path().into(),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        let appimage = Path::new("/home/u/Applications/Corundum Demo-x86_64.AppImage");
+        assert_eq!(
+            register_at(&SPEC, &root, appimage).unwrap(),
+            Registered::Written
+        );
+        let text = std::fs::read_to_string(
+            dir.path()
+                .join(".local/share/applications/corundum-demo.desktop"),
+        )
+        .unwrap();
+        assert!(
+            text.lines()
+                .any(|l| l == "Exec=\"/home/u/Applications/Corundum Demo-x86_64.AppImage\" %U")
+        );
+        assert_eq!(status_at(&SPEC, &root, appimage), Status::Registered);
+    }
+
+    #[test]
     fn register_writes_once_then_rewrites_a_moved_exe() {
         let dir = tempfile::tempdir().unwrap();
         let root = Root {
