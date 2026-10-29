@@ -406,7 +406,7 @@ pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod)
                 StoreKind::MacAppStore => "the Mac App Store",
             }
         ),
-        InstallMethod::Velopack => "Updated by the app itself: Settings › About.".to_owned(),
+        InstallMethod::Velopack => "Updated by the app itself.".to_owned(),
         InstallMethod::Release => format!("download it from {}", release.url),
     }
 }
