@@ -916,6 +916,7 @@ version = "0.3.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
+ "corundum-framework-package",
  "corundum-framework-platform",
  "corundum-framework-update",
  "eframe",

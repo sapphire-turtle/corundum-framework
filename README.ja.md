@@ -65,6 +65,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `package` | `package`：corundum-framework-package（`platform` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
+| `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |
 | `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |
 | `android` | `gui::window::run_android`：Android のウィンドウ（`gui` も有効になる） | いいえ |
 | `serde` | gui クレートの `serde` | いいえ |

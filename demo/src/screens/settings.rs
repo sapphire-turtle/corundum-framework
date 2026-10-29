@@ -176,7 +176,7 @@ impl About {
         };
         About {
             launcher: corundum_framework::gui::settings::LauncherRow::new(crate::LAUNCHER),
-            updates: UpdatesPanel::new(vec![target], "corundum-framework-demo"),
+            updates: UpdatesPanel::new(vec![target.into()], "corundum-framework-demo"),
         }
     }
 }

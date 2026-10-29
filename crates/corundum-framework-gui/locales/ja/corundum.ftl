@@ -80,6 +80,12 @@ corundum-update-by-snap = Snap Store が更新します
 corundum-update-by-microsoft-store = Microsoft Store が更新します
 corundum-update-by-mac-app-store = Mac App Store が更新します
 corundum-update-from-release-page = リリースページからダウンロードしてください
+# パッケージの行（`update::Target::Package`、`Target::Delegated`）：パッケージは自分で更新し、ダウンロードした更新は再起動で適用する。失敗と再試行は上の行と同じ。
+corundum-update-package-current = { $version }
+corundum-update-package-uptodate = 最新です（{ $version }）
+corundum-update-package-downloading = ダウンロードしています…
+corundum-update-package-ready = { $version } の準備ができました
+corundum-update-package-restart = 再起動して更新
 
 # アプリメニューの行（`settings::LauncherRow`）：ラベル、二つのボタン、クリックが効かなかった理由。
 corundum-launcher-in-menu = アプリメニューに表示

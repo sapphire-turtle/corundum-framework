@@ -5,11 +5,16 @@ use std::sync::Arc;
 use std::sync::mpsc::TryRecvError;
 #[cfg(test)]
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, Instant};
 
-use corundum_framework_update::{InstallMethod, Release, ReleaseSource, StoreKind, advice_command};
+use corundum_framework_update::{
+    InstallMethod, PackageState, PackageStatus, Release, ReleaseSource, StoreKind, advice_command,
+};
 use semver::Version;
 
+use super::package_row::{RowButton, package_row};
 use super::state::{Event, RestartOutcome, Retry, RowState, Step, on_check, on_event};
+use super::target::Target;
 use super::worker::{self, Job, Worker};
 use crate::tr;
 
@@ -42,15 +47,19 @@ pub enum AfterUpdate {
 /// It looks the releases up when first shown and on its Check button, never before; the
 /// work runs on a thread of its own, which ends when the panel is dropped. One target is
 /// installed at a time. Without the `self-update` feature it only reports, and says where
-/// each release is.
+/// each binary's release is; a package updates itself whatever the features.
 pub struct UpdatesPanel {
-    targets: Arc<[UpdateTarget]>,
+    targets: Arc<[Target]>,
+    /// The targets' labels, asked once.
+    labels: Vec<String>,
     rows: Vec<Row>,
     user_agent: String,
     /// Started on the first `ui`.
     worker: Option<Worker>,
     /// Whether the first check went out.
     checked: bool,
+    /// When the delegated packages were last asked their state.
+    last_poll: Option<Instant>,
     /// Each row's button, and whether it was enabled, for the tests.
     #[cfg(test)]
     buttons: Vec<Option<(egui::Rect, bool)>>,
@@ -60,8 +69,24 @@ pub struct UpdatesPanel {
 struct Row {
     /// The version running now; see [`UpdatesPanel::set_current`].
     current: Option<Version>,
+    /// A binary's state; a package row's is in `package`.
     state: RowState,
     method: Option<InstallMethod>,
+    /// A package row's state, `None` for a binary.
+    package: Option<PackageRow>,
+}
+
+/// What a package row knows besides its updater's state.
+struct PackageRow {
+    /// The updater's state: read every frame for this app's package, asked on the worker
+    /// for a delegated one.
+    status: PackageStatus,
+    /// Why the last apply failed, until the next check.
+    failure: Option<String>,
+    /// Whether an apply is under way.
+    applying: bool,
+    /// Whether a check or a poll is waiting for the worker.
+    asking: bool,
 }
 
 /// What a row's button asked for.
@@ -71,28 +96,44 @@ enum Action {
     Update(Release),
     /// Do what the failed row's retry does.
     Retry(Retry),
+    /// Apply a package's downloaded update.
+    Apply,
 }
 
 /// Whether this build installs releases.
 const CAN_INSTALL: bool = cfg!(feature = "self-update");
 
+/// How often a delegated package is asked its state while the panel is shown.
+const POLL_EVERY: Duration = Duration::from_secs(5);
+
 impl UpdatesPanel {
     /// The rows for `targets`; GitHub is asked as `user_agent`.
-    pub fn new(targets: Vec<UpdateTarget>, user_agent: &str) -> UpdatesPanel {
+    pub fn new(targets: Vec<Target>, user_agent: &str) -> UpdatesPanel {
         let rows = targets
             .iter()
             .map(|target| Row {
-                current: target.current.clone(),
+                current: target.binary().and_then(|target| target.current.clone()),
                 state: RowState::Checking,
                 method: None,
+                package: target.package().map(|_| PackageRow {
+                    status: PackageStatus {
+                        current: None,
+                        state: PackageState::Checking,
+                    },
+                    failure: None,
+                    applying: false,
+                    asking: false,
+                }),
             })
             .collect();
         UpdatesPanel {
+            labels: targets.iter().map(Target::label).collect(),
             targets: targets.into(),
             rows,
             user_agent: user_agent.to_owned(),
             worker: None,
             checked: false,
+            last_poll: None,
             #[cfg(test)]
             buttons: Vec::new(),
         }
@@ -101,7 +142,7 @@ impl UpdatesPanel {
     /// A panel whose worker is the other ends of `jobs` and `results`: for the tests.
     #[cfg(test)]
     pub(crate) fn with_worker(
-        targets: Vec<UpdateTarget>,
+        targets: Vec<Target>,
         jobs: Sender<Job>,
         results: Receiver<(usize, Event)>,
     ) -> UpdatesPanel {
@@ -130,19 +171,29 @@ impl UpdatesPanel {
         // Looked up when first shown, not when the app starts.
         if !self.checked {
             self.checked = true;
+            for target in self.targets.iter() {
+                target.repaint_on_change(ui.ctx());
+            }
             self.check_all(ui.ctx());
+            self.last_poll = Some(Instant::now());
         }
+        self.poll(ui.ctx());
         self.receive(ui.ctx());
+        for (target, row) in self.targets.iter().zip(&mut self.rows) {
+            if let (Some(status), Some(package)) = (target.live_status(), &mut row.package) {
+                package.status = status;
+            }
+        }
 
         if ui.button(tr!(ui, "corundum-update-check")).clicked() {
             self.check_all(ui.ctx());
         }
         ui.add_space(8.0);
         // One install at a time: while a row works, the others' buttons wait.
-        let idle = !self
-            .rows
-            .iter()
-            .any(|row| matches!(row.state, RowState::Working { .. }));
+        let idle = !self.rows.iter().any(|row| {
+            matches!(row.state, RowState::Working { .. })
+                || row.package.as_ref().is_some_and(|package| package.applying)
+        });
         let mut action = None;
         #[cfg(test)]
         self.buttons.clear();
@@ -151,12 +202,22 @@ impl UpdatesPanel {
             .spacing([16.0, 8.0])
             .show(ui, |ui| {
                 for (index, (target, row)) in self.targets.iter().zip(&self.rows).enumerate() {
-                    ui.label(&target.label);
-                    match &row.current {
+                    ui.label(&self.labels[index]);
+                    let current = match &row.package {
+                        Some(package) => package.status.current.as_ref(),
+                        None => row.current.as_ref(),
+                    };
+                    match current {
                         Some(version) => ui.label(version.to_string()),
                         None => ui.weak(tr!(ui, "corundum-update-not-running")),
                     };
-                    let (asked, _button) = ui.horizontal(|ui| row_ui(ui, target, row, idle)).inner;
+                    let (asked, _button) = ui
+                        .horizontal(|ui| match (target.binary(), &row.package) {
+                            (Some(target), _) => row_ui(ui, target, row, idle),
+                            (None, Some(package)) => package_ui(ui, package, idle),
+                            (None, None) => (None, None),
+                        })
+                        .inner;
                     if let Some(asked) = asked {
                         action = Some((index, asked));
                     }
@@ -173,22 +234,75 @@ impl UpdatesPanel {
             #[cfg(not(feature = "self-update"))]
             Some((index, Action::Retry(Retry::Update(_)))) => self.check(ui.ctx(), index),
             Some((index, Action::Retry(Retry::Check))) => self.check(ui.ctx(), index),
+            Some((index, Action::Apply)) => self.apply(ui.ctx(), index),
             None => {}
+        }
+        // Asked again while shown: `ui` runs at least that often.
+        if self.targets.iter().any(Target::is_polled) {
+            ui.ctx().request_repaint_after(POLL_EVERY);
         }
     }
 
     /// Look every row up again but one installing.
     fn check_all(&mut self, ctx: &egui::Context) {
         for index in 0..self.rows.len() {
-            if !matches!(self.rows[index].state, RowState::Working { .. }) {
+            let row = &self.rows[index];
+            let busy = match &row.package {
+                Some(package) => package.applying,
+                None => matches!(row.state, RowState::Working { .. }),
+            };
+            if !busy {
                 self.check(ctx, index);
             }
         }
     }
 
     fn check(&mut self, ctx: &egui::Context, index: usize) {
-        self.rows[index].state = RowState::Checking;
+        let row = &mut self.rows[index];
+        match &mut row.package {
+            Some(package) => {
+                package.failure = None;
+                package.asking = true;
+                // This app's package shows its own state from the next frame.
+                package.status.state = PackageState::Checking;
+            }
+            None => row.state = RowState::Checking,
+        }
         self.send(ctx, index, Job::Check(index));
+    }
+
+    /// Ask the delegated packages their state, if it has been [`POLL_EVERY`] since the last
+    /// time; but not one already waiting for an answer, or applying.
+    fn poll(&mut self, ctx: &egui::Context) {
+        if self
+            .last_poll
+            .is_some_and(|last| last.elapsed() < POLL_EVERY)
+        {
+            return;
+        }
+        self.last_poll = Some(Instant::now());
+        for index in 0..self.rows.len() {
+            let waiting = self.rows[index]
+                .package
+                .as_ref()
+                .is_none_or(|package| package.asking || package.applying);
+            if self.targets[index].is_polled() && !waiting {
+                if let Some(package) = &mut self.rows[index].package {
+                    package.asking = true;
+                }
+                self.send(ctx, index, Job::Poll(index));
+            }
+        }
+    }
+
+    /// Apply the package's downloaded update: on the worker, as the app's `before_apply`
+    /// may take a while. This app exits when it succeeds.
+    fn apply(&mut self, ctx: &egui::Context, index: usize) {
+        if let Some(package) = &mut self.rows[index].package {
+            package.applying = true;
+            package.failure = None;
+        }
+        self.send(ctx, index, Job::Apply(index));
     }
 
     #[cfg(feature = "self-update")]
@@ -208,7 +322,7 @@ impl UpdatesPanel {
             .as_ref()
             .is_some_and(|worker| worker.jobs.send(job).is_ok());
         if !sent {
-            self.rows[index].state = stopped(ctx);
+            stop(ctx, &mut self.rows[index]);
         }
     }
 
@@ -232,6 +346,26 @@ impl UpdatesPanel {
         for (index, event) in results {
             let (Some(target), Some(row)) = (self.targets.get(index), self.rows.get_mut(index))
             else {
+                continue;
+            };
+            if let Some(package) = &mut row.package {
+                match event {
+                    Event::Status(status) => {
+                        package.asking = false;
+                        match status {
+                            Ok(status) => package.status = status,
+                            Err(message) => package.status.state = PackageState::Failed(message),
+                        }
+                    }
+                    Event::Applied(applied) => {
+                        package.applying = false;
+                        package.failure = applied.err();
+                    }
+                    _ => {}
+                }
+                continue;
+            }
+            let Some(target) = target.binary() else {
                 continue;
             };
             match event {
@@ -269,20 +403,85 @@ impl UpdatesPanel {
         // The worker ended (a restart that panicked, say): what waits on it never comes.
         if gone {
             for row in &mut self.rows {
-                if matches!(row.state, RowState::Checking | RowState::Working { .. }) {
-                    row.state = stopped(ctx);
+                let waiting = match &row.package {
+                    Some(package) => package.asking || package.applying,
+                    None => matches!(row.state, RowState::Checking | RowState::Working { .. }),
+                };
+                if waiting {
+                    stop(ctx, row);
                 }
             }
         }
     }
 }
 
-/// A row whose worker is gone.
-fn stopped(ctx: &egui::Context) -> RowState {
-    RowState::Failed {
-        message: tr!(ctx, "corundum-update-worker-stopped"),
-        retry: Retry::Check,
+/// Fail `row`, whose worker is gone.
+fn stop(ctx: &egui::Context, row: &mut Row) {
+    let message = tr!(ctx, "corundum-update-worker-stopped");
+    match &mut row.package {
+        Some(package) => {
+            package.asking = false;
+            package.applying = false;
+            package.failure = Some(message);
+        }
+        None => {
+            row.state = RowState::Failed {
+                message,
+                retry: Retry::Check,
+            }
+        }
     }
+}
+
+/// A package row's state and button, from [`package_row`]: what its button asked for, and
+/// the button.
+fn package_ui(
+    ui: &mut egui::Ui,
+    package: &PackageRow,
+    idle: bool,
+) -> (Option<Action>, Option<egui::Response>) {
+    if package.applying {
+        ui.spinner();
+        ui.label(tr!(ui, "corundum-update-restarting"));
+        return (None, None);
+    }
+    let status = match &package.failure {
+        Some(failure) => PackageStatus {
+            current: package.status.current.clone(),
+            state: PackageState::Failed(failure.clone()),
+        },
+        None => package.status.clone(),
+    };
+    let view = package_row(&status);
+    if view.spinner {
+        ui.spinner();
+    }
+    if let Some(progress) = view.progress {
+        ui.add(
+            egui::ProgressBar::new(progress)
+                .desired_width(120.0)
+                .show_percentage(),
+        );
+    }
+    let (id, args) = view.text;
+    let args: Vec<_> = args
+        .into_iter()
+        .map(|(name, value)| (name, crate::i18n::Arg::from(value)))
+        .collect();
+    ui.label(crate::i18n::tr_args(ui.ctx(), id, &args));
+    let Some(button) = view.button else {
+        return (None, None);
+    };
+    let (text, action) = match button {
+        RowButton::RestartToUpdate => (tr!(ui, "corundum-update-package-restart"), Action::Apply),
+        RowButton::Retry => (
+            tr!(ui, "corundum-update-retry"),
+            Action::Retry(Retry::Check),
+        ),
+    };
+    let response = ui.add_enabled(idle, egui::Button::new(text));
+    let action = response.clicked().then_some(action);
+    (action, Some(response))
 }
 
 /// A row's state, button and release-notes link; what its button asked for, and the
@@ -415,8 +614,10 @@ fn notes_link(ui: &mut egui::Ui, release: &Release) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::update::DelegatedTarget;
     use crate::update::state::Event;
     use corundum_framework_update::{Asset, Release, asset_name};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
 
     fn release(version: &str) -> Release {
@@ -451,8 +652,8 @@ mod tests {
         let (job_tx, jobs) = mpsc::channel();
         let (results, result_rx) = mpsc::channel();
         let targets = vec![
-            target("App", AfterUpdate::Relaunch),
-            target("Server", AfterUpdate::Manual),
+            target("App", AfterUpdate::Relaunch).into(),
+            target("Server", AfterUpdate::Manual).into(),
         ];
         Fixture {
             ctx: egui::Context::default(),
@@ -481,6 +682,40 @@ mod tests {
 
         fn sent(&self) -> Vec<Job> {
             self.jobs.try_iter().collect()
+        }
+
+        fn click(&mut self, pos: egui::Pos2) {
+            let button = |pressed| egui::Event::PointerButton {
+                pos,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: egui::Modifiers::NONE,
+            };
+            self.frame(vec![egui::Event::PointerMoved(pos)]);
+            self.frame(vec![button(true)]);
+            self.frame(vec![button(false)]);
+            self.frame(vec![]);
+        }
+
+        /// Carry out the package rows' jobs sent, as the worker would, and send back its
+        /// replies; the jobs carried out. A binary row's are dropped.
+        fn work(&self) -> Vec<Job> {
+            let mut done = Vec::new();
+            for job in self.sent() {
+                let index = match job {
+                    Job::Check(index) | Job::Poll(index) | Job::Apply(index) => index,
+                    #[cfg(feature = "self-update")]
+                    Job::Update(index, ..) => index,
+                };
+                let Some(package) = self.panel.targets[index].package() else {
+                    continue;
+                };
+                for event in worker::package_job(package, &job) {
+                    self.results.send((index, event)).unwrap();
+                }
+                done.push(job);
+            }
+            done
         }
 
         /// Whether a frame asked for the window to close.
@@ -647,24 +882,122 @@ mod tests {
         assert!(Fixture::closes(&output));
     }
 
+    /// A delegated package that is always ready with 1.1.0, and counts its calls.
+    #[derive(Default)]
+    struct Bridge {
+        checks: AtomicUsize,
+        polls: AtomicUsize,
+        applies: AtomicUsize,
+    }
+
+    impl DelegatedTarget for Arc<Bridge> {
+        fn label(&self) -> String {
+            "Bridge".to_owned()
+        }
+
+        fn status(&self) -> Result<PackageStatus, String> {
+            self.polls.fetch_add(1, Ordering::SeqCst);
+            Ok(PackageStatus {
+                current: Some("1.0.0".parse().unwrap()),
+                state: PackageState::Ready {
+                    version: "1.1.0".parse().unwrap(),
+                },
+            })
+        }
+
+        fn check(&self) -> Result<(), String> {
+            self.checks.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn apply(&self) -> Result<(), String> {
+            self.applies.fetch_add(1, Ordering::SeqCst);
+            Err("the bridge is busy".to_owned())
+        }
+    }
+
+    fn bridge_fixture() -> (Fixture, Arc<Bridge>) {
+        let (job_tx, jobs) = mpsc::channel();
+        let (results, result_rx) = mpsc::channel();
+        let bridge = Arc::new(Bridge::default());
+        let targets = vec![
+            Target::Delegated(Box::new(Arc::clone(&bridge))),
+            target("App", AfterUpdate::Manual).into(),
+        ];
+        let fixture = Fixture {
+            ctx: egui::Context::default(),
+            panel: UpdatesPanel::with_worker(targets, job_tx, result_rx),
+            jobs,
+            results,
+        };
+        (fixture, bridge)
+    }
+
+    #[test]
+    fn a_delegated_row_shows_its_status_and_applies() {
+        let (mut f, bridge) = bridge_fixture();
+        f.frame(vec![]);
+        assert_eq!(f.work(), vec![Job::Check(0)]);
+        // The binary row's check is the test's to answer; it is left waiting.
+        f.frame(vec![]);
+        f.frame(vec![]);
+        assert_eq!(bridge.checks.load(Ordering::SeqCst), 1);
+        assert_eq!(f.panel.labels[0], "Bridge");
+        let package = f.panel.rows[0].package.as_ref().unwrap();
+        assert!(matches!(package.status.state, PackageState::Ready { .. }));
+        assert_eq!(package.status.current, Some("1.0.0".parse().unwrap()));
+        let (rect, enabled) = f.panel.buttons[0].expect("Restart to update");
+        assert!(enabled);
+
+        f.click(rect.center());
+        assert_eq!(f.work(), vec![Job::Apply(0)]);
+        assert_eq!(bridge.applies.load(Ordering::SeqCst), 1);
+        f.frame(vec![]);
+        let package = f.panel.rows[0].package.as_ref().unwrap();
+        assert!(!package.applying);
+        assert_eq!(package.failure.as_deref(), Some("the bridge is busy"));
+        // Retry checks again, and clears the failure.
+        let (rect, _) = f.panel.buttons[0].expect("Retry");
+        f.click(rect.center());
+        assert_eq!(f.work(), vec![Job::Check(0)]);
+        assert_eq!(bridge.checks.load(Ordering::SeqCst), 2);
+        assert_eq!(bridge.applies.load(Ordering::SeqCst), 1);
+        assert_eq!(f.panel.rows[0].package.as_ref().unwrap().failure, None);
+    }
+
+    #[test]
+    fn a_delegated_row_is_asked_its_state_every_5_seconds() {
+        let (mut f, bridge) = bridge_fixture();
+        f.frame(vec![]);
+        f.work();
+        f.frame(vec![]);
+        assert_eq!(f.sent(), vec![], "not again so soon");
+        f.panel.last_poll = Some(Instant::now() - POLL_EVERY);
+        f.frame(vec![]);
+        assert_eq!(f.work(), vec![Job::Poll(0)]);
+        assert_eq!(bridge.polls.load(Ordering::SeqCst), 2);
+        // Not while it is still waiting for the last answer.
+        f.panel.rows[0].package.as_mut().unwrap().asking = true;
+        f.panel.last_poll = Some(Instant::now() - POLL_EVERY);
+        f.frame(vec![]);
+        assert_eq!(f.sent(), vec![]);
+    }
+
+    #[test]
+    fn a_delegated_row_fails_when_the_worker_stops() {
+        let (mut f, _bridge) = bridge_fixture();
+        f.frame(vec![]);
+        f.sent();
+        f.results = mpsc::channel().0;
+        f.frame(vec![]);
+        let package = f.panel.rows[0].package.as_ref().unwrap();
+        assert!(package.failure.is_some());
+        assert!(!package.asking);
+    }
+
     #[cfg(feature = "self-update")]
     mod self_update {
         use super::*;
-
-        impl Fixture {
-            fn click(&mut self, pos: egui::Pos2) {
-                let button = |pressed| egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: egui::Modifiers::NONE,
-                };
-                self.frame(vec![egui::Event::PointerMoved(pos)]);
-                self.frame(vec![button(true)]);
-                self.frame(vec![button(false)]);
-                self.frame(vec![]);
-            }
-        }
 
         #[test]
         fn an_update_carries_the_set_version() {

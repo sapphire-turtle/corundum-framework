@@ -16,17 +16,21 @@ use corundum_framework_update::{
 use semver::Version;
 
 #[cfg(feature = "self-update")]
-use super::panel::AfterUpdate;
-use super::panel::UpdateTarget;
+use super::panel::{AfterUpdate, UpdateTarget};
 #[cfg(feature = "self-update")]
 use super::state::RestartOutcome;
 use super::state::{Event, has_asset};
+use super::target::{DelegatedTarget, Target};
 
 /// What the panel asks of the worker, by the row's index.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Job {
-    /// Look the row's latest release up.
+    /// Look the row's latest release up; for a package, have its updater look.
     Check(usize),
+    /// Ask a delegated package its state.
+    Poll(usize),
+    /// Apply a package's downloaded update.
+    Apply(usize),
     /// Download and install the release over the running version (`None` when unknown),
     /// then restart.
     #[cfg(feature = "self-update")]
@@ -41,11 +45,7 @@ pub(crate) struct Worker {
 
 /// Start the worker for `targets`. It asks `ctx` for a repaint after each result, and ends
 /// when the [`Worker`] (its job sender) is dropped.
-pub(crate) fn spawn(
-    targets: Arc<[UpdateTarget]>,
-    user_agent: String,
-    ctx: egui::Context,
-) -> Worker {
+pub(crate) fn spawn(targets: Arc<[Target]>, user_agent: String, ctx: egui::Context) -> Worker {
     let (jobs, job_rx) = mpsc::channel();
     let (result_tx, results) = mpsc::channel();
     let spawned = std::thread::Builder::new()
@@ -66,12 +66,7 @@ pub(crate) fn spawn(
 }
 
 /// Carry out the jobs from `jobs` until the panel hangs up.
-fn run(
-    targets: &[UpdateTarget],
-    user_agent: &str,
-    jobs: &Receiver<Job>,
-    reply: impl Fn(usize, Event),
-) {
+fn run(targets: &[Target], user_agent: &str, jobs: &Receiver<Job>, reply: impl Fn(usize, Event)) {
     let setup = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -82,9 +77,18 @@ fn run(
                 .map_err(|e| e.to_string())
         });
     for job in jobs {
+        let index = job.index();
+        if let Some(package) = targets[index].package() {
+            for event in package_job(package, &job) {
+                reply(index, event);
+            }
+            continue;
+        }
+        let Some(target) = targets[index].binary() else {
+            continue;
+        };
         match job {
             Job::Check(index) => {
-                let target = &targets[index];
                 let found = match &setup {
                     Ok((runtime, client)) => runtime
                         .block_on(latest_release(client, &target.source))
@@ -107,7 +111,6 @@ fn run(
             }
             #[cfg(feature = "self-update")]
             Job::Update(index, release, current) => {
-                let target = &targets[index];
                 let installed = match &setup {
                     Ok((runtime, client)) => {
                         install(runtime, client, target, &release, current.as_ref())
@@ -120,7 +123,40 @@ fn run(
                     reply(index, Event::Restarted(restart(target)));
                 }
             }
+            // Only package rows are polled or applied.
+            Job::Poll(_) | Job::Apply(_) => {}
         }
+    }
+}
+
+impl Job {
+    /// The row the job is for.
+    fn index(&self) -> usize {
+        match self {
+            Job::Check(index) | Job::Poll(index) | Job::Apply(index) => *index,
+            #[cfg(feature = "self-update")]
+            Job::Update(index, ..) => *index,
+        }
+    }
+}
+
+/// A package row's job, whose calls may block; what it replies, in order. Each ends with
+/// the state, but an apply that failed: its error is the reply.
+pub(crate) fn package_job(target: &dyn DelegatedTarget, job: &Job) -> Vec<Event> {
+    let status = || Event::Status(target.status());
+    match job {
+        Job::Check(_) => match target.check() {
+            Ok(()) => vec![status()],
+            Err(message) => vec![Event::Status(Err(message))],
+        },
+        Job::Poll(_) => vec![status()],
+        Job::Apply(_) => match target.apply() {
+            Ok(()) => vec![Event::Applied(Ok(())), status()],
+            Err(message) => vec![Event::Applied(Err(message))],
+        },
+        // A package is not installed from a release.
+        #[cfg(feature = "self-update")]
+        Job::Update(..) => Vec::new(),
     }
 }
 

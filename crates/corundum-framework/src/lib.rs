@@ -24,6 +24,7 @@
 //! | `package` | [`package`] | `corundum-framework-package`: the app as a Velopack package on the desktops, its start and install hooks (brings `platform`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
+//! | `gui-package` | `gui::update` | the panel's row for the app's own Velopack package, `Target::Package` (brings `gui-update` and `package`) |
 //! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
 //! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
 //! | `serde` | `gui::look`, `gui::store` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `store`: the look in effect and the rail's order, kept on the device in a TOML file and put back before the first frame |

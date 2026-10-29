@@ -49,6 +49,8 @@ serde = ["corundum-framework-gui?/serde"]
 gui-update = ["gui", "update", "corundum-framework-gui/update"]
 # ... with the download and the replacement.
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
+# ... with a row for the app's own Velopack package (`gui::update::Target::Package`).
+gui-package = ["gui-update", "package", "corundum-framework-gui/package"]
 
 [dependencies]
 corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", optional = true }

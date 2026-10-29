@@ -116,6 +116,7 @@ through to the gui crate.
 | `package` | `package`: corundum-framework-package (brings `platform`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
+| `gui-package` | The gui crate's `package`: the panel's row for the app's own package (brings `gui-update` and `package`) | no |
 | `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
 | `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
 | `serde` | The gui crate's `serde` | no |

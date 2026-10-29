@@ -207,8 +207,21 @@ impl Shared {
     /// One check, and the download of what it finds. Once an update is downloaded, later
     /// checks run quietly: the state stays `Ready` (what the badge and the button show)
     /// unless one finds a newer update and has downloaded it, and their errors are only
-    /// logged.
+    /// logged. A refused `before_apply` left `Failed`: a check (a GUI's Retry) is `Ready`
+    /// again for the update still downloaded.
     fn check(&self, backend: &dyn Backend) {
+        let ready = {
+            let state = lock(&self.state);
+            match (&state.state, &state.downloaded) {
+                (PackageState::Failed(_), Some(info)) => {
+                    Version::parse(&info.TargetFullRelease.Version).ok()
+                }
+                _ => None,
+            }
+        };
+        if let Some(version) = ready {
+            self.set(PackageState::Ready { version });
+        }
         let quiet = lock(&self.state).downloaded.is_some();
         let fail = |msg: String| {
             if quiet {
@@ -669,6 +682,35 @@ mod tests {
         assert_eq!(
             apply_log(),
             ["before_apply", "before_apply", "apply 1.1.0 Exit"]
+        );
+    }
+
+    #[test]
+    fn a_check_after_a_refused_before_apply_is_ready_again() {
+        let fake = Fake::new(
+            "1.0.0",
+            vec![
+                Ok(Some(info("1.1.0"))),
+                Err(Error::Network("offline".into())),
+            ],
+            None,
+        );
+        let updater = updater(spec(Some(failing_to_stop)), Arc::clone(&fake));
+        updater.check_now();
+        wait_for(&updater, settled);
+        updater.apply(After::RestartApp).unwrap_err();
+        assert_eq!(
+            updater.status().state,
+            PackageState::Failed("stop failed".to_owned())
+        );
+        // The GUI's Retry: a check, which fails here, and the update is still downloaded.
+        updater.check_now();
+        let status = wait_for(&updater, |s| matches!(s, PackageState::Ready { .. }));
+        assert_eq!(
+            status.state,
+            PackageState::Ready {
+                version: v("1.1.0")
+            }
         );
     }
 

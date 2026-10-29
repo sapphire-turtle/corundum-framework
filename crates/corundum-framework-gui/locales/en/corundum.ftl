@@ -83,6 +83,14 @@ corundum-update-by-snap = Updated by the Snap Store
 corundum-update-by-microsoft-store = Updated by the Microsoft Store
 corundum-update-by-mac-app-store = Updated by the Mac App Store
 corundum-update-from-release-page = Download it from the release page
+# A package's row (`update::Target::Package`, `Target::Delegated`): the package updates
+# itself, and a downloaded update is applied by restarting. Its failure and Retry are the
+# rows' above.
+corundum-update-package-current = { $version }
+corundum-update-package-uptodate = Up to date ({ $version })
+corundum-update-package-downloading = Downloading…
+corundum-update-package-ready = { $version } is ready
+corundum-update-package-restart = Restart to update
 
 # The app-menu row (`settings::LauncherRow`): its label, its two buttons, and why a click did
 # nothing.
