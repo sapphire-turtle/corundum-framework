@@ -283,15 +283,23 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
     }
 }
 
-/// Open the demo in a window and run it until it closes. On iOS this runs on the main
-/// thread and does not return while the app runs.
+/// Log to standard error, `RUST_LOG` or the demo's default filter. Called again, it does
+/// nothing: `main` calls it before `package::start`, whose hooks only log, and [`run`]
+/// for the other starts (iOS, a build without `velopack`).
 #[cfg(not(target_os = "android"))]
-pub fn run() -> corundum_framework::eframe::Result<()> {
+pub fn init_logging() {
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug"));
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
+}
+
+/// Open the demo in a window and run it until it closes. On iOS this runs on the main
+/// thread and does not return while the app runs.
+#[cfg(not(target_os = "android"))]
+pub fn run() -> corundum_framework::eframe::Result<()> {
+    init_logging();
     tracing::info!("corundum demo: start");
     corundum_framework::gui::window::run(window_options(), |cc| Box::new(Demo::new(&cc.egui_ctx)))
 }

@@ -4,9 +4,11 @@
 
 #[cfg(not(target_os = "android"))]
 fn main() -> corundum_framework::eframe::Result<()> {
-    // Velopack's hooks start the executable and expect it to exit at once: first of all.
+    // Velopack's hooks start the executable and expect it to exit at once: first of all,
+    // but the logging their failures go to.
     #[cfg(feature = "velopack")]
     {
+        corundum_demo::init_logging();
         let start = corundum_framework::package::start(&corundum_demo::velopack::PACKAGE);
         corundum_demo::velopack::log_start(&start);
     }
