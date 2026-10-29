@@ -13,6 +13,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
+| [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで Velopack パッケージとしてのアプリ：起動時の処理と、インストール・アンインストールのフック | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
@@ -61,6 +62,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `gui` | `gui` と `egui`：eframe を含まない corundum-framework-gui（`platform` も有効になる） | いいえ |
 | `update` | `update`：corundum-framework-update | いいえ |
 | `self-update` | ダウンロードと置き換えを含む `update`（ストア版では無効にします） | いいえ |
+| `package` | `package`：corundum-framework-package（`platform` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `eframe` | `gui::window::run`：デスクトップのウィンドウ（`gui` も有効になる） | いいえ |

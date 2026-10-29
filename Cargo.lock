@@ -886,6 +886,7 @@ name = "corundum-framework"
 version = "0.3.0"
 dependencies = [
  "corundum-framework-gui",
+ "corundum-framework-package",
  "corundum-framework-platform",
  "corundum-framework-update",
 ]
@@ -943,6 +944,17 @@ dependencies = [
  "tracing-subscriber",
  "ttf-parser",
  "unic-langid",
+]
+
+[[package]]
+name = "corundum-framework-package"
+version = "0.3.0"
+dependencies = [
+ "corundum-framework-platform",
+ "semver",
+ "thiserror 2.0.21",
+ "tracing",
+ "velopack",
 ]
 
 [[package]]
