@@ -951,6 +951,7 @@ name = "corundum-framework-package"
 version = "0.3.0"
 dependencies = [
  "corundum-framework-platform",
+ "corundum-framework-update",
  "semver",
  "thiserror 2.0.21",
  "tracing",
