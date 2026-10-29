@@ -24,6 +24,20 @@ fn main() {
 }
 ```
 
+The crate's other parts:
+
+- `Updater` finds and downloads the app's updates on a thread of its own, and applies one
+  only when asked, after the app's `before_apply` has stopped its background processes.
+  `apply` hands the update to Velopack's updater: with `After::Exit` (a daemon, a command)
+  it exits the process; with a restart it returns, and the app ends the process itself, a
+  GUI by closing its window. `apply_pending_at_start` applies, at a GUI's start, an update
+  downloaded earlier and never applied.
+- `cli_path` puts the app's command line on `PATH`: the user `Path` on Windows, from the
+  install hook; a link in `/usr/local/bin` on macOS and in `~/.local/bin` on Linux, when
+  the user asks. Another program's command of the same name is left alone.
+- `console` is the Windows console shim: a GUI binary has no console, so a small console
+  binary on `PATH` starts it with the terminal's arguments and streams.
+
 On iOS and Android the crate is empty: the store installs and updates the app there.
 
 ## License

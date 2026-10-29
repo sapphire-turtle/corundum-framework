@@ -101,6 +101,8 @@ pub enum PackageKind { Windows, MacBundle, AppImage }
 
 /// The package the running executable is in, or `None`.
 pub fn current() -> Option<PackageLayout>;
+/// The running executable as `current` looks at it: links resolved on macOS and Linux.
+pub fn current_exe() -> Option<PathBuf>;
 ```
 
 Told from the files Velopack lays out, as its own locator does:
@@ -111,7 +113,12 @@ Told from the files Velopack lays out, as its own locator does:
 - Linux: `$APPIMAGE` is set and the executable's directory holds `UpdateNix`.
 
 The checks take the paths and the variable as arguments (`current_with`), so the tests
-give made-up layouts.
+give made-up layouts. The executable's links are resolved first (but on Windows, whose
+canonical paths are `\\?\` paths): on macOS a start through the command line's
+`/usr/local/bin` link reports the link as the executable. The package crate hands
+Velopack the same resolved executable (`LocationContext::FromSpecifiedAppExecutable`,
+then `set_locator` and `UpdateManager::new` with the paths found), as Velopack's own
+search looks at the unresolved path.
 
 ## corundum-framework-package
 
@@ -142,8 +149,9 @@ pub enum Start {
     Same { version: Version },
 }
 
-/// Velopack's start, then what this start is. The first thing `main` runs: started for a
-/// Windows hook, it runs the hook and exits.
+/// Velopack's start, then what this start is. The first thing `main` runs but the app's
+/// logging (a hook's failures are only logged): started for a Windows hook, it runs the
+/// hook and exits.
 pub fn start(spec: &PackageSpec) -> Start;
 ```
 
@@ -151,7 +159,8 @@ pub fn start(spec: &PackageSpec) -> Start;
   `cli` is set); the uninstall hook runs `on_uninstalling` and removes it. The update hooks
   (`--veloapp-obsolete`, `--veloapp-updated`) exit without doing anything.
 - Then `VelopackApp::run`, with Velopack's apply-at-start turned off
-  (`set_auto_apply_on_startup(false)`).
+  (`set_auto_apply_on_startup(false)`). Before it, `start` notes whether
+  `VELOPACK_RESTART` is set (`run` removes it): Velopack's updater started the app.
 - The last version run is kept in `<data dir>/<app_name>/package-version`. `FirstStart`
   when it is missing or `VELOPACK_FIRSTRUN` is set; `Updated` when it differs from the
   package's; `Same` otherwise. The file is written before `start` returns. On macOS and
@@ -167,28 +176,31 @@ pub enum Source {
     Http(String),
 }
 pub enum After {
-    /// Start the app again without arguments: the GUI.
+    /// Start the app again without arguments: the GUI. The caller ends the process.
     RestartApp,
-    /// Start the app again with these arguments.
+    /// Start the app again with these arguments. The caller ends the process.
     RestartWith(Vec<OsString>),
-    /// Exit; something else starts it again (a service manager), or nothing.
+    /// Exit; something else starts it again (a service manager), or nothing. `apply`
+    /// exits the process.
     Exit,
 }
 
 impl Updater {
     /// `Error::NotPackaged` outside a package.
     pub fn new(spec: &'static PackageSpec, source: Source) -> Result<Updater, Error>;
-    /// Called after every change of state, from the updater's thread: a GUI asks for a
-    /// repaint here.
+    /// Called after every change of state, on the updater's thread or on the thread
+    /// calling `apply` (when `before_apply` refuses): a GUI asks for a repaint here.
     pub fn on_change(&self, f: impl Fn() + Send + Sync + 'static);
     pub fn status(&self) -> PackageStatus;
     /// Look now (the Check button, `<app> update`), and download what is found.
     pub fn check_now(&self);
     /// Look at once and then every `every`, downloading what is found.
     pub fn run_in_background(&self, every: Duration);
-    /// Run `before_apply`, then apply the downloaded update and exit.
-    pub fn apply(&self, after: After) -> Result<Infallible, Error>;
-    /// For a GUI's start only: apply an update downloaded earlier and never applied.
+    /// Run `before_apply`, then hand the downloaded update to Velopack's updater. Exits
+    /// for `After::Exit`; returns `Ok` for a restart, and the caller ends the process.
+    pub fn apply(&self, after: After) -> Result<(), Error>;
+    /// For a GUI's start only, before its window opens: apply an update downloaded
+    /// earlier and never applied, and exit. Nothing on a start by Velopack's updater.
     pub fn apply_pending_at_start(&self) -> Result<(), Error>;
 }
 ```
@@ -210,12 +222,26 @@ pub enum PackageState {
 
 - One thread per `Updater` does the checking and downloading; the state is shared, and
   `status` never blocks.
-- `apply` with `RestartApp` or `RestartWith` waits for the process to exit and starts it
-  again; with `Exit` it waits and only applies. In every case the process exits.
+- `apply` starts Velopack's updater, which waits for the process to exit (60 seconds at
+  most), replaces the files, and with `RestartApp` or `RestartWith` starts the app again.
+  Who ends the process: with `Exit` (a daemon, a command line) `apply` exits it itself;
+  with a restart `apply` returns `Ok` and the caller ends it soon, a GUI by closing its
+  window (`ViewportCommand::Close`), so eframe saves its state and the app's on-exit code
+  runs, as the binary row does after relaunching.
+- One apply at a time: a second `apply` while one runs (the badge and the panel clicked
+  together) returns `Error::Applying` at once. Once an update is handed to Velopack, later
+  calls return it too: the process is ending.
 - `apply_pending_at_start` looks only at the packages already downloaded, not at the
-  network, so a GUI start is not delayed.
-- Errors: `NotPackaged`, `Network`, `Velopack` (anything else from Velopack), `Prepare`
-  (`before_apply` failed; nothing is applied).
+  network, so a GUI start is not delayed. It runs before the window exists, so after a
+  successful apply it exits the process itself. On a start by Velopack's updater
+  (`VELOPACK_RESTART`, noted by `start`) it applies nothing, as Velopack's own
+  apply-at-start does: an update the updater failed to apply would otherwise be tried
+  again at every start, in a loop.
+- **An app applies an update only from its single running GUI instance; apps that can run
+  two GUI instances must prevent a second one (a single-instance lock) before using
+  `apply_pending_at_start` or the apply button.**
+- Errors: `NotPackaged`, `Network`, `Velopack` (anything else from Velopack), `Applying`
+  (another apply runs), `Prepare` (`before_apply` failed; nothing is applied).
 - Which `Source` an app uses (a GitHub channel per app and OS, or a feed of its own) is
   part 1's to decide; the spike found `GithubSource` reads only a repository's 10 newest
   releases and does not tell packages apart.
@@ -230,7 +256,7 @@ pub struct CliSpec {
     /// file name without `.exe`.
     pub command: &'static str,
 }
-pub enum CliStatus { Installed, Missing, Broken, Unsupported }
+pub enum CliStatus { Installed, Missing, Broken, Taken, Unsupported }
 pub fn status(spec: &CliSpec) -> CliStatus;
 pub fn install(spec: &CliSpec) -> Result<(), Error>;
 pub fn uninstall(spec: &CliSpec) -> Result<(), Error>;
@@ -239,11 +265,16 @@ pub fn uninstall(spec: &CliSpec) -> Result<(), Error>;
 | OS | Where | When |
 |---|---|---|
 | Windows | `<root>\current` added to the user `Path` (`HKCU\Environment`, keeping its `REG_EXPAND_SZ` type), then `WM_SETTINGCHANGE` broadcast | The install hook; removed by the uninstall hook |
-| macOS | `/usr/local/bin/<command>`, a link to the binary in the `.app`, made with administrator rights through `osascript` (`mkdir -p` and `ln -sf`) | `CliRow`'s button |
+| macOS | `/usr/local/bin/<command>`, a link to the binary in the `.app`, made with administrator rights through `osascript` (`mkdir -p` and `ln -sfh`, so a link to a directory is replaced, not linked into) | `CliRow`'s button |
 | Linux | `~/.local/bin/<command>`, a link to `$APPIMAGE` | `CliRow`'s button; it says so when `~/.local/bin` is not on `PATH` |
 
 - `Broken`: the link is there and its target is not (the `.app` or the AppImage was
-  deleted or moved); the row offers to make it again.
+  deleted or moved); the row offers to make it again, replacing the dangling link.
+- `Taken`: another program has the name: a file that is not a link (a command-line-only
+  install of the same app at `~/.local/bin/<command>`), or a link to another file that
+  exists (Homebrew's in `/usr/local/bin`, pipx's in `~/.local/bin`). `install` and
+  `uninstall` refuse it, never replacing another program's command, as root least of
+  all; the row says another `<command>` is installed there.
 - `Unsupported`: outside a package.
 - An update keeps the target's path (spike), so no link is made again after one.
 - Adding to and removing from a Windows `Path` value is a pure function: no duplicate,
@@ -259,7 +290,11 @@ pub fn forward(gui_exe: &str) -> !;
 
 An app adds a console binary of three lines, named `<command>.exe`. The child is put in a
 job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so it ends with the shim (Ctrl+C in
-the terminal). Standard input stays connected: interactive prompts and the stdio MCP
+the terminal), and `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so what the child starts is not
+in the job: Velopack starts `Update.exe` without leaving the job, and the GUI exits for
+the update to be applied; in the job, `Update.exe` (and the app it restarts, and any
+daemon) would be killed with the shim halfway through the update. A job that cannot be
+made is reported on standard error, as the shim has no logging. Standard input stays connected: interactive prompts and the stdio MCP
 transport work through it. The package's main executable (`--mainExe`) and its shortcuts
 are the GUI binary; `PATH` finds the shim.
 
@@ -332,7 +367,9 @@ from a pure function of `PackageStatus`, tested by table.
 ### `update::ReadyBadge`
 
 A status bar item: nothing until the app's `Updater` is `Ready`, then an icon whose tooltip
-names the version and whose click applies it (`After::RestartApp`).
+names the version and whose click applies it (`After::RestartApp`) and, once that
+succeeds, closes the root window. A `Package` row of the panel does the same after its
+apply succeeds; a `Delegated` row does not, as another package restarts, not this app.
 
 ### `settings::CliRow`
 
@@ -351,18 +388,22 @@ is part 1.
 ## Tests
 
 - `platform::package::current_with`: each OS's layout, and the near misses (a `current`
-  directory without `Update.exe`, a `.app` without `UpdateMac`).
+  directory without `Update.exe`, a `.app` without `UpdateMac`); a link to the binary in a
+  `.app` is in the package.
 - `classify`: kept version missing or equal or older or newer, with and without
   `VELOPACK_FIRSTRUN`.
 - `Updater`: state changes and `before_apply` ordering against a fake Velopack;
-  `Prepare` applies nothing.
-- `cli_path`: the Windows `Path` edits by table; the link states in a temporary directory.
+  `Prepare` applies nothing; a restart's `apply` returns `Ok`; a second apply while one
+  runs is refused; a start by Velopack's updater applies no pending package.
+- `cli_path`: the Windows `Path` edits by table; the link states in a temporary directory,
+  a link to another program `Taken` and left alone.
 - `console::forward`: on the Windows CI job, a test child's output and exit code come
   through.
 - The launcher in a package, through the existing `Root` with made-up layouts; the bundle
   it generated is told apart from a package's.
 - The panel: rows from `PackageStatus` by table; a `Delegated` row with a fake; the buttons'
-  presence and state, as the panel's tests do today.
+  presence and state, as the panel's tests do today; a `Package` row's and the badge's
+  successful apply closes the window, a failed one does not.
 - CI: without `gui-package` or `package`, the `velopack` crate is not in the tree (as the
   `self-replace` check today).
 - On the machines: the demo's packages, installed, updated with the daemon running, and
