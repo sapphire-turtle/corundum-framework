@@ -33,4 +33,7 @@ dependencies {
     // The version android-activity 0.6 is built against. Without prefab: android-activity
     // brings its own native glue, and the upstream C++ one must not be linked.
     implementation("androidx.games:games-activity:4.4.0")
+    // Google's code scanner, which corundum's platform::scan_qr opens (`qr-scan`). Play
+    // services draws the camera's screen, so the app asks for no camera permission.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 }

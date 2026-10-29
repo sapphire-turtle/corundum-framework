@@ -5,7 +5,7 @@ on:
 
 jobs:
   ci:
-    uses: sapphire-turtle/sapphire-framework/.github/workflows/shared-rust-ci.yml@main
+    uses: sapphire-turtle/.github/.github/workflows/rust-ci.yml@v1
     with:
       # eframe's windowing needs these to build on Linux.
       linux-packages: libwayland-dev libxkbcommon-dev
@@ -26,6 +26,23 @@ jobs:
         # The configurations a store build compiles: no `self-update`.
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
         cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
+        # Each of the system's screens (off by default) alone, so none comes to need another.
+        for f in media-picker qr-scan; do
+          cargo clippy -p corundum-framework-platform --all-targets --features $f --locked -- -D warnings || exit 1
+        done
+        for f in media-picker qr-scan qr-code; do
+          cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
+        done
+        # Without `qr-scan` an iOS app links no camera API (AVFoundation), which App Store
+        # review would ask an NSCameraUsageDescription for.
+        if cargo tree -p corundum-framework-gui --target aarch64-apple-ios -e normal --locked \
+            --features media-picker,qr-code | grep -q objc2-av-foundation; then
+          echo "AVFoundation is linked on iOS without qr-scan"; exit 1
+        fi
+        # The media session is off by default; on, alone and through the facade.
+        cargo clippy -p corundum-framework-platform --all-targets --locked -- -D warnings
+        cargo clippy -p corundum-framework-platform --all-targets --features media-session --locked -- -D warnings
+        cargo clippy -p corundum-framework --all-targets --features media-session --locked -- -D warnings
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
@@ -72,3 +89,22 @@ jobs:
             echo "velopack is not linked for --features gui-package"
             exit 1
           fi
+
+  # Without `media-session` the platform crate, and the facade's default, must not build zbus
+  # (or MediaPlayer): an app that plays nothing carries no D-Bus.
+  media-session-off:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: zbus is not built without media-session
+        run: |
+          for args in \
+            "-p corundum-framework-platform" \
+            "-p corundum-framework"; do
+            cargo tree --locked --target all $args -e normal > tree.txt
+            if grep -qE '(zbus|objc2-media-player|objc2-avf-audio) v' tree.txt; then
+              echo "the media session's dependencies are built for: $args"
+              exit 1
+            fi
+          done

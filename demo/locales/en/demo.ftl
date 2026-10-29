@@ -10,7 +10,9 @@ demo-screen-fonts = Fonts
 demo-screen-icons = Icons
 demo-screen-language = Language
 demo-screen-detail = Detail
+demo-screen-files = Files
 demo-screen-platform = Platform
+demo-screen-media = Media
 demo-screen-settings = Settings
 # The rail's action: a new note, written in the side pane beside whatever screen is open.
 demo-action-new = New note
@@ -90,12 +92,47 @@ demo-platform-images = Images
 demo-platform-pick-file = Pick a file…
 demo-platform-pick-folder = Pick a folder…
 demo-platform-show = Show in the file manager
+demo-platform-media = Photos and videos
+demo-platform-no-media = No photo picker here: on Android, the activity does not forward the picker's result.
+demo-platform-pick-photos = Pick photos…
+demo-platform-pick-video = Pick a video…
+demo-platform-pick-media = Pick up to 5 photos or videos…
+demo-platform-media-waiting = Waiting for the picker…
+demo-platform-media-none = Nothing picked yet.
+demo-platform-media-file = { $path } ({ $size } bytes)
+demo-platform-qr = QR codes
+demo-platform-qr-text = Text to show as a QR code
+demo-platform-no-scanner = No QR code scanner here: on Android it needs Google Play services, on iOS a camera.
+demo-platform-scan = Scan a QR code…
+demo-platform-scanning = Waiting for the scanner…
+demo-platform-scanned = Read: { $text }
+demo-platform-show-scanned = Show it as a QR code
+demo-platform-scanned-none = Nothing read.
 demo-platform-dirs = The app's directories
 demo-platform-config = Config: { $path }
 demo-platform-data = Data: { $path }
 demo-platform-cache = Cache: { $path }
 demo-platform-none = none
 demo-platform-refresh = Read again
+
+# The Media screen: a made-up player under the OS's media keys and in its "now playing".
+demo-media-intro = A player that plays nothing: a clock over three made-up tracks. Play it, then try the keyboard's media keys, the system's media panel or its lock screen. It follows them from every screen.
+demo-media-session = The OS's media session
+demo-media-connected = Connected: the OS shows this player and sends it its media keys.
+demo-media-disconnected = Not connected: { $error }
+demo-media-unsupported = This OS has no media session in corundum yet: the player runs, but the OS neither shows it nor sends it anything.
+demo-media-last-event = Last from the OS: { $event }
+demo-media-no-event = nothing yet
+demo-media-ios-silence = iOS shows a player only while it plays sound: this one plays silence while it plays.
+demo-media-player = Player
+demo-media-play = Play
+demo-media-pause = Pause
+demo-media-stop = Stop
+demo-media-next = Next
+demo-media-previous = Previous
+demo-media-playing = Playing
+demo-media-paused = Paused
+demo-media-stopped = Stopped
 
 # The Settings screen: corundum's, with the demo's pages in it.
 demo-settings-demo = Demo
@@ -132,3 +169,22 @@ demo-status-ready = Ready
 demo-status-writing = Writing a new note
 demo-status-saved = Saved the note “{ $note }”
 demo-status-picked = Picked { $album }
+demo-status-opened = Opened { $name }
+demo-status-moved =
+    { $count ->
+        [one] Moved 1 item into { $folder }
+       *[other] Moved { $count } items into { $folder }
+    }
+demo-status-renamed = Renamed { $name } to { $to }
+demo-status-failed = Failed: { $error }
+demo-status-files-reset = Made the sample folder again
+
+# The Files screen: the file explorer over a sample folder, or a folder picked.
+demo-files-intro = A sample folder in the demo's cache directory: drag entries into a folder, or rename one (F2, or its menu). The changes are made there for real.
+demo-files-picked = { $path }, to look at only
+demo-files-no-dir = This system gives the demo no cache directory to keep a sample folder in.
+demo-files-reset = Make the sample again
+demo-files-pick = Open a folder…
+demo-files-back = Back to the sample
+demo-files-copy = Copy name
+demo-files-show = Show in file manager

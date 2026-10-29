@@ -52,11 +52,24 @@ desktops and on phones.
   view's item holds (the playlist playing, the journal open) or a new entry begun from the
   rail's action, in a right column that a button on the status bar hides, on a card over
   the middle of the screen when the column is hidden, or on a phone in its place.
+- **File explorer**: `explorer::FileExplorer`, a folder's contents the app lists and hands
+  in (a page at a time if it likes) — under a trail of the folders above, as a list sorted
+  by a column's heading or a grid of thumbnails, and on a phone as tall rows a finger can
+  tap. Entries are picked with clicks, Ctrl and Shift, and the keys; a right click (a long
+  press) opens Open, Rename and the app's own items; picked entries dragged onto a folder
+  ask to be moved, and F2 renames in place. The explorer touches no files: it returns
+  `ExplorerEvent`s, and the app moves, renames and opens.
 - **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
   to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
   folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the
   clipboard and the insets. The dialogs are the desktops' for now: on a phone
-  `file_picker_available` says there are none.
+  `file_picker_available` says there are none. What a phone has instead is its photo
+  album: `platform::MediaPicker` (`media-picker` feature) picks photos and videos there
+  (PHPicker on iOS, the Photo Picker on Android) and from the file dialog on a desktop,
+  answering through a `Pending` the app polls each frame. `platform::scan_qr` (`qr-scan`)
+  reads a QR code with the phone's camera the same way.
+- **QR codes**: `qr::QrCode` (`qr-code` feature) draws text as a QR code, for a phone to
+  read off a desktop's screen: an invite ticket, a token.
 - **Window**: `window::run` opens a desktop window on wgpu the same way for every app;
   `window::run_android` does the same on an Android phone (GameActivity). On iOS the window
   is put in a scene, which iOS 27 requires (the app's Info.plist declares one with
@@ -76,6 +89,10 @@ desktops and on phones.
 | `serde` | `Serialize` / `Deserialize` on the theme and language settings | no |
 | `update` | `update::UpdatesPanel`, the Settings → About rows that look for a newer release and say where it is (brings corundum-framework-update) | no |
 | `self-update` | The panel also downloads the release and replaces the running binary (brings `update`). A store build leaves it off, as the store updates the app | no |
+| `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
+| `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
+| `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
+| `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not
@@ -98,6 +115,19 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   runs from a cargo target directory.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
+- **The system's screens** (features, off by default): `media`, the phone's photo picker
+  (`media-picker`), its picks copied into the cache, and `qr`, its QR code scanner
+  (`qr-scan`), each answering through a `pending::Pending`.
+- **Media session** (feature `media-session`, off by default): `media_session::MediaSession`,
+  a music player under the OS's media keys and in its "now playing": the app tells it the
+  track (title, artist, album, length, a cover as a file or bytes) and whether it plays and
+  where, and reads back play, pause, toggle, stop, next, previous and seeks as events,
+  without holding its frame. An MPRIS player over zbus on Linux (no libdbus), the window's
+  SystemMediaTransportControls on Windows, MediaPlayer's now-playing and remote commands
+  on macOS and iOS, with the audio session on iOS (interruptions, headphones pulled out).
+  Android has none yet: there the session does nothing. An iOS app that turns it on lists
+  `audio` under `UIBackgroundModes` in its Info.plist, and is shown only while it plays
+  sound.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
 
@@ -120,6 +150,10 @@ through to the gui crate.
 | `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
 | `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
 | `serde` | The gui crate's `serde` | no |
+| `media-picker` | `gui::platform::MediaPicker`, the phone's photo picker (brings `gui`) | no |
+| `qr-scan` | `gui::platform::scan_qr`, the phone's QR code scanner (brings `gui`) | no |
+| `qr-code` | `gui::qr`, QR codes drawn from text (brings `gui`) | no |
+| `media-session` | `platform::media_session`, and `gui::media_session` with `gui` | no |
 
 The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
 Android app `android`.

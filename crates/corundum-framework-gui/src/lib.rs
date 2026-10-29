@@ -10,15 +10,21 @@
 //! frameworks under it put in, the tabs of the scopes a setting can be kept in, and the
 //! theme and the language over them. [`detail`] is the app's side pane: a right column
 //! beside every screen, a card over it, or on a phone the screen in its place; its column's
-//! toggle sits at the right end of the shell's status bar. With the `serde` feature,
+//! toggle sits at the right end of the shell's status bar. [`explorer`] is a folder's
+//! contents the app hands in, to browse, pick, move and rename. With the `serde` feature,
 //! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
 //! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
-//! put back before the app's first frame.
+//! put back before the app's first frame. With the `qr-code` feature, [`qr`] draws text as
+//! a QR code, for a phone to read off the screen.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
 //! opens a desktop window on wgpu the same way for every app, set up by [`gpu`]; an app that
 //! renders egui without eframe turns default features off.
+//!
+//! With the `media-session` feature, `media_session` puts a music player under the OS's
+//! media keys and in its "now playing", and `media_session::start` makes one for an eframe
+//! window.
 
 /// The egui this crate renders with. Apps should use this re-export so their egui is
 /// always the one the components were built against.
@@ -29,6 +35,7 @@ pub use egui;
 pub use eframe;
 
 pub mod detail;
+pub mod explorer;
 pub mod fonts;
 #[cfg(feature = "eframe")]
 pub mod gpu;
@@ -37,7 +44,11 @@ pub mod icons;
 pub mod logcat;
 #[cfg(feature = "serde")]
 pub mod look;
+#[cfg(feature = "media-session")]
+pub mod media_session;
 pub mod platform;
+#[cfg(feature = "qr-code")]
+pub mod qr;
 pub mod settings;
 mod shell;
 #[cfg(feature = "serde")]

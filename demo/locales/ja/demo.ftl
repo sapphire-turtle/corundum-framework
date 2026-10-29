@@ -10,7 +10,9 @@ demo-screen-fonts = フォント
 demo-screen-icons = アイコン
 demo-screen-language = 言語
 demo-screen-detail = 詳細
+demo-screen-files = ファイル
 demo-screen-platform = プラットフォーム
+demo-screen-media = メディア
 demo-screen-settings = 設定
 # レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
 demo-action-new = 新しいメモ
@@ -84,12 +86,47 @@ demo-platform-images = 画像
 demo-platform-pick-file = ファイルを選ぶ…
 demo-platform-pick-folder = フォルダを選ぶ…
 demo-platform-show = ファイルマネージャーで表示
+demo-platform-media = 写真と動画
+demo-platform-no-media = ここには写真ピッカーがありません。Android では、Activity がピッカーの結果を渡していません。
+demo-platform-pick-photos = 写真を選ぶ…
+demo-platform-pick-video = 動画を一つ選ぶ…
+demo-platform-pick-media = 写真か動画を 5 個まで選ぶ…
+demo-platform-media-waiting = ピッカーを待っています…
+demo-platform-media-none = まだ何も選んでいません。
+demo-platform-media-file = { $path }（{ $size } バイト）
+demo-platform-qr = QR コード
+demo-platform-qr-text = QR コードにする文字列
+demo-platform-no-scanner = ここには QR コードスキャナーがありません。Android では Google Play 開発者サービスが、iOS ではカメラが必要です。
+demo-platform-scan = QR コードを読む…
+demo-platform-scanning = スキャナーを待っています…
+demo-platform-scanned = 読み取り結果：{ $text }
+demo-platform-show-scanned = QR コードにして表示
+demo-platform-scanned-none = 何も読み取りませんでした。
 demo-platform-dirs = アプリのディレクトリ
 demo-platform-config = 設定：{ $path }
 demo-platform-data = データ：{ $path }
 demo-platform-cache = キャッシュ：{ $path }
 demo-platform-none = なし
 demo-platform-refresh = 読み直す
+
+# メディア画面：OS のメディアキーと「再生中」の表示に連動する、架空のプレイヤー。
+demo-media-intro = 何も鳴らさないプレイヤーです。架空の3曲の上で時計を進めます。再生してから、キーボードのメディアキー、システムのメディアパネル、ロック画面を試してください。どの画面を開いていても従います。
+demo-media-session = OS のメディアセッション
+demo-media-connected = 接続済み：OS がこのプレイヤーを表示し、メディアキーを送ります。
+demo-media-disconnected = 接続していません：{ $error }
+demo-media-unsupported = この OS には、corundum のメディアセッションがまだありません。プレイヤーは動きますが、OS は表示もせず、何も送りません。
+demo-media-last-event = OS から最後に来たもの：{ $event }
+demo-media-no-event = まだありません
+demo-media-ios-silence = iOS は音を鳴らしているプレイヤーしか表示しないので、このプレイヤーは再生中に無音を鳴らします。
+demo-media-player = プレイヤー
+demo-media-play = 再生
+demo-media-pause = 一時停止
+demo-media-stop = 停止
+demo-media-next = 次へ
+demo-media-previous = 前へ
+demo-media-playing = 再生中
+demo-media-paused = 一時停止中
+demo-media-stopped = 停止中
 
 # 設定画面：corundum のもので、デモのページを差し込んだもの。
 demo-settings-demo = デモ
@@ -123,3 +160,18 @@ demo-status-ready = 準備完了
 demo-status-writing = 新しいメモを書いています
 demo-status-saved = メモ「{ $note }」を保存しました
 demo-status-picked = { $album } を選びました
+demo-status-opened = { $name } を開きました
+demo-status-moved = { $count } 項目を { $folder } へ移動しました
+demo-status-renamed = { $name } を { $to } に名前を変更しました
+demo-status-failed = 失敗しました: { $error }
+demo-status-files-reset = サンプルのフォルダーを作り直しました
+
+# ファイル画面：サンプルのフォルダー、または選んだフォルダーを、ファイルエクスプローラーで見る。
+demo-files-intro = デモのキャッシュディレクトリにあるサンプルのフォルダーです。項目をフォルダーへドラッグしたり、名前を変えたり（F2 かメニュー）できます。変更は実際にそこで行われます。
+demo-files-picked = { $path }（見るだけ）
+demo-files-no-dir = このシステムには、サンプルのフォルダーを置くキャッシュディレクトリがありません。
+demo-files-reset = サンプルを作り直す
+demo-files-pick = フォルダーを開く…
+demo-files-back = サンプルに戻る
+demo-files-copy = 名前をコピー
+demo-files-show = ファイルマネージャーで表示

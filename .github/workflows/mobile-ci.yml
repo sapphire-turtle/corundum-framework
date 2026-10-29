@@ -48,8 +48,14 @@ jobs:
         run: |
           for t in aarch64-apple-ios aarch64-apple-ios-sim; do
             cargo clippy -p corundum-framework-platform -p corundum-framework-gui --target "$t" --all-targets --locked -- -D warnings || exit 1
+            # The media session (MediaPlayer, the audio session) is off by default.
+            cargo clippy -p corundum-framework-platform -p corundum-framework-gui --target "$t" --all-targets --locked --features corundum-framework-platform/media-session,corundum-framework-gui/media-session -- -D warnings || exit 1
             cargo clippy -p corundum-framework --target "$t" --all-targets --locked --features eframe,serde -- -D warnings || exit 1
             cargo clippy -p corundum-framework-demo --target "$t" --all-targets --locked -- -D warnings || exit 1
+            # Each of the system's screens alone: each links its own frameworks.
+            for f in media-picker qr-scan qr-code; do
+              cargo clippy -p corundum-framework-platform -p corundum-framework-gui --target "$t" --all-targets --locked --features "corundum-framework-gui/$f" -- -D warnings || exit 1
+            done
           done
 
       # The simulator's CoreText lists the simulator's own fonts, not the Mac's, so this runs
@@ -116,10 +122,16 @@ jobs:
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-platform --all-targets --locked -- -D warnings
+          # Android has no media session yet: the feature builds the one that does nothing.
+          cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-platform --all-targets --locked --features media-session -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --no-default-features -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-gui --all-targets --locked --features android -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework --all-targets --locked --features android,serde -- -D warnings
           cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-demo --all-targets --locked -- -D warnings
+          # Each of the system's screens alone, with the phone's window.
+          for f in media-picker qr-scan qr-code; do
+            cargo ndk -t arm64-v8a -t x86_64 clippy -p corundum-framework-platform -p corundum-framework-gui --all-targets --locked --features "corundum-framework-gui/android,corundum-framework-gui/$f" -- -D warnings || exit 1
+          done
 
       # Built before the emulator starts, so the emulator step only runs it.
       - name: Build the tests
