@@ -99,8 +99,8 @@ impl Updater {
         }
     }
 
-    /// Called after every change of state, from the updater's thread: a GUI asks for a
-    /// repaint here.
+    /// Called after every change of state: a GUI asks for a repaint here. Runs on the
+    /// updater's thread, or on the thread calling `apply` when `before_apply` refuses.
     pub fn on_change(&self, f: impl Fn() + Send + Sync + 'static) {
         lock(&self.shared.listeners).push(Arc::new(f));
     }
@@ -125,16 +125,15 @@ impl Updater {
     }
 
     /// Runs `before_apply`, then applies the downloaded update and exits. Returns only on
-    /// an error: nothing downloaded, `before_apply` refused (nothing is applied), or
-    /// Velopack failed.
+    /// an error: nothing downloaded, `before_apply` refused (nothing is applied, and a later
+    /// call tries again), or Velopack failed.
     pub fn apply(&self, after: After) -> Result<Infallible, Error> {
-        let info = {
-            let state = lock(&self.shared.state);
-            match (&state.state, &state.downloaded) {
-                (PackageState::Ready { .. }, Some(info)) => info.clone(),
-                _ => return Err(Error::Velopack("nothing downloaded".into())),
-            }
-        };
+        // Whatever the state shows: after a refused `before_apply` it is `Failed`, and the
+        // update is still there to apply.
+        let info = lock(&self.shared.state)
+            .downloaded
+            .clone()
+            .ok_or_else(|| Error::Velopack("nothing downloaded".into()))?;
         self.shared.prepare()?;
         self.shared.backend.apply(Applied::Downloaded(info), &after)
     }
@@ -205,25 +204,49 @@ impl Shared {
         }
     }
 
-    /// One check, and the download of what it finds.
+    /// One check, and the download of what it finds. Once an update is downloaded, later
+    /// checks run quietly: the state stays `Ready` (what the badge and the button show)
+    /// unless one finds a newer update and has downloaded it, and their errors are only
+    /// logged.
     fn check(&self, backend: &dyn Backend) {
-        self.set(PackageState::Checking);
+        let quiet = lock(&self.state).downloaded.is_some();
+        let fail = |msg: String| {
+            if quiet {
+                tracing::warn!("update check failed, keeping the downloaded update: {msg}");
+            } else {
+                self.set(PackageState::Failed(msg));
+            }
+        };
+        if !quiet {
+            self.set(PackageState::Checking);
+        }
         let info = match backend.check() {
             Ok(Some(info)) => info,
-            Ok(None) => return self.set(PackageState::UpToDate),
-            Err(e) => return self.set(PackageState::Failed(e.to_string())),
+            Ok(None) => {
+                if !quiet {
+                    self.set(PackageState::UpToDate);
+                }
+                return;
+            }
+            Err(e) => return fail(e.to_string()),
         };
         let version = match Version::parse(&info.TargetFullRelease.Version) {
             Ok(version) => version,
             Err(e) => {
-                return self.set(PackageState::Failed(format!(
+                return fail(format!(
                     "the update's version {:?} is not a version: {e}",
                     info.TargetFullRelease.Version
-                )));
+                ));
             }
         };
-        self.set(PackageState::Downloading { percent: 0 });
-        let progress = |percent: u8| self.set(PackageState::Downloading { percent });
+        if !quiet {
+            self.set(PackageState::Downloading { percent: 0 });
+        }
+        let progress = |percent: u8| {
+            if !quiet {
+                self.set(PackageState::Downloading { percent });
+            }
+        };
         match backend.download(&info, &progress) {
             Ok(()) => {
                 {
@@ -233,7 +256,7 @@ impl Shared {
                 }
                 self.notify();
             }
-            Err(e) => self.set(PackageState::Failed(e.to_string())),
+            Err(e) => fail(e.to_string()),
         }
     }
 }
@@ -344,6 +367,7 @@ mod tests {
     struct Fake {
         current: Version,
         checks: Mutex<VecDeque<Result<Option<UpdateInfo>, Error>>>,
+        checked: AtomicUsize,
         pending: Option<Version>,
     }
 
@@ -356,6 +380,7 @@ mod tests {
             Arc::new(Fake {
                 current: v(current),
                 checks: Mutex::new(checks.into()),
+                checked: AtomicUsize::new(0),
                 pending: pending.map(v),
             })
         }
@@ -367,6 +392,7 @@ mod tests {
         }
 
         fn check(&self) -> Result<Option<UpdateInfo>, Error> {
+            self.checked.fetch_add(1, Ordering::SeqCst);
             self.checks.lock().unwrap().pop_front().unwrap_or(Ok(None))
         }
 
@@ -567,6 +593,83 @@ mod tests {
         }
         assert_eq!(first.load(Ordering::SeqCst), 5);
         assert_eq!(second.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn a_failing_check_after_a_download_keeps_it_ready() {
+        let fake = Fake::new(
+            "1.0.0",
+            vec![
+                Ok(Some(info("1.1.0"))),
+                Err(Error::Network("offline".into())),
+            ],
+            None,
+        );
+        let updater = updater(spec(Some(stopping)), Arc::clone(&fake));
+        let changes = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&changes);
+        updater.on_change(move || {
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        updater.check_now();
+        wait_for(&updater, settled);
+        // A check that fails, then one that finds nothing: once the fake sees the third
+        // check, the worker is done with the failing one.
+        updater.check_now();
+        updater.check_now();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while fake.checked.load(Ordering::SeqCst) < 3 {
+            assert!(Instant::now() < deadline, "the checks never ran");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            updater.status().state,
+            PackageState::Ready {
+                version: v("1.1.0")
+            }
+        );
+        // Checking, Downloading at 0, 50 and 100, Ready; nothing for the later checks.
+        assert_eq!(changes.load(Ordering::SeqCst), 5);
+        let err = updater.apply(After::RestartApp).unwrap_err();
+        assert!(
+            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
+            "{err:?}"
+        );
+        assert_eq!(apply_log(), ["before_apply", "apply 1.1.0 RestartApp"]);
+    }
+
+    #[test]
+    fn apply_is_retried_after_a_failing_before_apply() {
+        static REFUSE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+        fn refusing_once() -> Result<(), String> {
+            log("before_apply");
+            if REFUSE.swap(false, Ordering::SeqCst) {
+                Err("stop failed".to_owned())
+            } else {
+                Ok(())
+            }
+        }
+        let updater = updater(
+            spec(Some(refusing_once)),
+            Fake::new("1.0.0", vec![Ok(Some(info("1.1.0")))], None),
+        );
+        updater.check_now();
+        wait_for(&updater, settled);
+        let err = updater.apply(After::Exit).unwrap_err();
+        assert!(matches!(err, Error::Prepare(_)), "{err:?}");
+        assert_eq!(
+            updater.status().state,
+            PackageState::Failed("stop failed".to_owned())
+        );
+        let err = updater.apply(After::Exit).unwrap_err();
+        assert!(
+            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
+            "{err:?}"
+        );
+        assert_eq!(
+            apply_log(),
+            ["before_apply", "before_apply", "apply 1.1.0 Exit"]
+        );
     }
 
     #[test]

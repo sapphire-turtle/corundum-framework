@@ -45,6 +45,10 @@ impl Velopack {
     pub(crate) fn new(source: &Source) -> Result<Velopack, Error> {
         let manager = match source {
             Source::Github { repo, prerelease } => {
+                // Velopack panics on a repository that is not a URL.
+                url::Url::parse(repo.trim_end_matches('/')).map_err(|e| {
+                    Error::Velopack(format!("the repository {repo:?} is not a URL: {e}"))
+                })?;
                 UpdateManager::new(GithubSource::new(repo, None, *prerelease), None, None)
             }
             Source::Http(url) => UpdateManager::new(HttpSource::new(url), None, None),

@@ -955,6 +955,7 @@ dependencies = [
  "semver",
  "thiserror 2.0.21",
  "tracing",
+ "url",
  "velopack",
 ]
 
