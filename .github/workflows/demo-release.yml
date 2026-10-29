@@ -2,7 +2,7 @@ name: Demo release (Velopack)
 
 # The Velopack spike (corundum-framework#51): packages the demo with Velopack on Linux,
 # macOS and Windows and puts the packages on the tag's pre-release, from which an installed
-# demo updates itself (demo/src/velopack.rs).
+# demo updates itself (corundum-framework-package, through demo/src/velopack.rs).
 #
 # Started by pushing a tag `demo-v<x.y.z>`; push a second, higher one to try an update. A
 # tag rather than a manual run, so that the workflow runs from a branch before it is on main.
@@ -17,9 +17,12 @@ defaults:
     shell: bash
 
 env:
-  # vpk and the velopack crate (demo/Cargo.toml) are released together; keep them the same.
+  # vpk and the velopack crate (crates/corundum-framework-package/Cargo.toml) are released
+  # together; keep them the same.
   VPK_VERSION: 1.2.161
-  PACK_ID: corundum-framework-demo
+  # Not the data directory's name (`corundum-framework-demo`): on Windows the package is
+  # installed in %LocalAppData%\<package id>, which its uninstall deletes.
+  PACK_ID: corundum-framework-demo-desktop
 
 jobs:
   pack:
@@ -39,7 +42,7 @@ jobs:
             icon: icon.icns
             # Not the launcher's bundle id (`net.fireturtle.corundum.corundum-demo`), so the
             # bundle the launcher writes in ~/Applications and this one stay apart.
-            extra: --bundleId net.fireturtle.corundum.demo
+            extra: --bundleId net.sapphire-turtle.corundum-demo
           - os: windows-latest
             channel: win
             exe: '.exe'
@@ -86,6 +89,10 @@ jobs:
         run: |
           mkdir pack
           cp "target/release/corundum-framework-demo$EXE" "target/release/corundum-framework-demo-daemon$EXE" pack/
+          # The console shim, under the command's name, for the install hook to put on `Path`.
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
+          fi
           # Unquoted on purpose: EXTRA is a list of arguments.
           vpk pack \
             --packId "$PACK_ID" \

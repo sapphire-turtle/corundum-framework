@@ -20,6 +20,9 @@ jobs:
         cargo clippy -p corundum-framework --all-targets --no-default-features --features gui,serde --locked -- -D warnings
         # The demo's binary links on each desktop (the tests link only its lib).
         cargo build -p corundum-framework-demo --bin corundum-framework-demo --locked
+        # ... and as the Velopack package demo-release.yml packs: the GUI, the daemon, and
+        # the console shim.
+        cargo build -p corundum-framework-demo --features velopack --bins --locked
         # The configurations a store build compiles: no `self-update`.
         cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features update --locked -- -D warnings
         cargo clippy -p corundum-framework-update --all-targets --no-default-features --locked -- -D warnings
@@ -46,3 +49,26 @@ jobs:
               exit 1
             fi
           done
+
+  # Velopack comes only with the package features: an app that updates a binary, or only
+  # looks releases up, links none of it.
+  velopack-only-for-package:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: velopack is linked with gui-package only
+        run: |
+          # Each tree goes to a file first, so a failing cargo fails the job rather than
+          # passing as an empty tree.
+          # The crate's own entry (`velopack v1.2.161`), not a path that has the word in it.
+          cargo tree --locked --target all -p corundum-framework --features gui-update -e normal > tree.txt
+          if grep -q ' velopack v' tree.txt; then
+            echo "velopack is linked for --features gui-update"
+            exit 1
+          fi
+          cargo tree --locked --target all -p corundum-framework --features gui-package -e normal > tree.txt
+          if ! grep -q ' velopack v' tree.txt; then
+            echo "velopack is not linked for --features gui-package"
+            exit 1
+          fi

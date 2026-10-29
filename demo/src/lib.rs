@@ -69,6 +69,9 @@ struct App {
     /// are told apart from.
     applied: Look,
     state: screens::State,
+    /// The status bar's icon for a downloaded update, in a package.
+    #[cfg(feature = "velopack")]
+    badge: Option<corundum_framework::gui::update::ReadyBadge>,
 }
 
 impl Demo {
@@ -109,6 +112,13 @@ impl Demo {
                 language: applied.language.clone(),
                 applied,
                 state: screens::State::new(CJK_FAMILY.get().cloned()),
+                #[cfg(feature = "velopack")]
+                badge: velopack::updater().map(|updater| {
+                    // The badge appears when the background download ends: draw it then.
+                    let ctx = ctx.clone();
+                    updater.on_change(move || ctx.request_repaint());
+                    corundum_framework::gui::update::ReadyBadge::new(updater)
+                }),
             },
             logged: None,
         }
@@ -156,6 +166,10 @@ impl ShellApp<Screen> for App {
     }
 
     fn status_ui(&mut self, ui: &mut egui::Ui) {
+        #[cfg(feature = "velopack")]
+        if let Some(badge) = &mut self.badge {
+            badge.ui(ui);
+        }
         ui.weak(self.state.log.text(ui.ctx()));
     }
 
