@@ -1,8 +1,191 @@
 //! The app's command line on `PATH`.
+//!
+//! Windows puts the package's `current` directory on the user `Path` from the install hook
+//! and takes it off from the uninstall hook. macOS links `/usr/local/bin/<command>` to the
+//! binary in the `.app`, with administrator rights asked through `osascript`; Linux links
+//! `~/.local/bin/<command>` to the AppImage. Both are made and removed when the user asks.
+//! An update keeps the binary's path, so nothing is made again after one.
+
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
+use crate::error::Error;
+
+#[cfg(unix)]
+mod unix;
+#[cfg(windows)]
+mod windows;
 
 /// The command line a package puts on `PATH`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct CliSpec {
-    /// The command's name: `sapphire-journal`.
+    /// The name typed in a terminal: `sapphire-journal`. On Windows, the console shim's
+    /// file name without `.exe`.
     pub command: &'static str,
+}
+
+/// Whether the command line is on `PATH`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CliStatus {
+    /// On `PATH`, running this package.
+    Installed,
+    /// Not on `PATH`, or a link to something else.
+    Missing,
+    /// A link whose target is gone: the `.app` or the AppImage was deleted or moved.
+    Broken,
+    /// Another program has the name: a file that is not a link (a command-line-only
+    /// install of the same app), left alone.
+    Taken,
+    /// Outside a package.
+    Unsupported,
+}
+
+/// Whether the command line is on `PATH`.
+pub fn status(spec: &CliSpec) -> CliStatus {
+    #[cfg(windows)]
+    return windows::status(spec);
+    #[cfg(unix)]
+    return unix::status(spec);
+}
+
+/// Puts the command line on `PATH`. Never replaces a file that is not a link.
+pub fn install(spec: &CliSpec) -> Result<(), Error> {
+    #[cfg(windows)]
+    return windows::install(spec);
+    #[cfg(unix)]
+    return unix::install(spec);
+}
+
+/// Takes the command line off `PATH`. Nothing to take off is not an error.
+pub fn uninstall(spec: &CliSpec) -> Result<(), Error> {
+    #[cfg(windows)]
+    return windows::uninstall(spec);
+    #[cfg(unix)]
+    return unix::uninstall(spec);
+}
+
+/// Whether `dir` is on this process's `PATH`: Linux's `~/.local/bin` is not on every
+/// distribution's.
+pub fn on_path(dir: &Path) -> bool {
+    on_path_in(dir, &std::env::var_os("PATH").unwrap_or_default())
+}
+
+/// [`on_path`] for a given `PATH` value.
+pub(crate) fn on_path_in(dir: &Path, path_var: &OsStr) -> bool {
+    let dir = clean(dir);
+    std::env::split_paths(path_var)
+        .filter(|entry| !entry.as_os_str().is_empty())
+        .any(|entry| clean(&entry) == dir)
+}
+
+/// `path` as it names a directory: its canonical form, or, when it does not exist, its
+/// components without `.` and a trailing separator.
+fn clean(path: &Path) -> PathBuf {
+    path.canonicalize()
+        .unwrap_or_else(|_| path.components().collect())
+}
+
+/// The user `Path` value with `dir` added at the end, or `None` when it is already there.
+/// The other entries are kept as they are, a trailing `;` too.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn path_with(value: &str, dir: &str) -> Option<String> {
+    if value.split(';').any(|entry| same_entry(entry, dir)) {
+        return None;
+    }
+    Some(if value.is_empty() {
+        dir.to_owned()
+    } else if let Some(rest) = value.strip_suffix(';') {
+        format!("{rest};{dir};")
+    } else {
+        format!("{value};{dir}")
+    })
+}
+
+/// The user `Path` value with every entry naming `dir` removed, or `None` when there is
+/// none. The other entries are kept as they are, empty ones too.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn path_without(value: &str, dir: &str) -> Option<String> {
+    let entries: Vec<&str> = value.split(';').collect();
+    let kept: Vec<&str> = entries
+        .iter()
+        .copied()
+        .filter(|entry| !same_entry(entry, dir))
+        .collect();
+    (kept.len() != entries.len()).then(|| kept.join(";"))
+}
+
+/// Whether a `Path` entry names `dir`: Windows paths ignore case, and an entry may be
+/// quoted or end with a `\`. An empty entry names nothing.
+fn same_entry(entry: &str, dir: &str) -> bool {
+    let norm = |s: &str| {
+        let s = s
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(s);
+        s.strip_suffix('\\').unwrap_or(s).to_lowercase()
+    };
+    !entry.is_empty() && norm(entry) == norm(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsString;
+
+    use super::*;
+
+    const DIR: &str = "C:\\x\\current";
+
+    #[test]
+    fn a_dir_is_added_at_the_end_of_a_path_without_it() {
+        let cases: &[(&str, Option<&str>)] = &[
+            ("C:\\a;C:\\b", Some("C:\\a;C:\\b;C:\\x\\current")),
+            ("", Some("C:\\x\\current")),
+            ("C:\\a;", Some("C:\\a;C:\\x\\current;")),
+            ("C:\\a;;C:\\b", Some("C:\\a;;C:\\b;C:\\x\\current")),
+            ("C:\\a;C:\\X\\CURRENT\\", None),
+            ("\"C:\\x\\current\";C:\\b", None),
+            ("C:\\x\\current", None),
+        ];
+        for (value, want) in cases {
+            assert_eq!(path_with(value, DIR).as_deref(), *want, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_dir_is_removed_from_a_path_keeping_the_other_entries() {
+        let cases: &[(&str, Option<&str>)] = &[
+            (
+                "%USERPROFILE%\\bin;C:\\x\\current;C:\\b",
+                Some("%USERPROFILE%\\bin;C:\\b"),
+            ),
+            ("C:\\a;C:\\x\\current;", Some("C:\\a;")),
+            ("C:\\a;;C:\\X\\Current\\;C:\\b", Some("C:\\a;;C:\\b")),
+            ("\"C:\\x\\current\"", Some("")),
+            ("C:\\x\\current;C:\\a;C:\\x\\current", Some("C:\\a")),
+            ("C:\\a;C:\\b", None),
+            ("", None),
+            ("C:\\x\\current2", None),
+        ];
+        for (value, want) in cases {
+            assert_eq!(path_without(value, DIR).as_deref(), *want, "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_dir_is_on_a_path_naming_it_with_or_without_a_trailing_separator() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("bin");
+        std::fs::create_dir(&dir).unwrap();
+        let other = tmp.path().join("other");
+        let sep = std::path::MAIN_SEPARATOR;
+        let path_of = |entries: &[PathBuf]| -> OsString { std::env::join_paths(entries).unwrap() };
+
+        assert!(on_path_in(&dir, &path_of(&[other.clone(), dir.clone()])));
+        let trailing = PathBuf::from(format!("{}{sep}", dir.display()));
+        assert!(on_path_in(&dir, &path_of(&[trailing])));
+        let dotted = tmp.path().join(".").join("bin");
+        assert!(on_path_in(&dir, &path_of(&[dotted])));
+        assert!(!on_path_in(&dir, &path_of(&[other])));
+        assert!(!on_path_in(&dir, OsStr::new("")));
+    }
 }

@@ -953,10 +953,12 @@ dependencies = [
  "corundum-framework-platform",
  "corundum-framework-update",
  "semver",
+ "tempfile",
  "thiserror 2.0.21",
  "tracing",
  "url",
  "velopack",
+ "windows",
 ]
 
 [[package]]

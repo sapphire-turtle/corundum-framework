@@ -7,6 +7,8 @@ use semver::Version;
 use velopack::VelopackApp;
 use velopack::locator::{LocationContext, auto_locate_app_manifest};
 
+#[cfg(windows)]
+use crate::cli_path;
 use crate::cli_path::CliSpec;
 use crate::error::Error;
 
@@ -104,7 +106,14 @@ pub fn start(spec: &PackageSpec) -> Start {
 fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a> {
     let on_installed = spec.on_installed;
     let on_uninstalling = spec.on_uninstalling;
+    let cli = spec.cli;
+    // A hook has 30 seconds and no window: a failure is logged, never shown or panicked on.
     app.on_after_install_fast_callback(move |_| {
+        if let Some(cli) = cli
+            && let Err(e) = cli_path::install(&cli)
+        {
+            tracing::warn!("could not put {} on PATH: {e}", cli.command);
+        }
         if let Some(on_installed) = on_installed {
             on_installed();
         }
@@ -112,6 +121,11 @@ fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a
     .on_before_uninstall_fast_callback(move |_| {
         if let Some(on_uninstalling) = on_uninstalling {
             on_uninstalling();
+        }
+        if let Some(cli) = cli
+            && let Err(e) = cli_path::uninstall(&cli)
+        {
+            tracing::warn!("could not take {} off PATH: {e}", cli.command);
         }
     })
 }

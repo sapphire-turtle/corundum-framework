@@ -13,6 +13,15 @@ pub enum Error {
     /// The app's `before_apply` refused the update.
     #[error("could not prepare for the update: {0}")]
     Prepare(String),
+    /// Another program has the command's name: a file that is not a link, left alone.
+    #[error("another {command} is installed at {}", path.display())]
+    Taken {
+        command: String,
+        path: std::path::PathBuf,
+    },
+    /// The command line could not be put on or taken off `PATH`.
+    #[error("could not change the command line on PATH: {0}")]
+    CliPath(String),
     /// A file could not be read or written.
     #[error(transparent)]
     Io(#[from] std::io::Error),
