@@ -13,6 +13,8 @@ mod backend;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod cli_path;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub mod console;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod error;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod start;
