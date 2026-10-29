@@ -60,27 +60,35 @@ pub(super) fn install(spec: &CliSpec) -> Result<(), Error> {
     if !admin {
         return link_at(&link, &target, spec.command);
     }
-    refuse_taken(&link, spec.command)?;
+    refuse_taken(&link, &target, spec.command)?;
+    // `-h`: BSD `ln` would otherwise follow a link at the path to a directory, and make
+    // the new link inside it.
     run_as_admin(&format!(
-        "mkdir -p /usr/local/bin && ln -sf {} {}",
+        "mkdir -p /usr/local/bin && ln -sfh {} {}",
         shell_quote(&target.to_string_lossy()),
         shell_quote(&link.to_string_lossy()),
     ))
 }
 
 pub(super) fn uninstall(spec: &CliSpec) -> Result<(), Error> {
-    let Link { link, admin, .. } = link_of(spec).ok_or(Error::NotPackaged)?;
+    let Link {
+        link,
+        target,
+        admin,
+    } = link_of(spec).ok_or(Error::NotPackaged)?;
     if !admin {
-        return unlink_at(&link, spec.command);
+        return unlink_at(&link, &target, spec.command);
     }
     if fs::symlink_metadata(&link).is_err() {
         return Ok(());
     }
-    refuse_taken(&link, spec.command)?;
+    refuse_taken(&link, &target, spec.command)?;
     run_as_admin(&format!("rm -f {}", shell_quote(&link.to_string_lossy())))
 }
 
-/// What the link at `link` is, for a package whose binary is `target`.
+/// What the link at `link` is, for a package whose binary is `target`. A link to another
+/// file that exists belongs to another program (Homebrew's in `/usr/local/bin`, pipx's in
+/// `~/.local/bin`), as much as a file that is not a link.
 pub(super) fn status_at(link: &Path, target: &Path) -> CliStatus {
     let Ok(meta) = fs::symlink_metadata(link) else {
         return CliStatus::Missing;
@@ -95,14 +103,15 @@ pub(super) fn status_at(link: &Path, target: &Path) -> CliStatus {
     if fs::canonicalize(target).is_ok_and(|target| target == reached) {
         CliStatus::Installed
     } else {
-        CliStatus::Missing
+        CliStatus::Taken
     }
 }
 
-/// An error when something other than a link has the command's name.
-fn refuse_taken(link: &Path, command: &str) -> Result<(), Error> {
-    match fs::symlink_metadata(link) {
-        Ok(meta) if !meta.file_type().is_symlink() => Err(Error::Taken {
+/// An error when another program has the command's name; a missing, broken or own link
+/// may be replaced or removed.
+fn refuse_taken(link: &Path, target: &Path, command: &str) -> Result<(), Error> {
+    match status_at(link, target) {
+        CliStatus::Taken => Err(Error::Taken {
             command: command.to_owned(),
             path: link.to_path_buf(),
         }),
@@ -110,12 +119,15 @@ fn refuse_taken(link: &Path, command: &str) -> Result<(), Error> {
     }
 }
 
-/// Makes `link` point at `target`, replacing a link already there.
+/// Makes `link` point at `target`, replacing a link of the package's already there, or a
+/// broken one.
 fn link_at(link: &Path, target: &Path, command: &str) -> Result<(), Error> {
-    refuse_taken(link, command)?;
+    refuse_taken(link, target, command)?;
     if let Some(dir) = link.parent() {
         fs::create_dir_all(dir)?;
     }
+    // Removes the link itself, never what it points at, so a link to a directory is
+    // replaced, not linked into.
     match fs::remove_file(link) {
         Err(e) if e.kind() != ErrorKind::NotFound => return Err(e.into()),
         _ => {}
@@ -124,9 +136,9 @@ fn link_at(link: &Path, target: &Path, command: &str) -> Result<(), Error> {
     Ok(())
 }
 
-/// Removes the link at `link`, if there is one.
-fn unlink_at(link: &Path, command: &str) -> Result<(), Error> {
-    refuse_taken(link, command)?;
+/// Removes the link at `link` to `target`, or a broken one, if there is one.
+fn unlink_at(link: &Path, target: &Path, command: &str) -> Result<(), Error> {
+    refuse_taken(link, target, command)?;
     match fs::remove_file(link) {
         Err(e) if e.kind() != ErrorKind::NotFound => Err(e.into()),
         _ => Ok(()),
@@ -182,7 +194,14 @@ mod tests {
 
         fs::remove_file(&link).unwrap();
         symlink(&elsewhere, &link).unwrap();
-        assert_eq!(status_at(&link, &target), CliStatus::Missing);
+        assert_eq!(status_at(&link, &target), CliStatus::Taken);
+
+        fs::remove_file(&link).unwrap();
+        symlink(tmp.path(), &link).unwrap();
+        assert_eq!(status_at(&link, &target), CliStatus::Taken);
+
+        fs::remove_file(&link).unwrap();
+        symlink(&elsewhere, &link).unwrap();
 
         fs::remove_file(&elsewhere).unwrap();
         assert_eq!(status_at(&link, &target), CliStatus::Broken);
@@ -212,20 +231,56 @@ mod tests {
 
         link_at(&link, &target, "cmd").unwrap();
         assert_eq!(status_at(&link, &target), CliStatus::Installed);
-        // A stale link is replaced.
+        // The package's own link is made again.
         link_at(&link, &target, "cmd").unwrap();
         assert_eq!(status_at(&link, &target), CliStatus::Installed);
-        unlink_at(&link, "cmd").unwrap();
+        unlink_at(&link, &target, "cmd").unwrap();
         assert_eq!(status_at(&link, &target), CliStatus::Missing);
-        unlink_at(&link, "cmd").unwrap();
+        unlink_at(&link, &target, "cmd").unwrap();
+
+        // A broken link is replaced.
+        symlink(tmp.path().join("gone"), &link).unwrap();
+        link_at(&link, &target, "cmd").unwrap();
+        assert_eq!(status_at(&link, &target), CliStatus::Installed);
+        fs::remove_file(&link).unwrap();
 
         fs::write(&link, "a real binary").unwrap();
         assert!(matches!(
             link_at(&link, &target, "cmd"),
             Err(Error::Taken { .. })
         ));
-        assert!(matches!(unlink_at(&link, "cmd"), Err(Error::Taken { .. })));
+        assert!(matches!(
+            unlink_at(&link, &target, "cmd"),
+            Err(Error::Taken { .. })
+        ));
         assert_eq!(fs::read_to_string(&link).unwrap(), "a real binary");
+    }
+
+    #[test]
+    fn a_link_to_another_program_is_left_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("app");
+        fs::write(&target, "").unwrap();
+        let other = tmp.path().join("homebrew-cmd");
+        fs::write(&other, "").unwrap();
+        let dir = tmp.path().join("a-dir");
+        fs::create_dir(&dir).unwrap();
+        let link = tmp.path().join("cmd");
+
+        for elsewhere in [&other, &dir] {
+            symlink(elsewhere, &link).unwrap();
+            assert!(matches!(
+                link_at(&link, &target, "cmd"),
+                Err(Error::Taken { .. })
+            ));
+            assert!(matches!(
+                unlink_at(&link, &target, "cmd"),
+                Err(Error::Taken { .. })
+            ));
+            assert_eq!(fs::read_link(&link).unwrap(), *elsewhere);
+            fs::remove_file(&link).unwrap();
+        }
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
     }
 
     #[test]

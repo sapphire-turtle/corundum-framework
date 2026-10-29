@@ -29,12 +29,13 @@ pub struct CliSpec {
 pub enum CliStatus {
     /// On `PATH`, running this package.
     Installed,
-    /// Not on `PATH`, or a link to something else.
+    /// Not on `PATH`.
     Missing,
     /// A link whose target is gone: the `.app` or the AppImage was deleted or moved.
     Broken,
-    /// Another program has the name: a file that is not a link (a command-line-only
-    /// install of the same app), left alone.
+    /// Another program has the name, left alone: a file that is not a link (a
+    /// command-line-only install of the same app), or a link to another file (Homebrew's,
+    /// pipx's).
     Taken,
     /// Outside a package.
     Unsupported,
@@ -48,7 +49,8 @@ pub fn status(spec: &CliSpec) -> CliStatus {
     return unix::status(spec);
 }
 
-/// Puts the command line on `PATH`. Never replaces a file that is not a link.
+/// Puts the command line on `PATH`. Never replaces another program's: a file that is not a
+/// link, or a link to another file ([`CliStatus::Taken`]).
 pub fn install(spec: &CliSpec) -> Result<(), Error> {
     #[cfg(windows)]
     return windows::install(spec);
