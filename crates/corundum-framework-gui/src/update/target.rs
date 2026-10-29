@@ -97,12 +97,12 @@ impl DelegatedTarget for PackageTarget {
         Ok(())
     }
 
-    /// Returns only on an error: on success the process exits and starts again.
+    /// On success Velopack's updater waits for this process to end, and the panel closes
+    /// the window (see [`Target::closes_on_apply`]).
     fn apply(&self) -> Result<(), String> {
-        match self.updater.apply(After::RestartApp) {
-            Ok(never) => match never {},
-            Err(e) => Err(e.to_string()),
-        }
+        self.updater
+            .apply(After::RestartApp)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -151,6 +151,19 @@ impl Target {
             ))]
             Target::Package(target) => Some(target.updater.status()),
             _ => None,
+        }
+    }
+
+    /// Whether an apply ends this app, so the panel closes the window once it succeeds:
+    /// this app's package's. A delegated package restarts itself, not this app.
+    pub(crate) fn closes_on_apply(&self) -> bool {
+        match self {
+            #[cfg(all(
+                feature = "package",
+                not(any(target_os = "ios", target_os = "android"))
+            ))]
+            Target::Package(_) => true,
+            _ => false,
         }
     }
 

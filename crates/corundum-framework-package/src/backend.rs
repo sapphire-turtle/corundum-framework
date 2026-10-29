@@ -1,6 +1,5 @@
 //! The calls into Velopack, behind a trait so the updater's states are tested with a fake.
 
-use std::convert::Infallible;
 use std::ffi::OsString;
 use std::path::Path;
 use std::sync::mpsc;
@@ -34,8 +33,9 @@ pub(crate) trait Backend: Send + Sync {
     fn download(&self, info: &UpdateInfo, progress: &dyn Fn(u8)) -> Result<(), Error>;
     /// The version of a package downloaded earlier and newer than the running one.
     fn pending(&self) -> Option<Version>;
-    /// Hands `applied` to Velopack's updater and exits; returns only on an error.
-    fn apply(&self, applied: Applied, after: &After) -> Result<Infallible, Error>;
+    /// Hands `applied` to Velopack's updater, which waits for this process to end. Exits
+    /// for [`After::Exit`]; for a restart returns `Ok`, and the caller ends the process.
+    fn apply(&self, applied: Applied, after: &After) -> Result<(), Error>;
 }
 
 /// The real Velopack, over its `UpdateManager`.
@@ -153,7 +153,7 @@ impl Backend for Velopack {
         Version::parse(&asset.Version).ok()
     }
 
-    fn apply(&self, applied: Applied, after: &After) -> Result<Infallible, Error> {
+    fn apply(&self, applied: Applied, after: &After) -> Result<(), Error> {
         let asset = match applied {
             Applied::Downloaded(info) => info.TargetFullRelease,
             Applied::Pending => self
@@ -169,8 +169,12 @@ impl Backend for Velopack {
         self.manager
             .wait_exit_then_apply_updates(&asset, false, restart, args)
             .map_err(from_velopack)?;
-        // Velopack's updater waits for this process to exit before it replaces the files.
-        std::process::exit(0)
+        // Velopack's updater waits for this process to exit before it replaces the files,
+        // for 60 seconds: a GUI closes its window, saving what it keeps, in that time.
+        if matches!(after, After::Exit) {
+            std::process::exit(0);
+        }
+        Ok(())
     }
 }
 

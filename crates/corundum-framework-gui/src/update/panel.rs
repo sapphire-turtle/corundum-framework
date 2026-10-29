@@ -296,7 +296,7 @@ impl UpdatesPanel {
     }
 
     /// Apply the package's downloaded update: on the worker, as the app's `before_apply`
-    /// may take a while. This app exits when it succeeds.
+    /// may take a while. When it succeeds for this app's package, the window closes.
     fn apply(&mut self, ctx: &egui::Context, index: usize) {
         if let Some(package) = &mut self.rows[index].package {
             package.applying = true;
@@ -359,6 +359,11 @@ impl UpdatesPanel {
                     }
                     Event::Applied(applied) => {
                         package.applying = false;
+                        // Velopack's updater waits for this app to end: the window closes,
+                        // as for a relaunched binary, so what the app saves on exit is saved.
+                        if applied.is_ok() && target.closes_on_apply() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                         package.failure = applied.err();
                     }
                     _ => {}
@@ -981,6 +986,57 @@ mod tests {
         f.panel.last_poll = Some(Instant::now() - POLL_EVERY);
         f.frame(vec![]);
         assert_eq!(f.sent(), vec![]);
+    }
+
+    /// A panel whose first row is this app's package, its updater standing in `state`.
+    #[cfg(feature = "package")]
+    fn package_fixture(state: PackageState) -> Fixture {
+        let (job_tx, jobs) = mpsc::channel();
+        let (results, result_rx) = mpsc::channel();
+        let targets = vec![
+            Target::Package(crate::update::PackageTarget {
+                label: "App".to_owned(),
+                updater: corundum_framework_package::Updater::for_tests(state),
+            }),
+            target("Server", AfterUpdate::Manual).into(),
+        ];
+        Fixture {
+            ctx: egui::Context::default(),
+            panel: UpdatesPanel::with_worker(targets, job_tx, result_rx),
+            jobs,
+            results,
+        }
+    }
+
+    #[cfg(feature = "package")]
+    #[test]
+    fn an_applied_package_of_this_app_closes_the_window() {
+        let mut f = package_fixture(PackageState::Ready {
+            version: "1.1.0".parse().unwrap(),
+        });
+        f.frame(vec![]);
+        f.sent();
+        let (rect, enabled) = f.panel.buttons[0].expect("Restart to update");
+        assert!(enabled);
+        f.click(rect.center());
+        assert_eq!(f.work(), vec![Job::Apply(0)]);
+        let output = f.frame(vec![]);
+        assert!(Fixture::closes(&output));
+        assert_eq!(f.panel.rows[0].package.as_ref().unwrap().failure, None);
+    }
+
+    #[cfg(feature = "package")]
+    #[test]
+    fn a_failed_package_apply_keeps_the_window() {
+        let mut f = package_fixture(PackageState::Failed("stop failed".into()));
+        f.frame(vec![]);
+        f.sent();
+        f.panel.apply(&f.ctx.clone(), 0);
+        assert_eq!(f.work(), vec![Job::Apply(0)]);
+        let output = f.frame(vec![]);
+        assert!(!Fixture::closes(&output));
+        let failure = f.panel.rows[0].package.as_ref().unwrap().failure.clone();
+        assert!(failure.is_some_and(|f| f.contains("nothing downloaded")));
     }
 
     #[test]

@@ -10,10 +10,14 @@ pub enum Error {
     /// Velopack itself failed.
     #[error("Velopack error: {0}")]
     Velopack(String),
+    /// An update is being applied already, from another thread.
+    #[error("an update is being applied already")]
+    Applying,
     /// The app's `before_apply` refused the update.
     #[error("could not prepare for the update: {0}")]
     Prepare(String),
-    /// Another program has the command's name: a file that is not a link, left alone.
+    /// Another program has the command's name: a file that is not a link, or a link to
+    /// another program, left alone.
     #[error("another {command} is installed at {}", path.display())]
     Taken {
         command: String,

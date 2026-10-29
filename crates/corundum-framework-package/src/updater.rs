@@ -1,8 +1,8 @@
 //! Updates: found and downloaded by a thread of the updater's own, applied only when the
 //! app asks, after its `before_apply`.
 
-use std::convert::Infallible;
 use std::ffi::OsString;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
@@ -14,7 +14,7 @@ use velopack::UpdateInfo;
 
 use crate::backend::{Applied, Backend, Velopack};
 use crate::error::Error;
-use crate::start::PackageSpec;
+use crate::start::{self, PackageSpec};
 
 /// Where a package's updates are published.
 #[derive(Clone, Debug)]
@@ -26,14 +26,15 @@ pub enum Source {
     Http(String),
 }
 
-/// What happens once an update is applied.
+/// What happens once an update is applied, and who ends the process for it.
 #[derive(Clone, Debug)]
 pub enum After {
-    /// Start the app again without arguments: the GUI.
+    /// Start the app again without arguments: the GUI. The caller ends the process.
     RestartApp,
-    /// Start the app again with these arguments.
+    /// Start the app again with these arguments. The caller ends the process.
     RestartWith(Vec<OsString>),
-    /// Exit; something else starts it again (a service manager), or nothing.
+    /// Exit; something else starts it again (a service manager), or nothing. The process
+    /// exits in [`Updater::apply`]: a daemon or a command line has nothing to close.
     Exit,
 }
 
@@ -56,6 +57,9 @@ struct Shared {
     /// The worker's requests, `None` until the first check. Dropping it with the last
     /// clone ends the worker.
     worker: Mutex<Option<Sender<Request>>>,
+    /// Whether an apply runs: a status-bar badge and the update panel may both ask at
+    /// once. It stays set once an update is handed to Velopack, as the process is ending.
+    applying: AtomicBool,
 }
 
 /// The backend of [`Updater::for_tests`]: nothing to find, nothing to apply.
@@ -80,8 +84,8 @@ impl Backend for Inert {
         None
     }
 
-    fn apply(&self, _applied: Applied, _after: &After) -> Result<Infallible, Error> {
-        Err(Error::Velopack("not applied in tests".into()))
+    fn apply(&self, _applied: Applied, _after: &After) -> Result<(), Error> {
+        Ok(())
     }
 }
 
@@ -122,12 +126,14 @@ impl Updater {
                 }),
                 listeners: Mutex::new(Vec::new()),
                 worker: Mutex::new(None),
+                applying: AtomicBool::new(false),
             }),
         }
     }
 
     /// An updater standing in `state`, over a backend that checks nothing and never applies:
-    /// [`apply`](Self::apply) returns an error. For a GUI's tests.
+    /// [`apply`](Self::apply) returns `Ok` without doing anything when `state` is `Ready`,
+    /// and an error (nothing downloaded) otherwise. For a GUI's tests.
     #[cfg(feature = "test-support")]
     #[doc(hidden)]
     pub fn for_tests(state: PackageState) -> Updater {
@@ -139,7 +145,17 @@ impl Updater {
             cli: None,
         };
         let updater = Updater::with_backend(&SPEC, Arc::new(Inert));
-        lock(&updater.shared.state).state = state;
+        let downloaded = match &state {
+            PackageState::Ready { version } => Some(UpdateInfo {
+                TargetFullRelease: velopack::VelopackAsset {
+                    Version: version.to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }),
+            _ => None,
+        };
+        *lock(&updater.shared.state) = State { state, downloaded };
         updater
     }
 
@@ -168,10 +184,19 @@ impl Updater {
         self.send(Request::Every(every));
     }
 
-    /// Runs `before_apply`, then applies the downloaded update and exits. Returns only on
-    /// an error: nothing downloaded, `before_apply` refused (nothing is applied, and a later
-    /// call tries again), or Velopack failed.
-    pub fn apply(&self, after: After) -> Result<Infallible, Error> {
+    /// Runs `before_apply`, then hands the downloaded update to Velopack's updater, which
+    /// waits for this process to end before it replaces the files.
+    ///
+    /// Who ends the process: for [`After::Exit`] this call exits it and returns only on an
+    /// error. For [`After::RestartApp`] and [`After::RestartWith`] it returns `Ok`, and the
+    /// caller must end the process soon (Velopack waits 60 seconds), a GUI by closing its
+    /// window so that what it saves on exit is saved.
+    ///
+    /// An error: nothing downloaded, an apply already running on another thread
+    /// ([`Error::Applying`]), `before_apply` refused (nothing is applied, and a later call
+    /// tries again), or Velopack failed.
+    pub fn apply(&self, after: After) -> Result<(), Error> {
+        let applying = self.shared.begin_apply()?;
         // Whatever the state shows: after a refused `before_apply` it is `Failed`, and the
         // update is still there to apply.
         let info = lock(&self.shared.state)
@@ -179,22 +204,46 @@ impl Updater {
             .clone()
             .ok_or_else(|| Error::Velopack("nothing downloaded".into()))?;
         self.shared.prepare()?;
-        self.shared.backend.apply(Applied::Downloaded(info), &after)
+        self.shared
+            .backend
+            .apply(Applied::Downloaded(info), &after)?;
+        applying.keep();
+        Ok(())
     }
 
-    /// For a GUI's start only: apply an update downloaded earlier and never applied, and
-    /// start the app again. Looks at the downloaded packages only, never the network, so
-    /// the start is not delayed. `Ok` when there is none.
+    /// For a GUI's start only, before its window opens: apply an update downloaded earlier
+    /// and never applied, and start the app again; this call then exits the process itself,
+    /// as there is no window to close. Looks at the downloaded packages only, never the
+    /// network, so the start is not delayed. `Ok` when there is none, and on a start by
+    /// Velopack's updater: an update it failed to apply would otherwise be tried at every
+    /// start.
+    ///
+    /// Only the app's single GUI instance may call this: an app that can run two must
+    /// prevent the second first.
     pub fn apply_pending_at_start(&self) -> Result<(), Error> {
+        if self.apply_pending(start::restarted())? {
+            std::process::exit(0);
+        }
+        Ok(())
+    }
+
+    /// [`apply_pending_at_start`](Self::apply_pending_at_start) but the exit: whether an
+    /// update was handed to Velopack.
+    fn apply_pending(&self, restarted: bool) -> Result<bool, Error> {
+        if restarted {
+            return Ok(false);
+        }
         match self.shared.backend.pending() {
             Some(pending) if pending > self.shared.current => {
+                let applying = self.shared.begin_apply()?;
                 self.shared.prepare()?;
-                match self
-                    .shared
+                self.shared
                     .backend
-                    .apply(Applied::Pending, &After::RestartApp)? {}
+                    .apply(Applied::Pending, &After::RestartApp)?;
+                applying.keep();
+                Ok(true)
             }
-            _ => Ok(()),
+            _ => Ok(false),
         }
     }
 
@@ -216,7 +265,33 @@ impl Updater {
     }
 }
 
+/// An apply under way: dropped, it lets the next one run, unless [`keep`](Self::keep)
+/// says the update was handed to Velopack.
+struct ApplyGuard<'a>(Option<&'a AtomicBool>);
+
+impl ApplyGuard<'_> {
+    fn keep(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for ApplyGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(applying) = self.0 {
+            applying.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
 impl Shared {
+    /// Marks an apply as running, or [`Error::Applying`] when one already is.
+    fn begin_apply(&self) -> Result<ApplyGuard<'_>, Error> {
+        self.applying
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| Error::Applying)?;
+        Ok(ApplyGuard(Some(&self.applying)))
+    }
+
     /// Runs the app's `before_apply`; its error is the state and stops the update.
     fn prepare(&self) -> Result<(), Error> {
         let Some(before_apply) = self.spec.before_apply else {
@@ -420,7 +495,7 @@ mod tests {
     }
 
     /// A Velopack that answers checks from a list, downloads in three steps and records an
-    /// apply instead of exiting.
+    /// apply instead of handing it over.
     struct Fake {
         current: Version,
         checks: Mutex<VecDeque<Result<Option<UpdateInfo>, Error>>>,
@@ -464,13 +539,13 @@ mod tests {
             self.pending.clone()
         }
 
-        fn apply(&self, applied: Applied, after: &After) -> Result<Infallible, Error> {
+        fn apply(&self, applied: Applied, after: &After) -> Result<(), Error> {
             let what = match applied {
                 Applied::Downloaded(info) => info.TargetFullRelease.Version,
                 Applied::Pending => "pending".to_owned(),
             };
             log(format!("apply {what} {after:?}"));
-            Err(Error::Velopack("fake applied".into()))
+            Ok(())
         }
     }
 
@@ -564,12 +639,37 @@ mod tests {
         );
         updater.check_now();
         wait_for(&updater, settled);
-        let err = updater.apply(After::RestartApp).unwrap_err();
-        assert!(
-            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
-            "{err:?}"
-        );
+        updater.apply(After::RestartApp).unwrap();
         assert_eq!(apply_log(), ["before_apply", "apply 1.1.0 RestartApp"]);
+    }
+
+    #[test]
+    fn a_second_apply_while_one_runs_is_refused() {
+        static UPDATER: std::sync::OnceLock<Updater> = std::sync::OnceLock::new();
+        /// Asks for an apply again while the first is still in `before_apply`: the badge
+        /// and the panel, clicked together.
+        fn applying_again() -> Result<(), String> {
+            let again = UPDATER.get().unwrap().apply(After::RestartApp);
+            log(format!("again {again:?}"));
+            Ok(())
+        }
+        let updater = updater(
+            spec(Some(applying_again)),
+            Fake::new("1.0.0", vec![Ok(Some(info("1.1.0")))], None),
+        );
+        UPDATER.set(updater.clone()).ok().unwrap();
+        updater.check_now();
+        wait_for(&updater, settled);
+        updater.apply(After::RestartApp).unwrap();
+        assert_eq!(
+            apply_log(),
+            ["again Err(Applying)", "apply 1.1.0 RestartApp"]
+        );
+        // Handed to Velopack: the process is ending, and nothing applies again.
+        assert!(matches!(
+            updater.apply(After::RestartApp),
+            Err(Error::Applying)
+        ));
     }
 
     #[test]
@@ -609,11 +709,7 @@ mod tests {
             spec(Some(stopping)),
             Fake::new("1.0.0", vec![], Some("1.1.0")),
         );
-        let err = updater.apply_pending_at_start().unwrap_err();
-        assert!(
-            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
-            "{err:?}"
-        );
+        assert!(updater.apply_pending(false).unwrap());
         assert_eq!(apply_log(), ["before_apply", "apply pending RestartApp"]);
     }
 
@@ -621,8 +717,18 @@ mod tests {
     fn a_pending_package_not_newer_is_left_alone() {
         for pending in [Some("1.0.0"), Some("0.9.0"), None] {
             let updater = updater(spec(Some(stopping)), Fake::new("1.0.0", vec![], pending));
-            updater.apply_pending_at_start().unwrap();
+            assert!(!updater.apply_pending(false).unwrap());
         }
+        assert!(apply_log().is_empty());
+    }
+
+    #[test]
+    fn a_start_by_velopack_s_updater_applies_no_pending_package() {
+        let updater = updater(
+            spec(Some(stopping)),
+            Fake::new("1.0.0", vec![], Some("1.1.0")),
+        );
+        assert!(!updater.apply_pending(true).unwrap());
         assert!(apply_log().is_empty());
     }
 
@@ -687,11 +793,7 @@ mod tests {
         );
         // Checking, Downloading at 0, 50 and 100, Ready; nothing for the later checks.
         assert_eq!(changes.load(Ordering::SeqCst), 5);
-        let err = updater.apply(After::RestartApp).unwrap_err();
-        assert!(
-            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
-            "{err:?}"
-        );
+        updater.apply(After::RestartApp).unwrap();
         assert_eq!(apply_log(), ["before_apply", "apply 1.1.0 RestartApp"]);
     }
 
@@ -718,11 +820,7 @@ mod tests {
             updater.status().state,
             PackageState::Failed("stop failed".to_owned())
         );
-        let err = updater.apply(After::Exit).unwrap_err();
-        assert!(
-            matches!(err, Error::Velopack(ref m) if m == "fake applied"),
-            "{err:?}"
-        );
+        updater.apply(After::Exit).unwrap();
         assert_eq!(
             apply_log(),
             ["before_apply", "before_apply", "apply 1.1.0 Exit"]

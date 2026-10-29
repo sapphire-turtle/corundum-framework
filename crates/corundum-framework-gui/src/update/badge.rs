@@ -14,7 +14,8 @@ use crate::{icons, tr};
 ///
 /// The restart runs [`Updater::apply`] on a thread of its own, so the window does not
 /// freeze while the app's `before_apply` stops its background processes. On success the
-/// process exits; if the apply returns, its error is the icon's tooltip.
+/// badge closes the root window, as Velopack's updater waits for the app to end; an
+/// error is the icon's tooltip.
 pub struct ReadyBadge {
     updater: Updater,
     /// Why the last click did nothing; written by the apply thread.
@@ -89,7 +90,7 @@ impl ReadyBadge {
         }
     }
 
-    /// Apply the update on a thread; it exits the process unless it fails.
+    /// Apply the update on a thread; it closes the window unless it fails.
     fn restart(&self, ctx: &egui::Context) {
         {
             let mut applying = self.applying.lock().unwrap_or_else(|e| e.into_inner());
@@ -108,9 +109,14 @@ impl ReadyBadge {
         std::thread::spawn(move || {
             // Put the flag back even if the apply panics.
             let _reset = ResetOnDrop(applying, ctx.clone());
-            // Infallible on success: the process has exited, so this is the error.
-            let Err(err) = updater.apply(After::RestartApp);
-            *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.to_string());
+            match updater.apply(After::RestartApp) {
+                Ok(()) => {
+                    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Close)
+                }
+                Err(err) => {
+                    *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.to_string());
+                }
+            }
         });
     }
 }
@@ -154,16 +160,47 @@ mod tests {
         }));
     }
 
-    /// A badge whose click failed: the updater is `Failed`, as after a refused
-    /// `before_apply`, and has nothing downloaded, so the apply returns an error.
-    fn clicked_failing() -> ReadyBadge {
-        let badge = ReadyBadge::new(Updater::for_tests(PackageState::Failed("stop".into())));
+    /// A badge over `updater`, clicked, once its apply thread is done; and its context.
+    fn clicked(updater: Updater) -> (ReadyBadge, egui::Context) {
+        let badge = ReadyBadge::new(updater);
         let ctx = egui::Context::default();
         badge.restart(&ctx);
         while *badge.applying.lock().unwrap() {
             std::thread::yield_now();
         }
-        badge
+        (badge, ctx)
+    }
+
+    /// A badge whose click failed: the updater is `Failed`, as after a refused
+    /// `before_apply`, and has nothing downloaded, so the apply returns an error.
+    fn clicked_failing() -> ReadyBadge {
+        clicked(Updater::for_tests(PackageState::Failed("stop".into()))).0
+    }
+
+    /// Whether the next frame of `ctx` asks for the window to close.
+    fn closes(ctx: &egui::Context) -> bool {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        output.viewport_output.values().any(|v| {
+            v.commands
+                .iter()
+                .any(|c| matches!(c, egui::ViewportCommand::Close))
+        })
+    }
+
+    #[test]
+    fn a_restart_handed_to_velopack_closes_the_window() {
+        let (badge, ctx) = clicked(Updater::for_tests(PackageState::Ready {
+            version: "1.1.0".parse().unwrap(),
+        }));
+        assert!(closes(&ctx));
+        assert!(badge.error.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_failed_restart_keeps_the_window() {
+        let (_badge, ctx) = clicked(Updater::for_tests(PackageState::Failed("stop".into())));
+        assert!(!closes(&ctx));
     }
 
     #[test]

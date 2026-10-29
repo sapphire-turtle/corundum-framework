@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use corundum_framework_platform::dirs::AppDirs;
 use corundum_framework_platform::package;
@@ -15,6 +16,13 @@ use crate::cli_path::CliSpec;
 /// Set by Velopack for the app's first start after an install. Its `run` removes it, so it
 /// is read before.
 const FIRSTRUN: &str = "VELOPACK_FIRSTRUN";
+
+/// Set by Velopack's updater when it starts the app again after an update, applied or
+/// not. Its `run` removes it, so it is read before.
+const RESTART: &str = "VELOPACK_RESTART";
+
+/// Whether [`start`] saw [`RESTART`].
+static RESTARTED: AtomicBool = AtomicBool::new(false);
 
 /// The file, in the app's data directory, holding the version the app last ran with.
 const KEPT_VERSION: &str = "package-version";
@@ -50,10 +58,13 @@ pub enum Start {
     Same { version: Version },
 }
 
-/// Velopack's start, then what this start is. The first thing `main` runs: started for a
-/// Windows hook, it runs the hook and exits.
+/// Velopack's start, then what this start is. The first thing `main` runs but the app's
+/// logging: started for a Windows hook, it runs the hook and exits, and what goes wrong in
+/// a hook (the command line not put on `PATH`) is only logged, so initialise logging
+/// before calling `start`.
 pub fn start(spec: &PackageSpec) -> Start {
     let firstrun = std::env::var_os(FIRSTRUN).is_some();
+    RESTARTED.store(std::env::var_os(RESTART).is_some(), Ordering::Relaxed);
     // The app applies an update when it asks to, after `before_apply`, never behind its back
     // at a start.
     let app = VelopackApp::build().set_auto_apply_on_startup(false);
@@ -107,6 +118,13 @@ pub fn start(spec: &PackageSpec) -> Start {
         on_installed();
     }
     start
+}
+
+/// Whether Velopack's updater started this process, after applying an update or failing
+/// to: `Updater::apply_pending_at_start` then applies nothing, as an update that failed
+/// would be tried again at every start.
+pub(crate) fn restarted() -> bool {
+    RESTARTED.load(Ordering::Relaxed)
 }
 
 /// The app's install and uninstall hooks. Velopack runs a hook and exits when the installer
