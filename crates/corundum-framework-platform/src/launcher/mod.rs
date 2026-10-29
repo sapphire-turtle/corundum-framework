@@ -124,8 +124,7 @@ pub fn in_package(layout: Option<&PackageLayout>) -> io::Result<Placement> {
 /// `CORUNDUM_NO_LAUNCHER` is set. In a Windows or macOS package it registers nothing and
 /// removes the entry an earlier, unpackaged run left, which would double the installer's.
 pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
-    let env_set = std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some();
-    if env_set {
+    if std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some() {
         return Ok(Registered::Skipped);
     }
     let layout = package::current();
@@ -133,7 +132,7 @@ pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
         return Ok(Registered::Skipped);
     };
     match in_package(layout.as_ref())? {
-        Placement::Register(exe) if skipped(&exe, env_set) => Ok(Registered::Skipped),
+        Placement::Register(exe) if skipped(&exe, false) => Ok(Registered::Skipped),
         Placement::Register(exe) => register_at(spec, &root, &exe),
         Placement::StepAside => {
             if let Some(layout) = &layout {
@@ -145,12 +144,13 @@ pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
 }
 
 /// Removes what the launcher wrote before the app ran from the package `layout`: on
-/// Windows its Start Menu shortcut, on macOS the bundle it generated under the app's name,
-/// never the bundle the app runs from.
+/// Windows its Start Menu shortcut, unless it starts the package (the installer's own, at
+/// the same path when the package's title is the app's name); on macOS the bundle it
+/// generated under the app's name, never the bundle the app runs from.
 fn step_aside(spec: &LauncherSpec, root: &Root, layout: &PackageLayout) -> io::Result<()> {
     #[cfg(windows)]
     if layout.kind == PackageKind::Windows {
-        return windows::unregister(spec, root);
+        return windows::remove_left_behind(spec, root, &layout.root);
     }
     #[cfg(target_os = "macos")]
     if layout.kind == PackageKind::MacBundle {
