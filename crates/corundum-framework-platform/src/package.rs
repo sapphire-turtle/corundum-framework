@@ -4,6 +4,10 @@
 //! plain path tests, so that an app can ask without linking the updater (a cargo build, an
 //! unpackaged binary and a phone all answer `None`). Every OS's rule is checked on every OS,
 //! so [`current_with`] is testable anywhere.
+//!
+//! The executable is looked at with its links resolved: on macOS a start through the
+//! command line's `/usr/local/bin` link reports the link as the executable, and only the
+//! file it points at is inside the `.app`.
 
 use std::path::{Path, PathBuf};
 
@@ -34,16 +38,34 @@ pub fn current() -> Option<PackageLayout> {
     if cfg!(any(target_os = "ios", target_os = "android")) {
         return None;
     }
-    let exe = std::env::current_exe().ok()?;
+    let exe = current_exe()?;
     let appimage = std::env::var_os("APPIMAGE").map(PathBuf::from);
     current_with(&exe, appimage.as_deref())
 }
 
-/// [`current`] for a given executable path and `$APPIMAGE` value.
+/// The running executable as [`current`] looks at it: with its links resolved on macOS
+/// and Linux.
+pub fn current_exe() -> Option<PathBuf> {
+    std::env::current_exe().ok().map(|exe| resolved(&exe))
+}
+
+/// [`current`] for a given executable path and `$APPIMAGE` value. Links in `exe` are
+/// resolved first, but on Windows.
 pub fn current_with(exe: &Path, appimage: Option<&Path>) -> Option<PackageLayout> {
+    let exe = &resolved(exe);
     windows(exe)
         .or_else(|| mac_bundle(exe))
         .or_else(|| app_image(exe, appimage))
+}
+
+/// `exe` with its links resolved, or as it is when that fails. Not on Windows: the canonical
+/// form there is a `\\?\` path, which would end up on the user `Path`, and a Windows
+/// package is started from its `current` directory, never through a link.
+fn resolved(exe: &Path) -> PathBuf {
+    if cfg!(windows) {
+        return exe.to_path_buf();
+    }
+    exe.canonicalize().unwrap_or_else(|_| exe.to_path_buf())
 }
 
 fn windows(exe: &Path) -> Option<PackageLayout> {
@@ -87,6 +109,14 @@ mod tests {
     use std::fs;
     use std::path::Path;
 
+    /// A temporary directory and its path as `current_with` sees it: macOS's temporary
+    /// directory is under a link.
+    fn tempdir() -> (tempfile::TempDir, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let path = resolved(d.path());
+        (d, path)
+    }
+
     fn touch(path: &Path) {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, b"").unwrap();
@@ -94,32 +124,32 @@ mod tests {
 
     #[test]
     fn a_windows_install_is_current_beside_update_exe() {
-        let d = tempfile::tempdir().unwrap();
-        touch(&d.path().join("Update.exe"));
-        let exe = d.path().join("current").join("app.exe");
+        let (_d, d) = tempdir();
+        touch(&d.join("Update.exe"));
+        let exe = d.join("current").join("app.exe");
         touch(&exe);
         assert_eq!(
             current_with(&exe, None),
             Some(PackageLayout {
                 kind: PackageKind::Windows,
-                root: d.path().to_path_buf(),
-                bin_dir: d.path().join("current"),
+                root: d.clone(),
+                bin_dir: d.join("current"),
             })
         );
     }
 
     #[test]
     fn current_without_update_exe_is_not_a_package() {
-        let d = tempfile::tempdir().unwrap();
-        let exe = d.path().join("current").join("app.exe");
+        let (_d, d) = tempdir();
+        let exe = d.join("current").join("app.exe");
         touch(&exe);
         assert_eq!(current_with(&exe, None), None);
     }
 
     #[test]
     fn a_mac_bundle_holds_update_mac() {
-        let d = tempfile::tempdir().unwrap();
-        let macos = d.path().join("Demo.app/Contents/MacOS");
+        let (_d, d) = tempdir();
+        let macos = d.join("Demo.app/Contents/MacOS");
         touch(&macos.join("UpdateMac"));
         let exe = macos.join("demo");
         touch(&exe);
@@ -127,7 +157,7 @@ mod tests {
             current_with(&exe, None),
             Some(PackageLayout {
                 kind: PackageKind::MacBundle,
-                root: d.path().join("Demo.app"),
+                root: d.join("Demo.app"),
                 bin_dir: macos,
             })
         );
@@ -135,16 +165,16 @@ mod tests {
 
     #[test]
     fn an_app_without_update_mac_is_not_a_package() {
-        let d = tempfile::tempdir().unwrap();
-        let exe = d.path().join("Demo.app/Contents/MacOS/demo");
+        let (_d, d) = tempdir();
+        let exe = d.join("Demo.app/Contents/MacOS/demo");
         touch(&exe);
         assert_eq!(current_with(&exe, None), None);
     }
 
     #[test]
     fn an_appimage_needs_the_variable_and_update_nix() {
-        let m = tempfile::tempdir().unwrap();
-        let bin = m.path().join("usr/bin");
+        let (_m, m) = tempdir();
+        let bin = m.join("usr/bin");
         touch(&bin.join("UpdateNix"));
         let exe = bin.join("demo");
         touch(&exe);
@@ -160,10 +190,31 @@ mod tests {
         assert_eq!(current_with(&exe, None), None);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_the_binary_in_a_mac_bundle_is_in_the_package() {
+        let (_d, d) = tempdir();
+        let macos = d.join("Demo.app/Contents/MacOS");
+        touch(&macos.join("UpdateMac"));
+        let exe = macos.join("demo");
+        touch(&exe);
+        let link = d.join("bin/demo");
+        fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&exe, &link).unwrap();
+        assert_eq!(
+            current_with(&link, None),
+            Some(PackageLayout {
+                kind: PackageKind::MacBundle,
+                root: d.join("Demo.app"),
+                bin_dir: macos,
+            })
+        );
+    }
+
     #[test]
     fn a_cargo_build_is_not_a_package() {
-        let d = tempfile::tempdir().unwrap();
-        let exe = d.path().join("target/debug/demo");
+        let (_d, d) = tempdir();
+        let exe = d.join("target/debug/demo");
         touch(&exe);
         assert_eq!(current_with(&exe, None), None);
     }

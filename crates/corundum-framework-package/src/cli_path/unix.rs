@@ -23,7 +23,8 @@ fn link_of(spec: &CliSpec) -> Option<Link> {
     match layout.kind {
         // `/usr/local/bin` is on every macOS `PATH`, and owned by root.
         PackageKind::MacBundle => {
-            let exe = std::env::current_exe().ok()?;
+            // Resolved: started through the link, the executable's name is the command's.
+            let exe = package::current_exe()?;
             Some(Link {
                 link: Path::new("/usr/local/bin").join(spec.command),
                 target: layout.bin_dir.join(exe.file_name()?),

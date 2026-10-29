@@ -5,12 +5,12 @@ use corundum_framework_platform::dirs::AppDirs;
 use corundum_framework_platform::package;
 use semver::Version;
 use velopack::VelopackApp;
-use velopack::locator::{LocationContext, auto_locate_app_manifest};
+
+use crate::backend::{self, Located};
 
 #[cfg(windows)]
 use crate::cli_path;
 use crate::cli_path::CliSpec;
-use crate::error::Error;
 
 /// Set by Velopack for the app's first start after an install. Its `run` removes it, so it
 /// is read before.
@@ -57,6 +57,16 @@ pub fn start(spec: &PackageSpec) -> Start {
     // The app applies an update when it asks to, after `before_apply`, never behind its back
     // at a start.
     let app = VelopackApp::build().set_auto_apply_on_startup(false);
+    // Found from the executable with its links resolved: see `backend::locate`. Outside a
+    // package Velopack searches by itself, and finds nothing either.
+    let located = backend::locate();
+    let app = match &located {
+        Ok(Located {
+            config: Some(config),
+            ..
+        }) => app.set_locator(config.clone()),
+        _ => app,
+    };
     #[cfg(windows)]
     let app = windows_hooks(app, spec);
     let mut app = app;
@@ -65,8 +75,8 @@ pub fn start(spec: &PackageSpec) -> Start {
     if package::current().is_none() {
         return Start::NotPackaged;
     }
-    let now = match package_version() {
-        Ok(now) => now,
+    let now = match located {
+        Ok(Located { version, .. }) => version,
         Err(e) => {
             tracing::warn!("in a package, but its version could not be read: {e}");
             return Start::NotPackaged;
@@ -128,13 +138,6 @@ fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a
             tracing::warn!("could not take {} off PATH: {e}", cli.command);
         }
     })
-}
-
-/// The version of the package the app runs from, from its manifest.
-fn package_version() -> Result<Version, Error> {
-    let locator = auto_locate_app_manifest(LocationContext::FromCurrentExe)
-        .map_err(|e| Error::Velopack(e.to_string()))?;
-    Ok(locator.get_manifest_version())
 }
 
 /// Keeps `version` as the one the app last ran with.
