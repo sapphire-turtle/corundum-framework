@@ -92,3 +92,15 @@ corundum-launcher-in-menu = アプリメニューに表示
 corundum-launcher-remove = 外す
 corundum-launcher-add = 戻す
 corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }
+
+# 設定の「バージョン情報」にあるコマンドラインの行（`settings::CliRow`）：ラベル、ボタン、ボタンを出せないときの文、クリックが効かなかった理由。
+corundum-update-badge = 再起動して { $version } に更新
+corundum-cli-row = コマンドライン: { $command }
+corundum-cli-install = インストール
+corundum-cli-remove = 削除
+corundum-cli-repair = 修復
+corundum-cli-taken = 別の { $command } がすでにインストールされています。先に削除してください
+corundum-cli-not-on-path = ~/.local/bin が PATH にありません
+corundum-cli-status-installed = PATH にあります
+corundum-cli-status-missing = PATH にありません
+corundum-cli-failed = コマンドラインを変更できませんでした: { $error }

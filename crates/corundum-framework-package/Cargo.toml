@@ -10,6 +10,11 @@ readme = "README.md"
 keywords = ["velopack", "installer", "update", "package", "desktop"]
 categories = ["os"]
 
+# `test-support`: `Updater::for_tests`, an updater in a given state that never applies, for a
+# GUI's tests.
+[features]
+test-support = []
+
 # Desktops only: Velopack packages Windows, macOS and Linux apps, and a phone's store installs
 # and updates the app. On iOS and Android the crate builds empty.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]

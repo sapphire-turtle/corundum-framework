@@ -95,6 +95,7 @@ toml = { version = "1", optional = true }
 unic-langid = "0.9"
 
 [dev-dependencies]
+corundum-framework-package = { version = "0.3.0", path = "../corundum-framework-package", features = ["test-support"] }
 serde_json.workspace = true
 tempfile = "3"
 

@@ -98,3 +98,16 @@ corundum-launcher-in-menu = In the app menu
 corundum-launcher-remove = Remove
 corundum-launcher-add = Add back
 corundum-launcher-failed = Could not change the app menu: { $error }
+
+# The About page's command line row (`settings::CliRow`): its label, its buttons, what it says
+# when it cannot offer one, and why a click did nothing.
+corundum-update-badge = Restart to update to { $version }
+corundum-cli-row = Command line: { $command }
+corundum-cli-install = Install
+corundum-cli-remove = Remove
+corundum-cli-repair = Repair
+corundum-cli-taken = Another { $command } is installed there; remove it first
+corundum-cli-not-on-path = ~/.local/bin is not on PATH
+corundum-cli-status-installed = On PATH
+corundum-cli-status-missing = Not on PATH
+corundum-cli-failed = Could not change the command line: { $error }

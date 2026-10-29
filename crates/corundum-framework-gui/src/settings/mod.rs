@@ -18,12 +18,22 @@
 //! changes the app menu at once, keeping the choice in corundum's [store](crate::store).
 
 mod appearance;
+#[cfg(all(
+    feature = "package",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+mod cli;
 mod launcher;
 mod layout;
 mod rail;
 mod scope;
 
 pub use appearance::{AppearanceChange, AppearanceCtx, AppearancePage, AppearanceScope};
+#[cfg(all(
+    feature = "package",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+pub use cli::CliRow;
 pub use launcher::LauncherRow;
 pub use layout::{ListItem, SettingsLayout};
 pub use rail::RailPage;

@@ -58,6 +58,33 @@ struct Shared {
     worker: Mutex<Option<Sender<Request>>>,
 }
 
+/// The backend of [`Updater::for_tests`]: nothing to find, nothing to apply.
+#[cfg(feature = "test-support")]
+struct Inert;
+
+#[cfg(feature = "test-support")]
+impl Backend for Inert {
+    fn current(&self) -> Version {
+        Version::new(1, 0, 0)
+    }
+
+    fn check(&self) -> Result<Option<UpdateInfo>, Error> {
+        Ok(None)
+    }
+
+    fn download(&self, _info: &UpdateInfo, _progress: &dyn Fn(u8)) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn pending(&self) -> Option<Version> {
+        None
+    }
+
+    fn apply(&self, _applied: Applied, _after: &After) -> Result<Infallible, Error> {
+        Err(Error::Velopack("not applied in tests".into()))
+    }
+}
+
 struct State {
     state: PackageState,
     /// What `Ready` stands for.
@@ -97,6 +124,23 @@ impl Updater {
                 worker: Mutex::new(None),
             }),
         }
+    }
+
+    /// An updater standing in `state`, over a backend that checks nothing and never applies:
+    /// [`apply`](Self::apply) returns an error. For a GUI's tests.
+    #[cfg(feature = "test-support")]
+    #[doc(hidden)]
+    pub fn for_tests(state: PackageState) -> Updater {
+        static SPEC: PackageSpec = PackageSpec {
+            app_name: "test",
+            on_installed: None,
+            on_uninstalling: None,
+            before_apply: None,
+            cli: None,
+        };
+        let updater = Updater::with_backend(&SPEC, Arc::new(Inert));
+        lock(&updater.shared.state).state = state;
+        updater
     }
 
     /// Called after every change of state: a GUI asks for a repaint here. Runs on the
