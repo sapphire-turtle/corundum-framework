@@ -99,9 +99,11 @@ corundum-launcher-remove = Remove
 corundum-launcher-add = Add back
 corundum-launcher-failed = Could not change the app menu: { $error }
 
+# The status bar's update icon (`update::ReadyBadge`): its tooltip.
+corundum-update-badge = Restart to update to { $version }
+
 # The About page's command line row (`settings::CliRow`): its label, its buttons, what it says
 # when it cannot offer one, and why a click did nothing.
-corundum-update-badge = Restart to update to { $version }
 corundum-cli-row = Command line: { $command }
 corundum-cli-install = Install
 corundum-cli-remove = Remove

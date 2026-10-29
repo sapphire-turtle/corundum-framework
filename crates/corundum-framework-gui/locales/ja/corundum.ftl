@@ -93,8 +93,10 @@ corundum-launcher-remove = 外す
 corundum-launcher-add = 戻す
 corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }
 
-# 設定の「バージョン情報」にあるコマンドラインの行（`settings::CliRow`）：ラベル、ボタン、ボタンを出せないときの文、クリックが効かなかった理由。
+# ステータスバーの更新アイコン（`update::ReadyBadge`）：ツールチップ。
 corundum-update-badge = 再起動して { $version } に更新
+
+# 設定の「バージョン情報」にあるコマンドラインの行（`settings::CliRow`）：ラベル、ボタン、ボタンを出せないときの文、クリックが効かなかった理由。
 corundum-cli-row = コマンドライン: { $command }
 corundum-cli-install = インストール
 corundum-cli-remove = 削除

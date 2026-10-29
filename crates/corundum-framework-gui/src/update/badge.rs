@@ -38,24 +38,51 @@ impl ReadyBadge {
         }
     }
 
-    /// Render the icon when an update is ready, nothing otherwise.
+    /// Render the icon when an update is ready, or when the last click failed, nothing
+    /// otherwise.
+    ///
+    /// A refused `before_apply` leaves the updater `Failed`, so the icon stays for as long
+    /// as it holds its click's error: shown in the warning colour with the error as its
+    /// hover text, and a click tries again.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        let PackageState::Ready { version } = self.updater.status().state else {
-            #[cfg(test)]
-            {
-                self.shown = false;
-            }
-            return;
+        let state = self.updater.status().state;
+        let ready = match &state {
+            PackageState::Ready { version } => Some(version.to_string()),
+            _ => None,
         };
+        let mut error = self.error.lock().unwrap_or_else(|e| e.into_inner());
+        // Checking again, or a newer state, ends the failure the icon was showing.
+        if ready.is_none()
+            && !matches!(state, PackageState::Failed(_))
+            && !*self.applying.lock().unwrap_or_else(|e| e.into_inner())
+        {
+            *error = None;
+        }
+        let error = error.clone();
+        let shown = ready.is_some() || error.is_some();
         #[cfg(test)]
         {
-            self.shown = true;
+            self.shown = shown;
         }
-        let error = self.error.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        let hover = error
-            .unwrap_or_else(|| tr!(ui, "corundum-update-badge", version = version.to_string()));
+        if !shown {
+            return;
+        }
+        let failed = error.is_some();
+        let hover = error.unwrap_or_else(|| {
+            tr!(
+                ui,
+                "corundum-update-badge",
+                version = ready.unwrap_or_default()
+            )
+        });
         let response = ui
-            .add(icons::button(icons::download(), 14.0))
+            .scope(|ui| {
+                if failed {
+                    ui.visuals_mut().override_text_color = Some(ui.visuals().warn_fg_color);
+                }
+                ui.add(icons::button(icons::download(), 14.0))
+            })
+            .inner
             .on_hover_text(hover);
         if response.clicked() {
             self.restart(ui.ctx());
@@ -79,12 +106,23 @@ impl ReadyBadge {
             ctx.clone(),
         );
         std::thread::spawn(move || {
+            // Put the flag back even if the apply panics.
+            let _reset = ResetOnDrop(applying, ctx.clone());
             // Infallible on success: the process has exited, so this is the error.
             let Err(err) = updater.apply(After::RestartApp);
             *error.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.to_string());
-            *applying.lock().unwrap_or_else(|e| e.into_inner()) = false;
-            ctx.request_repaint();
         });
+    }
+}
+
+/// Clears the badge's `applying` flag and asks for a repaint when the apply thread ends,
+/// however it ends.
+struct ResetOnDrop(Arc<Mutex<bool>>, egui::Context);
+
+impl Drop for ResetOnDrop {
+    fn drop(&mut self) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = false;
+        self.1.request_repaint();
     }
 }
 
@@ -92,8 +130,6 @@ impl ReadyBadge {
 mod tests {
     use super::*;
     use crate::test_support::render;
-    use corundum_framework_package::Updater;
-    use corundum_framework_update::PackageState;
 
     fn shown(state: PackageState) -> bool {
         let mut badge = ReadyBadge::new(Updater::for_tests(state));
@@ -116,5 +152,49 @@ mod tests {
         assert!(shown(PackageState::Ready {
             version: "1.1.0".parse().unwrap()
         }));
+    }
+
+    /// A badge whose click failed: the updater is `Failed`, as after a refused
+    /// `before_apply`, and has nothing downloaded, so the apply returns an error.
+    fn clicked_failing() -> ReadyBadge {
+        let badge = ReadyBadge::new(Updater::for_tests(PackageState::Failed("stop".into())));
+        let ctx = egui::Context::default();
+        badge.restart(&ctx);
+        while *badge.applying.lock().unwrap() {
+            std::thread::yield_now();
+        }
+        badge
+    }
+
+    #[test]
+    fn a_failed_restart_keeps_the_badge_with_its_error() {
+        let mut badge = clicked_failing();
+        render([600.0, 400.0], |ui| badge.ui(ui));
+        assert!(badge.shown);
+        let error = badge.error.lock().unwrap().clone();
+        assert!(error.is_some_and(|e| e.contains("nothing downloaded")));
+    }
+
+    #[test]
+    fn a_new_check_ends_the_failure_the_badge_showed() {
+        let badge = clicked_failing();
+        let mut ready = ReadyBadge::new(Updater::for_tests(PackageState::Checking));
+        ready.error = Arc::clone(&badge.error);
+        render([600.0, 400.0], |ui| ready.ui(ui));
+        assert!(!ready.shown);
+        assert!(badge.error.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn a_ready_badge_is_an_enabled_button() {
+        let mut badge = ReadyBadge::new(Updater::for_tests(PackageState::Ready {
+            version: "1.1.0".parse().unwrap(),
+        }));
+        let mut enabled = false;
+        render([600.0, 400.0], |ui| {
+            badge.ui(ui);
+            enabled = ui.is_enabled() && badge.shown;
+        });
+        assert!(enabled);
     }
 }
