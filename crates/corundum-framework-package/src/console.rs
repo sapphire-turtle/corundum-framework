@@ -4,6 +4,16 @@
 //! command prints nothing and returns at once. A tiny console binary on `PATH` calls
 //! [`forward`]: it starts the GUI binary with the same arguments and standard streams, waits,
 //! and exits with its exit code.
+//!
+//! On Windows the child is put in a job object that kills it when the shim goes away, so
+//! Ctrl+C in the console takes the GUI process with it. Only the child: the job lets the
+//! processes it starts leave silently (`JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`). Velopack
+//! starts its `Update.exe` without asking to leave the job, and the GUI exits for the
+//! update to be applied; in the shim's job, `Update.exe` would be killed with it halfway
+//! through replacing the files, and so would the app it restarts and any daemon.
+//!
+//! A shim has no logging set up, so a job that cannot be made is reported on standard
+//! error.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -52,8 +62,8 @@ mod job {
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
     use windows::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-        SetInformationJobObject,
+        JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JobObjectExtendedLimitInformation, SetInformationJobObject,
     };
 
     /// A job object handle; closing it (when the shim ends, however it ends) kills the child.
@@ -67,12 +77,12 @@ mod job {
     }
 
     /// Puts `child` in a new job that kills it on close. Without one (a failure is only
-    /// logged) the child still runs; it just outlives a Ctrl+C.
+    /// printed: the shim has no logging) the child still runs; it just outlives a Ctrl+C.
     pub fn kill_on_close(child: &Child) -> Option<Job> {
         match try_kill_on_close(child) {
             Ok(job) => Some(job),
             Err(e) => {
-                tracing::warn!("the console shim runs without a job object: {e}");
+                eprintln!("the console shim runs without a job object: {e}");
                 None
             }
         }
@@ -84,7 +94,10 @@ mod job {
         unsafe {
             let job = Job(CreateJobObjectW(None, None)?);
             let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            // Only the child is killed: what it starts (Velopack's `Update.exe`, which must
+            // outlive the GUI to apply an update) leaves the job.
+            info.BasicLimitInformation.LimitFlags =
+                JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
             SetInformationJobObject(
                 job.0,
                 JobObjectExtendedLimitInformation,
