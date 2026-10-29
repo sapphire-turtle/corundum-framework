@@ -387,6 +387,7 @@ fn how_ui(
         (Some(InstallMethod::PackageManager), None) => {
             tr!(ui, "corundum-update-by-package-manager")
         }
+        (Some(InstallMethod::Velopack), None) => tr!(ui, "corundum-update-by-the-app"),
         (Some(InstallMethod::Store(store)), None) => tr!(
             ui,
             match store {
