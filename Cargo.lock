@@ -905,6 +905,7 @@ version = "0.0.0"
 dependencies = [
  "corundum-framework",
  "corundum-framework-build",
+ "libc",
  "tracing",
  "tracing-subscriber",
 ]
