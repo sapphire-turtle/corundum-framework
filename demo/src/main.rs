@@ -20,10 +20,14 @@ fn main() -> corundum_framework::eframe::Result<()> {
     #[cfg(feature = "velopack")]
     {
         use corundum_framework::platform::instance;
+        // Both outcomes go to velopack.log too, which a check on the machines reads: a second
+        // start logs its `start` line as well before it learns that it is second.
         let Some(instance) = instance::acquire_or_activate(corundum_demo::APP_NAME) else {
             tracing::info!("corundum demo: running already; brought it to the front");
+            corundum_demo::velopack::log("instance: running already; brought it to the front");
             return Ok(());
         };
+        corundum_demo::velopack::log("instance: the only one running");
         corundum_demo::velopack::start_updates();
         corundum_demo::run_as(instance)
     }
