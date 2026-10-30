@@ -906,7 +906,6 @@ version = "0.0.0"
 dependencies = [
  "corundum-framework",
  "corundum-framework-build",
- "libc",
  "objc2 0.6.5",
  "objc2-avf-audio",
  "objc2-foundation 0.3.2",

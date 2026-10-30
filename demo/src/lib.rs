@@ -13,7 +13,11 @@ use corundum_framework::gui::store::Store;
 use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, icons};
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod first_run;
 mod screens;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod service;
 #[cfg(feature = "velopack")]
 pub mod velopack;
 
@@ -53,6 +57,10 @@ pub struct Demo {
     app: App,
     /// The window's rects as last logged, to log them again only when they change.
     logged: Option<[egui::Rect; 3]>,
+    /// The first-run flow while it is shown: until it is finished, and again after Settings ›
+    /// About resets it.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    first_run: Option<corundum_framework::gui::first_run::FirstRun>,
 }
 
 /// What the shell draws: the screens, the side pane beside them all, the foot and the
@@ -123,6 +131,8 @@ impl Demo {
                 }),
             },
             logged: None,
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            first_run: None,
         }
     }
 
@@ -139,6 +149,10 @@ impl Demo {
     /// Draw the app into the window's root `ui`.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.log_rects(ui);
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if self.first_run_ui(ui) {
+            return;
+        }
         // The player follows the OS's media keys from every screen.
         let on_screen = self.shell.current() == Some(Screen::Media);
         self.app.state.media.update(ui.ctx(), on_screen);
@@ -214,6 +228,27 @@ impl App {
 }
 
 impl Demo {
+    /// Draw the first-run flow in place of the shell while it is not finished; whether it
+    /// was drawn. Asked every frame, so a reset from Settings › About shows it at once.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    fn first_run_ui(&mut self, ui: &mut egui::Ui) -> bool {
+        use corundum_framework::gui::first_run::FirstRun;
+
+        if FirstRun::done(ui.ctx()) {
+            self.first_run = None;
+            return false;
+        }
+        let flow = self
+            .first_run
+            .get_or_insert_with(|| first_run::flow(ui.ctx()));
+        if flow.ui(ui) {
+            // Finished: the shell from the next frame.
+            self.first_run = None;
+            ui.ctx().request_repaint();
+        }
+        true
+    }
+
     /// Log the screen, the area egui keeps clear of the system's bars, and the root `ui`,
     /// when they change: what the insets did, in the log a CI run keeps.
     fn log_rects(&mut self, ui: &egui::Ui) {
@@ -288,6 +323,47 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
             );
             options
         }
+    }
+}
+
+/// What the command line asks of a desktop start.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommandLine {
+    /// Open the window, with the arguments as they are.
+    Window,
+    /// Answered in the terminal (`--help`, `--version`): exit.
+    Done,
+    /// Run the daemon, the demo's background service ([`service::service`]).
+    Daemon,
+}
+
+/// The command line the package puts on `PATH` (`corundum-demo`), from the arguments after
+/// the executable's name: `daemon` runs the daemon, `--help` and `--version` answer in the
+/// terminal. Any other start opens the window, arguments and all, as the app menu's entry
+/// passes the files it was given: only an exact first argument is taken for an option or the
+/// subcommand.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn command_line(args: impl IntoIterator<Item = std::ffi::OsString>) -> CommandLine {
+    // `OsString`: a file name the entry passes need not be UTF-8.
+    let first = args.into_iter().next();
+    match first.as_ref().and_then(|arg| arg.to_str()) {
+        Some("daemon") => CommandLine::Daemon,
+        Some("--help" | "-h") => {
+            println!(
+                "corundum-framework demo {}\n\n\
+                 Usage: corundum-demo [--help | --version | daemon]\n\n\
+                 Without an argument, opens the demo's window. `daemon` runs the demo's\n\
+                 background service, as the service manager starts it.",
+                env!("CARGO_PKG_VERSION")
+            );
+            CommandLine::Done
+        }
+        Some("--version" | "-V") => {
+            println!("corundum-framework demo {}", env!("CARGO_PKG_VERSION"));
+            CommandLine::Done
+        }
+        _ => CommandLine::Window,
     }
 }
 

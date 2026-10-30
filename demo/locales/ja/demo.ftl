@@ -144,6 +144,13 @@ demo-settings-look-memory = デモの実行中だけ保持します。このプ�
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
 demo-settings-velopack = Velopack
+demo-settings-first-run-again = 初回セットアップをもう一度行う
+
+# 初回セットアップ：ようこそのページと、デーモンをバックグラウンドで動かし続けるかの質問。
+demo-first-run-welcome = ようこそ
+demo-first-run-welcome-text = このデモでは、corundum-framework がアプリと共有するすべての部品を試せます。まずバックグラウンドのデーモンについて一つ質問し、そのあとデモが始まります。
+demo-first-run-service-question = デモのデーモンをバックグラウンドで動かし続けますか？
+demo-first-run-service-reason = デーモンはアプリのサーバーの代わりです。ログイン時に起動し、ウィンドウを閉じても動き続けます。あとで「設定 › このアプリについて」から変更できます。
 
 # 詳細画面：アルバムと、選んだアルバムの曲をサイドペインに。
 demo-detail-intro = アルバムを選ぶと、曲がサイドペインに表示されます。広い画面ではどの画面でも右カラムとして表示され、ステータスバー右端のボタンで隠せます。隠しているときやスマートフォンでは、アルバムを選ぶと開きます。

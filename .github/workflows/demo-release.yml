@@ -88,7 +88,8 @@ jobs:
           EXTRA: ${{ matrix.extra }}
         run: |
           mkdir pack
-          cp "target/release/corundum-framework-demo$EXE" "target/release/corundum-framework-demo-daemon$EXE" pack/
+          # One binary: the daemon is its `daemon` subcommand.
+          cp "target/release/corundum-framework-demo$EXE" pack/
           # The console shim, under the command's name, for the install hook to put on `Path`.
           if [ "$RUNNER_OS" = Windows ]; then
             cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
