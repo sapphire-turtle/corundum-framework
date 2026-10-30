@@ -5,10 +5,12 @@
 #[cfg(not(target_os = "android"))]
 fn main() -> corundum_framework::eframe::Result<()> {
     // Velopack's hooks start the executable and expect it to exit at once: first of all,
-    // but the logging their failures go to.
+    // but the logging their failures go to and the move of the data directory the start
+    // reads.
     #[cfg(feature = "velopack")]
     {
         corundum_demo::init_logging();
+        corundum_demo::migrate_dirs();
         let start = corundum_framework::package::start(&corundum_demo::velopack::PACKAGE);
         corundum_demo::velopack::log_start(&start);
     }
