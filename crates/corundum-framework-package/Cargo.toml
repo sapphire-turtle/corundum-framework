@@ -18,7 +18,7 @@ test-support = []
 # Desktops only: Velopack packages Windows, macOS and Linux apps, and a phone's store installs
 # and updates the app. On iOS and Android the crate builds empty.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
-corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform" }
+corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", default-features = false }
 corundum-framework-update = { version = "0.3.0", path = "../corundum-framework-update", default-features = false }
 semver = "1"
 thiserror.workspace = true

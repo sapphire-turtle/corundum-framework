@@ -90,6 +90,31 @@ jobs:
             exit 1
           fi
 
+  # The update crate, and the package crate, ask the platform crate for its directories and
+  # `package` only: a headless user (a CLI, a server) must not build the SVG renderer.
+  headless-without-resvg:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: resvg is not built for the update crate alone
+        run: |
+          for args in \
+            "-p corundum-framework-update" \
+            "-p corundum-framework-package" \
+            "-p corundum-framework-platform --no-default-features"; do
+            cargo tree --locked --target all $args -e normal > tree.txt
+            if grep -q ' resvg v' tree.txt; then
+              echo "resvg is built for: $args"
+              exit 1
+            fi
+          done
+          cargo tree --locked --target all -p corundum-framework-platform -e normal > tree.txt
+          if ! grep -q ' resvg v' tree.txt; then
+            echo "resvg is not built for the platform crate's default features"
+            exit 1
+          fi
+
   # Without `media-session` the platform crate, and the facade's default, must not build zbus
   # (or MediaPlayer): an app that plays nothing carries no D-Bus.
   media-session-off:
