@@ -1,6 +1,6 @@
 //! What a registered service is doing, as a value the GUI can branch on.
 
-/// The state of an app's service registration, as [`state`](crate::state) reports it.
+/// The state of an app's service registration, as [`state`](fn@crate::state) reports it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServiceState {
     /// Nothing is registered with the OS service manager.

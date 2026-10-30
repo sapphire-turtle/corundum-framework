@@ -24,7 +24,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::error::{Error, Result};
-use crate::launchd::{agent_path, label, labelled_agent_path, relabel, render_launch_agent};
+use crate::launchd::{
+    MacBackend, agent_path, bundled_agent_path, label, labelled_agent_path, mac_backend, relabel,
+    render_launch_agent,
+};
 use crate::scope::{Environment, InstallContext, Os, ServiceSpec};
 use crate::state::ServiceState;
 use crate::systemd::{activation, render_unit, unit_path, words};
@@ -62,6 +65,34 @@ pub trait ServiceManager {
             Err(error) => Err(error.into()),
         }
     }
+
+    /// Ask macOS's SMAppService to act on the agent whose plist the running `.app` carries
+    /// as `Contents/Library/LaunchAgents/<plist_name>`, and return its status afterwards.
+    fn app_service(&self, plist_name: &str, action: AppServiceAction) -> Result<AppServiceStatus>;
+}
+
+/// What [`ServiceManager::app_service`] asks SMAppService to do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppServiceAction {
+    /// Register the agent, which starts it once the person has allowed it.
+    Register,
+    /// Unregister the agent, which stops it.
+    Unregister,
+    /// Only ask for the status.
+    Status,
+}
+
+/// SMAppService's status of an agent, as [`ServiceManager::app_service`] reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppServiceStatus {
+    /// Not registered, or unregistered since.
+    NotRegistered,
+    /// Registered and allowed to run.
+    Enabled,
+    /// Registered, waiting for the person to allow it in System Settings › Login Items.
+    RequiresApproval,
+    /// SMAppService could not find the agent's plist in the bundle.
+    NotFound,
 }
 
 /// The real service manager: real files, real commands.
@@ -114,6 +145,20 @@ impl ServiceManager for SystemManager {
             Err(error) => Err(error.into()),
         }
     }
+
+    #[cfg(target_os = "macos")]
+    fn app_service(&self, plist_name: &str, action: AppServiceAction) -> Result<AppServiceStatus> {
+        crate::smappservice::app_service(plist_name, action)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn app_service(
+        &self,
+        _plist_name: &str,
+        _action: AppServiceAction,
+    ) -> Result<AppServiceStatus> {
+        Err(Error::Manager("SMAppService is macOS only".to_owned()))
+    }
 }
 
 /// What a [`RecordingManager`] was asked to do, in order.
@@ -127,6 +172,8 @@ pub struct Calls {
     pub removed: Vec<PathBuf>,
     /// Every unit file read.
     pub read: Vec<PathBuf>,
+    /// Every SMAppService request, with the plist name it was made for.
+    pub app_service: Vec<(String, AppServiceAction)>,
 }
 
 /// A service manager that records instead of acting.
@@ -146,6 +193,8 @@ pub struct RecordingManager {
     existing: Vec<(PathBuf, String)>,
     files: Vec<PathBuf>,
     answers: Vec<(String, String)>,
+    app_service_status: Option<AppServiceStatus>,
+    app_service_fail_on: Option<AppServiceAction>,
 }
 
 impl RecordingManager {
@@ -199,6 +248,20 @@ impl RecordingManager {
     /// than its default output. May be chained: the first matching answer wins.
     pub fn answering(mut self, needle: &str, text: &str) -> Self {
         self.answers.push((needle.to_owned(), text.to_owned()));
+        self
+    }
+
+    /// The same manager, answering every SMAppService request with `status` rather than
+    /// [`AppServiceStatus::NotRegistered`].
+    pub fn with_app_service(mut self, status: AppServiceStatus) -> Self {
+        self.app_service_status = Some(status);
+        self
+    }
+
+    /// The same manager, failing the SMAppService request `action` (after recording it), as
+    /// SMAppService refuses an unsigned app or an unregister of an unknown agent.
+    pub fn failing_app_service_on(mut self, action: AppServiceAction) -> Self {
+        self.app_service_fail_on = Some(action);
         self
     }
 
@@ -283,6 +346,20 @@ impl ServiceManager for RecordingManager {
             .iter()
             .find(|(existing, _)| existing == path)
             .map(|(_, body)| body.clone()))
+    }
+
+    fn app_service(&self, plist_name: &str, action: AppServiceAction) -> Result<AppServiceStatus> {
+        self.calls
+            .lock()
+            .expect("the recording manager's lock is never held across a panic")
+            .app_service
+            .push((plist_name.to_owned(), action));
+        if self.app_service_fail_on == Some(action) {
+            return Err(Error::Manager(format!("refused: {action:?} {plist_name}")));
+        }
+        Ok(self
+            .app_service_status
+            .unwrap_or(AppServiceStatus::NotRegistered))
     }
 }
 
@@ -370,6 +447,18 @@ pub fn install(
     manager: &dyn ServiceManager,
 ) -> Result<InstallContext> {
     retire_legacy_agent(spec, env, manager)?;
+    if let Some((plist_name, unit_path)) = bundled_agent(spec, env, manager) {
+        // An agent file left by an install from outside the package would run a second
+        // copy under the same label; it goes before SMAppService registers the bundle's.
+        retire_agent_file(spec, env, manager)?;
+        let context = InstallContext {
+            unit_path,
+            exe: crate::exe::service_exe()?,
+        };
+        manager.app_service(&plist_name, AppServiceAction::Register)?;
+        run_post_install(spec, &context)?;
+        return Ok(context);
+    }
     let context = InstallContext {
         unit_path: install_path(spec, env)?,
         exe: crate::exe::service_exe()?,
@@ -393,16 +482,22 @@ pub fn install(
         // copy left under the temporary directory has done its job.
         let _ = manager.remove_unit(&context.unit_path);
     }
-    // The hook runs last, on an installed, running service, with what the install resolved.
+    run_post_install(spec, &context)?;
+    Ok(context)
+}
+
+/// Run the spec's post-install hook, last, on an installed, running service, with what the
+/// install resolved.
+fn run_post_install(spec: &ServiceSpec, context: &InstallContext) -> Result<()> {
     if let Some(hook) = spec.post_install.as_ref()
-        && let Err(error) = hook(&context)
+        && let Err(error) = hook(context)
     {
         return Err(Error::Manager(format!(
             "{error}; the service is installed and running, so fix what the hook needs \
              and rerun the uninstall and install of your choice"
         )));
     }
-    Ok(context)
+    Ok(())
 }
 
 /// Uninstall a service: stop and disable it, then remove its file.
@@ -417,6 +512,19 @@ pub fn uninstall(
     manager: &dyn ServiceManager,
 ) -> Result<()> {
     retire_legacy_agent(spec, env, manager)?;
+    if let Some((plist_name, _)) = bundled_agent(spec, env, manager) {
+        retire_agent_file(spec, env, manager)?;
+        // SMAppService refuses to unregister an agent it does not have, which is the state
+        // an uninstall wants to reach anyway; it is only asked when there is one.
+        let status = manager.app_service(&plist_name, AppServiceAction::Status)?;
+        if matches!(
+            status,
+            AppServiceStatus::Enabled | AppServiceStatus::RequiresApproval
+        ) {
+            manager.app_service(&plist_name, AppServiceAction::Unregister)?;
+        }
+        return Ok(());
+    }
     let path = install_path(spec, env)?;
 
     for command in uninstall_commands(spec, env) {
@@ -447,6 +555,21 @@ pub fn state(
     manager: &dyn ServiceManager,
 ) -> Result<ServiceState> {
     adopt_legacy_agent(spec, env, manager)?;
+    if let Some((plist_name, _)) = bundled_agent(spec, env, manager) {
+        return Ok(
+            match manager.app_service(&plist_name, AppServiceAction::Status)? {
+                AppServiceStatus::RequiresApproval => ServiceState::NeedsApproval,
+                AppServiceStatus::NotRegistered | AppServiceStatus::NotFound => {
+                    ServiceState::NotInstalled
+                }
+                // SMAppService says only that it may run; launchd says whether it does.
+                AppServiceStatus::Enabled => match manager.run(&status_command(spec, env)) {
+                    Ok(output) if crate::launchd::is_running(&output) => ServiceState::Running,
+                    _ => ServiceState::Stopped,
+                },
+            },
+        );
+    }
     let (program, running_command, is_running): (_, _, fn(&str) -> bool) = match env.os {
         Os::Linux => {
             let Some(unit) = manager.read_unit(&install_path(spec, env)?)? else {
@@ -559,9 +682,15 @@ fn adopt_legacy_agent(
     env: &Environment,
     manager: &dyn ServiceManager,
 ) -> Result<()> {
+    let retired = retire_legacy_agent(spec, env, manager)?;
+    // Under SMAppService the bundle's plist is the service: an adopted agent file would run
+    // a second copy, so the legacy agent is only retired.
+    if bundled_agent(spec, env, manager).is_some() {
+        return Ok(());
+    }
     // An agent under the legacy label is the service, renamed: it keeps running, under the
     // current label, unless one is installed there already.
-    if let Some((from_label, legacy)) = retire_legacy_agent(spec, env, manager)? {
+    if let Some((from_label, legacy)) = retired {
         let path = install_path(spec, env)?;
         if manager.read_unit(&path)?.is_none() {
             manager.write_unit(&path, &relabel(&legacy, &from_label, spec.app_name))?;
@@ -605,6 +734,51 @@ fn retire_legacy_agent(
         first.get_or_insert((legacy_label.clone(), body));
     }
     Ok(first)
+}
+
+/// The plist name and path of the agent the running `.app` carries, when the install goes
+/// through SMAppService ([`mac_backend`]); `None` off macOS and for the LaunchAgent file.
+fn bundled_agent(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Option<(String, PathBuf)> {
+    if env.os != Os::MacOs {
+        return None;
+    }
+    let layout = env.package.as_ref()?;
+    match mac_backend(Some(layout), |path| manager.exists(path), spec.app_name) {
+        MacBackend::AppService { plist_name } => {
+            let path = bundled_agent_path(&layout.root, &plist_name);
+            Some((plist_name, path))
+        }
+        MacBackend::AgentFile => None,
+    }
+}
+
+/// Take a LaunchAgent file under the current label off launchd and remove it, if one is
+/// there: one an install from outside the package left.
+fn retire_agent_file(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Result<()> {
+    // Without a home there is no `~/Library/LaunchAgents` to have left a file in.
+    let Some(home) = env.home.as_deref() else {
+        return Ok(());
+    };
+    let path = agent_path(spec.app_name, home);
+    if manager.read_unit(&path)?.is_none() {
+        return Ok(());
+    }
+    // Not loaded is what this wants anyway.
+    let _ = manager.run(&words(&[
+        "launchctl",
+        "bootout",
+        &format!("gui/{}", env.euid),
+        &label(spec.app_name),
+    ]));
+    manager.remove_unit(&path)
 }
 
 /// Where each platform keeps the file an install writes: the invoking user's own directory;
@@ -707,6 +881,7 @@ fn home_dir(env: &Environment) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use corundum_framework_platform::package::{PackageKind, PackageLayout};
 
     fn spec() -> ServiceSpec {
         ServiceSpec {
@@ -725,6 +900,7 @@ mod tests {
             euid: 1000,
             os: Os::Linux,
             home: Some(PathBuf::from("/home/user")),
+            package: None,
         }
     }
 
@@ -733,6 +909,7 @@ mod tests {
             euid: 1000,
             os: Os::MacOs,
             home: Some(PathBuf::from("/home/user")),
+            package: None,
         }
     }
 
@@ -741,7 +918,34 @@ mod tests {
             euid: 1000,
             os: Os::Windows,
             home: Some(PathBuf::from("/home/user")),
+            package: None,
         }
+    }
+
+    /// macOS, running from a `.app` that carries the agent's plist.
+    fn macos_bundle() -> Environment {
+        Environment {
+            package: Some(PackageLayout {
+                kind: PackageKind::MacBundle,
+                root: PathBuf::from("/Applications/Sapphire.app"),
+                bin_dir: PathBuf::from("/Applications/Sapphire.app/Contents/MacOS"),
+            }),
+            ..macos()
+        }
+    }
+
+    const BUNDLED_PLIST_NAME: &str = "net.sapphire-turtle.sapphire-agent.plist";
+
+    /// A manager that sees the bundle's own plist, so the flows pick SMAppService.
+    fn bundle_manager() -> RecordingManager {
+        RecordingManager::new().with_file(
+            "/Applications/Sapphire.app/Contents/Library/LaunchAgents/\
+             net.sapphire-turtle.sapphire-agent.plist",
+        )
+    }
+
+    fn app_service_call(action: AppServiceAction) -> (String, AppServiceAction) {
+        (BUNDLED_PLIST_NAME.to_owned(), action)
     }
 
     fn command(parts: &[&str]) -> Vec<String> {
@@ -1195,6 +1399,185 @@ mod tests {
         let flat: Vec<String> = manager.calls().commands.iter().flatten().cloned().collect();
         assert!(flat.contains(&"schtasks".to_owned()), "{flat:?}");
         assert!(flat.contains(&"/create".to_owned()), "{flat:?}");
+    }
+
+    #[test]
+    fn install_registers_with_smappservice() {
+        let manager = bundle_manager().with_app_service(AppServiceStatus::Enabled);
+        install(&spec(), &macos_bundle(), &manager).unwrap();
+
+        let calls = manager.calls();
+        assert!(
+            calls
+                .app_service
+                .contains(&app_service_call(AppServiceAction::Register)),
+            "{:?}",
+            calls.app_service
+        );
+        assert!(
+            calls.units.is_empty(),
+            "the bundle carries the plist: {:?}",
+            calls.units
+        );
+        assert!(
+            !calls.commands.iter().flatten().any(|w| w == "bootout"),
+            "no agent file was there to take off: {:?}",
+            calls.commands
+        );
+        assert!(calls.removed.is_empty(), "{:?}", calls.removed);
+    }
+
+    #[test]
+    fn install_with_smappservice_retires_an_agent_file_under_the_same_label() {
+        let manager = bundle_manager()
+            .with_app_service(AppServiceStatus::Enabled)
+            .with_unit(current_plist(), &macos_plist());
+        install(&spec(), &macos_bundle(), &manager).unwrap();
+
+        let calls = manager.calls();
+        assert!(
+            calls.commands.contains(&words(&[
+                "launchctl",
+                "bootout",
+                "gui/1000",
+                "net.sapphire-turtle.sapphire-agent",
+            ])),
+            "{:?}",
+            calls.commands
+        );
+        assert_eq!(calls.removed, vec![current_plist()]);
+        assert!(calls.units.is_empty(), "{:?}", calls.units);
+        assert_eq!(
+            calls.app_service,
+            vec![app_service_call(AppServiceAction::Register)]
+        );
+    }
+
+    #[test]
+    fn a_failed_smappservice_registration_is_an_error() {
+        let manager = bundle_manager()
+            .with_app_service(AppServiceStatus::NotRegistered)
+            .failing_app_service_on(AppServiceAction::Register);
+        assert!(install(&spec(), &macos_bundle(), &manager).is_err());
+    }
+
+    #[test]
+    fn uninstall_unregisters() {
+        let manager = bundle_manager().with_app_service(AppServiceStatus::Enabled);
+        uninstall(&spec(), &macos_bundle(), &manager).unwrap();
+
+        let calls = manager.calls();
+        assert!(
+            calls
+                .app_service
+                .contains(&app_service_call(AppServiceAction::Unregister)),
+            "{:?}",
+            calls.app_service
+        );
+        assert!(calls.units.is_empty(), "{:?}", calls.units);
+    }
+
+    #[test]
+    fn uninstalling_an_unregistered_app_service_is_not_an_error() {
+        // SMAppService refuses to unregister what it does not know; an uninstall of a
+        // service that is not there must not.
+        for status in [AppServiceStatus::NotRegistered, AppServiceStatus::NotFound] {
+            let manager = bundle_manager()
+                .with_app_service(status)
+                .failing_app_service_on(AppServiceAction::Unregister);
+            uninstall(&spec(), &macos_bundle(), &manager).unwrap();
+            assert!(
+                !manager
+                    .calls()
+                    .app_service
+                    .contains(&app_service_call(AppServiceAction::Unregister)),
+                "{:?}",
+                manager.calls().app_service
+            );
+        }
+    }
+
+    #[test]
+    fn state_maps_smappservice() {
+        for (status, print_fails, expected) in [
+            (
+                AppServiceStatus::RequiresApproval,
+                false,
+                ServiceState::NeedsApproval,
+            ),
+            (
+                AppServiceStatus::NotRegistered,
+                false,
+                ServiceState::NotInstalled,
+            ),
+            (
+                AppServiceStatus::NotFound,
+                false,
+                ServiceState::NotInstalled,
+            ),
+            (AppServiceStatus::Enabled, false, ServiceState::Running),
+            (AppServiceStatus::Enabled, true, ServiceState::Stopped),
+        ] {
+            let manager = if print_fails {
+                RecordingManager::failing_on("print")
+            } else {
+                RecordingManager::returning("\tstate = running\n")
+            }
+            .with_file(
+                "/Applications/Sapphire.app/Contents/Library/LaunchAgents/\
+                 net.sapphire-turtle.sapphire-agent.plist",
+            )
+            .with_app_service(status);
+            assert_eq!(
+                state(&spec(), &macos_bundle(), &manager).unwrap(),
+                expected,
+                "{status:?}, print failing: {print_fails}"
+            );
+            let calls = manager.calls();
+            assert_eq!(
+                calls.app_service,
+                vec![app_service_call(AppServiceAction::Status)]
+            );
+            assert!(calls.units.is_empty(), "{:?}", calls.units);
+        }
+    }
+
+    #[test]
+    fn a_legacy_agent_is_retired_not_adopted_under_smappservice() {
+        // Adopting it would write an agent file next to the registered service: two copies.
+        let manager = bundle_manager()
+            .with_app_service(AppServiceStatus::Enabled)
+            .with_unit(legacy_plist(), &legacy_body());
+        state(&spec(), &macos_bundle(), &manager).unwrap();
+        let calls = manager.calls();
+        assert!(boots_out_legacy(&calls), "{:?}", calls.commands);
+        assert_eq!(calls.removed, vec![legacy_plist()]);
+        assert!(calls.units.is_empty(), "{:?}", calls.units);
+    }
+
+    #[test]
+    fn smappservice_stop_and_start_go_through_launchctl() {
+        let label = "gui/1000/net.sapphire-turtle.sapphire-agent";
+        let manager = bundle_manager().with_app_service(AppServiceStatus::Enabled);
+        stop(&spec(), &macos_bundle(), &manager).unwrap();
+        start(&spec(), &macos_bundle(), &manager).unwrap();
+        assert_eq!(
+            manager.calls().commands,
+            vec![
+                command(&["launchctl", "kill", "SIGTERM", label]),
+                command(&["launchctl", "kickstart", "-k", label]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_bundle_without_the_plist_keeps_the_agent_file() {
+        let manager = RecordingManager::new();
+        install(&spec(), &macos_bundle(), &manager).unwrap();
+        let calls = manager.calls();
+        assert!(calls.app_service.is_empty(), "{:?}", calls.app_service);
+        assert_eq!(calls.units.len(), 1);
+        assert_eq!(calls.units[0].0, current_plist());
     }
 
     #[test]

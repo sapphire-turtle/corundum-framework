@@ -6,6 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+use corundum_framework_platform::package::{PackageKind, PackageLayout};
+
 use crate::scope::{InstallContext, ServiceSpec};
 
 /// The label a LaunchAgent is registered under.
@@ -82,6 +84,23 @@ fn comment_safe(text: &str) -> String {
 /// lands in an XML comment, the place a human looks and the one place the XML
 /// grammar (unlike the plist) has room for it.
 pub fn render_launch_agent(spec: &ServiceSpec, ctx: &InstallContext) -> String {
+    render_agent(spec, None, &ctx.exe.display().to_string())
+}
+
+/// The plist a macOS package carries in `Contents/Library/LaunchAgents/<label>.plist`, for
+/// SMAppService to register.
+///
+/// The same agent as [`render_launch_agent`], with the program given relative to the
+/// bundle: `BundleProgram` is `Contents/MacOS/<exe_name>`, which launchd resolves against
+/// wherever the `.app` is now, so moving the app does not break the agent. `exe_name` is
+/// the first `ProgramArguments` string, the `argv[0]` the program sees.
+pub fn bundled_agent_plist(spec: &ServiceSpec, exe_name: &str) -> String {
+    render_agent(spec, Some(&format!("Contents/MacOS/{exe_name}")), exe_name)
+}
+
+/// The agent plist both renderers share: `bundle_program` is the `BundleProgram` key's value
+/// when there is one, `program` the first `ProgramArguments` string.
+fn render_agent(spec: &ServiceSpec, bundle_program: Option<&str>, program: &str) -> String {
     let mut agent = String::new();
     agent.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     agent.push_str("<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" ");
@@ -92,11 +111,12 @@ pub fn render_launch_agent(spec: &ServiceSpec, ctx: &InstallContext) -> String {
         "  <string>{}</string>\n",
         escape(&label(spec.app_name))
     ));
+    if let Some(bundle_program) = bundle_program {
+        agent.push_str("  <key>BundleProgram</key>\n");
+        agent.push_str(&format!("  <string>{}</string>\n", escape(bundle_program)));
+    }
     agent.push_str("  <key>ProgramArguments</key>\n  <array>\n");
-    agent.push_str(&format!(
-        "    <string>{}</string>\n",
-        escape(&ctx.exe.display().to_string())
-    ));
+    agent.push_str(&format!("    <string>{}</string>\n", escape(program)));
     for arg in &spec.args {
         agent.push_str(&format!("    <string>{}</string>\n", escape(arg)));
     }
@@ -111,6 +131,50 @@ pub fn render_launch_agent(spec: &ServiceSpec, ctx: &InstallContext) -> String {
     agent.push_str(&format!("  <!-- {} -->\n", comment_safe(&spec.description)));
     agent.push_str("</dict>\n</plist>\n");
     agent
+}
+
+/// How a macOS install registers the agent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MacBackend {
+    /// Through SMAppService, with the plist the `.app` carries: the registration goes when
+    /// the app is deleted, and the person manages it in System Settings › Login Items.
+    AppService {
+        /// The plist's file name in `Contents/Library/LaunchAgents/`, as SMAppService asks
+        /// for it: `<label>.plist`.
+        plist_name: String,
+    },
+    /// Through a LaunchAgent file in `~/Library/LaunchAgents/`, loaded with `launchctl`.
+    AgentFile,
+}
+
+/// Which [`MacBackend`] an install uses: SMAppService when the app runs from a macOS
+/// package whose `Contents/Library/LaunchAgents/<label>.plist` exists, the LaunchAgent file
+/// otherwise.
+///
+/// A pure rule: `layout` is [`package::current`](corundum_framework_platform::package::current)'s
+/// answer and `plist_present` says whether a file exists, so every case is testable on any
+/// machine. A package without the plist (one packaged before it carried one) falls back to
+/// the file, which works anywhere.
+pub fn mac_backend(
+    layout: Option<&PackageLayout>,
+    plist_present: impl Fn(&Path) -> bool,
+    app_name: &str,
+) -> MacBackend {
+    let plist_name = format!("{}.plist", label(app_name));
+    match layout {
+        Some(layout)
+            if layout.kind == PackageKind::MacBundle
+                && plist_present(&bundled_agent_path(&layout.root, &plist_name)) =>
+        {
+            MacBackend::AppService { plist_name }
+        }
+        _ => MacBackend::AgentFile,
+    }
+}
+
+/// Where a `.app` carries an agent's plist: `<app>/Contents/Library/LaunchAgents/<name>`.
+pub fn bundled_agent_path(app: &Path, plist_name: &str) -> PathBuf {
+    app.join("Contents/Library/LaunchAgents").join(plist_name)
 }
 
 /// The program an agent runs: the first `ProgramArguments` string; `None` when there is none.
@@ -220,6 +284,37 @@ mod tests {
             unit_path: PathBuf::from("/dev/null"),
             exe: PathBuf::from("/usr/bin/sapphire-agent"),
         }
+    }
+
+    fn bundle(kind: PackageKind) -> PackageLayout {
+        PackageLayout {
+            kind,
+            root: PathBuf::from("/Applications/Demo.app"),
+            bin_dir: PathBuf::from("/Applications/Demo.app/Contents/MacOS"),
+        }
+    }
+
+    #[test]
+    fn the_backend_is_smappservice_only_in_a_bundle_carrying_the_plist() {
+        let carried = PathBuf::from(
+            "/Applications/Demo.app/Contents/Library/LaunchAgents/net.sapphire-turtle.demo.plist",
+        );
+        let present = |path: &Path| path == carried;
+        assert_eq!(mac_backend(None, present, "demo"), MacBackend::AgentFile);
+        assert_eq!(
+            mac_backend(Some(&bundle(PackageKind::MacBundle)), present, "demo"),
+            MacBackend::AppService {
+                plist_name: "net.sapphire-turtle.demo.plist".to_owned()
+            }
+        );
+        assert_eq!(
+            mac_backend(Some(&bundle(PackageKind::MacBundle)), |_| false, "demo"),
+            MacBackend::AgentFile
+        );
+        assert_eq!(
+            mac_backend(Some(&bundle(PackageKind::AppImage)), present, "demo"),
+            MacBackend::AgentFile
+        );
     }
 
     #[test]

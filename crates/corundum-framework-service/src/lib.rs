@@ -10,6 +10,7 @@
 //! |---|---|---|
 //! | Linux | `~/.config/systemd/user/<app>.service` | `systemctl --user enable --now` |
 //! | macOS | `~/Library/LaunchAgents/<label>.plist` | `launchctl bootstrap gui/<uid>` |
+//! | macOS package | `<app>.app/Contents/Library/LaunchAgents/<label>.plist` | SMAppService |
 //! | Windows | a scheduled task, handed over from a temporary XML | `schtasks /create` |
 //!
 //! Every install is user level: the service runs as the user who installed it, with their
@@ -33,6 +34,8 @@ pub mod launchd;
 pub mod manager;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod scope;
+#[cfg(target_os = "macos")]
+mod smappservice;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod state;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -45,13 +48,16 @@ pub use error::{Error, Result};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use exe::service_exe;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-pub use launchd::{agent_path, label, labelled_agent_path, relabel, render_launch_agent};
+pub use launchd::{
+    MacBackend, agent_path, bundled_agent_path, bundled_agent_plist, label, labelled_agent_path,
+    mac_backend, relabel, render_launch_agent,
+};
 #[cfg(all(feature = "cli", not(any(target_os = "ios", target_os = "android"))))]
 pub use manager::ServiceCommand;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use manager::{
-    Calls, RecordingManager, ServiceManager, SystemManager, install, start, state, status, stop,
-    uninstall,
+    AppServiceAction, AppServiceStatus, Calls, RecordingManager, ServiceManager, SystemManager,
+    install, start, state, status, stop, uninstall,
 };
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use scope::{Environment, InstallContext, Os, PostInstall, ServiceSpec};
