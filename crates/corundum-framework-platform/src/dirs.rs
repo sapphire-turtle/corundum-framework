@@ -128,19 +128,23 @@ impl AppDirs {
     /// (`<app>.corundum-migrating`, `<app>\.corundum-migrating-<name>`; a Roaming entry
     /// named with that prefix is never moved), renamed into place, and only then removed
     /// from Roaming. Nothing is ever half there: a copy that fails is removed and its
-    /// source stays in Roaming. Two cases leave an entry in Roaming, reported in
-    /// [`Migrated::Merged`]'s `left` (after a whole move, at the next start), and do not
-    /// stop the start:
+    /// source stays in Roaming. Two cases leave something in Roaming, reported in `left`,
+    /// and do not stop the start:
     ///
-    /// - A symlink or junction in it that cannot be made again in Local (Windows lets only
-    ///   an administrator, or developer mode, make one): the entry is not copied at all.
+    /// - A symlink or junction that cannot be made again in Local (Windows lets only an
+    ///   administrator, or developer mode, make one): all else is copied and moved, and
+    ///   only the link stays, with the directories holding it; `left` names the link.
     /// - A source that cannot be removed once copied (a file in it still open in an old
     ///   process): Local holds the copy taken at that moment, and the Roaming entry stays,
-    ///   reported again at later starts as one Local has already.
+    ///   reported (again, after a whole move) at later starts as one Local has already.
+    ///
+    /// An old process still writing in Roaming while this runs can lose what it writes
+    /// after the copy: that is removed with the source. Across volumes, the app's other
+    /// processes should be stopped first.
     ///
     /// One start moves at a time: the others find the lock
-    /// (`%LOCALAPPDATA%\<app>.migrate.lock`, removed once Roaming is gone) held, and return
-    /// an error of kind [`io::ErrorKind::WouldBlock`], touching nothing.
+    /// (`%LOCALAPPDATA%\<app>.migrate.lock`, an empty file that stays) held, and return an
+    /// error of kind [`io::ErrorKind::WouldBlock`], touching nothing.
     ///
     /// A Local directory that is a Velopack install (`Update.exe`, or `current` with
     /// `packages`: one made under a `packId` equal to the app's name) is never merged into,
@@ -174,13 +178,15 @@ impl AppDirs {
 /// What [`AppDirs::migrate_from_roaming`] did.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Migrated {
-    /// The Roaming directory was moved to Local whole.
-    Moved,
-    /// The Roaming directory was merged into Local entry by entry: there was a Local
-    /// directory already, or a link deep in Roaming kept it from being copied whole. `left`
-    /// are the Roaming entries left where they were (Local had them already, they have
-    /// the reserved prefix, or they could not be moved whole); when it is empty the
-    /// Roaming directory is gone.
+    /// The Roaming directory was moved to Local whole, but for `left`: the links in it
+    /// (symlinks, junctions) that a copy across volumes could not make again, left in
+    /// Roaming with the directories holding them.
+    Moved { left: Vec<PathBuf> },
+    /// There was a Local directory already, and the Roaming one was merged into it entry
+    /// by entry. `left` are what was left in Roaming: entries Local had already, entries
+    /// with the reserved prefix, entries that could not be removed once copied, and links
+    /// a copy could not make again (named themselves, deep as they are); when it is empty
+    /// the Roaming directory is gone.
     Merged { left: Vec<PathBuf> },
     /// There was no Roaming directory to move, or the platform has none.
     Nothing,
@@ -252,16 +258,12 @@ fn migrate_from_roaming_with(
     remove(&root_temporary)?;
     let migrated = match migration(roaming_there, is_there(&local)?) {
         Migration::Move => match move_entry(&roaming, &local, &root_temporary, rename)? {
-            Outcome::Moved | Outcome::SourceKept => {
+            Outcome::Moved { skipped } => {
                 tracing::info!("moved {} to {}", roaming.display(), local.display());
-                Migrated::Moved
+                Migrated::Moved { left: skipped }
             }
-            // A link deep in it could not be made: the entries are moved one by one, and
-            // the one holding the link is left.
-            Outcome::LinkLeft => {
-                std::fs::create_dir(&local)?;
-                merge(&roaming, &local, rename)?
-            }
+            // Local is whole; what is left in Roaming is reported at the next start.
+            Outcome::SourceKept => Migrated::Moved { left: Vec::new() },
         },
         Migration::Merge => {
             if is_velopack_install(&local)? {
@@ -276,18 +278,16 @@ fn migrate_from_roaming_with(
         }
         Migration::Nothing => Migrated::Nothing,
     };
-    // With Roaming gone no start needs the lock again. One that opened it before this
-    // removes it finds Roaming gone too, and does nothing.
-    if !is_there(&roaming).unwrap_or(true) {
-        let _ = std::fs::remove_file(&lock_path);
-    }
+    // The lock file stays, empty: were it removed, a start that had opened it and one that
+    // made a new one could each hold a lock.
+    drop(lock);
     Ok(migrated)
 }
 
 /// Rename each entry of `roaming` that `local` does not have into `local`, and remove
-/// `roaming` if that empties it. The first entry that fails to move stops it; one that
-/// cannot be moved whole (a link that cannot be made, a source that cannot be removed) is
-/// left and reported.
+/// `roaming` if that empties it. The first entry that fails to move stops it; what cannot
+/// be moved (a link that cannot be made, a source that cannot be removed) is left and
+/// reported.
 fn merge(roaming: &Path, local: &Path, rename: &Rename) -> io::Result<Migrated> {
     // What copies cut off by a crash left: the caller holds the lock.
     for entry in std::fs::read_dir(local)? {
@@ -313,10 +313,11 @@ fn merge(roaming: &Path, local: &Path, rename: &Rename) -> io::Result<Migrated> 
         temporary_name.push(&name);
         let temporary = local.join(temporary_name);
         match move_entry(&from, &to, &temporary, rename) {
-            Ok(Outcome::Moved) => {
+            Ok(Outcome::Moved { skipped }) => {
                 tracing::info!("moved {} to {}", from.display(), to.display());
+                left.extend(skipped);
             }
-            Ok(Outcome::SourceKept | Outcome::LinkLeft) => left.push(from),
+            Ok(Outcome::SourceKept) => left.push(from),
             // Made in Local since it was looked at: Local's is the one kept.
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => left.push(from),
             Err(err) => return Err(err),
@@ -343,42 +344,46 @@ fn is_temporary(name: &std::ffi::OsStr) -> bool {
 }
 
 /// What [`move_entry`] did.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 enum Outcome {
-    /// Moved: in Local, gone from Roaming.
-    Moved,
+    /// Moved: in Local, gone from Roaming, but for `skipped`: the links (symlinks,
+    /// junctions) a copy across volumes could not make again, left in Roaming with the
+    /// directories holding them.
+    Moved { skipped: Vec<PathBuf> },
     /// Copied into Local, but the source could not be removed (a file in it still open):
     /// Local holds the copy taken then, and the source stays in Roaming.
     SourceKept,
-    /// Not moved: a link in it could not be made in Local. It stays in Roaming whole.
-    LinkLeft,
 }
 
 /// Move `from` to `to`, which is not there: one rename, or across volumes a copy to
-/// `temporary` (beside `to`), renamed to `to`, and only then `from` removed.
+/// `temporary` (beside `to`), renamed to `to`, and only then what was copied removed from
+/// `from`.
 fn move_entry(from: &Path, to: &Path, temporary: &Path, rename: &Rename) -> io::Result<Outcome> {
     match rename(from, to) {
-        Ok(()) => return Ok(Outcome::Moved),
+        Ok(()) => {
+            return Ok(Outcome::Moved {
+                skipped: Vec::new(),
+            });
+        }
         Err(err) if crosses_volumes(&err) => {}
         Err(err) => return Err(err),
     }
     // What a copy cut off before left is no use: it is made again whole.
     remove(temporary)?;
-    if let Err(err) = copy(from, temporary).and_then(|()| rename(temporary, to)) {
+    let mut skipped = Vec::new();
+    let copied = copy(from, temporary, &mut skipped);
+    // `from` is itself a link that could not be made: nothing was copied.
+    if copied.is_ok() && skipped.iter().any(|path| path == from) {
+        return Ok(Outcome::Moved { skipped });
+    }
+    if let Err(err) = copied.and_then(|()| rename(temporary, to)) {
         if let Err(remove_err) = remove(temporary) {
             tracing::warn!("could not remove {}: {remove_err}", temporary.display());
         }
-        if err
-            .get_ref()
-            .is_some_and(|inner| inner.is::<LinkNotCopied>())
-        {
-            tracing::warn!("{} is left in Roaming: {err}", from.display());
-            return Ok(Outcome::LinkLeft);
-        }
         return Err(err);
     }
-    match remove(from) {
-        Ok(()) => Ok(Outcome::Moved),
+    match remove_copied(from, &skipped) {
+        Ok(()) => Ok(Outcome::Moved { skipped }),
         Err(err) => {
             tracing::warn!(
                 "copied {} to {}, but could not remove it: {err}",
@@ -390,6 +395,20 @@ fn move_entry(from: &Path, to: &Path, temporary: &Path, rename: &Rename) -> io::
     }
 }
 
+/// Remove `path` but for the `skipped` links in it and the directories holding them.
+fn remove_copied(path: &Path, skipped: &[PathBuf]) -> io::Result<()> {
+    if skipped.iter().any(|link| link == path) {
+        return Ok(());
+    }
+    if !skipped.iter().any(|link| link.starts_with(path)) {
+        return remove(path);
+    }
+    for entry in std::fs::read_dir(path)? {
+        remove_copied(&entry?.path(), skipped)?;
+    }
+    Ok(())
+}
+
 /// Whether `err` is a rename's from one volume to another.
 fn crosses_volumes(err: &io::Error) -> bool {
     // ERROR_NOT_SAME_DEVICE, should std not map it.
@@ -397,15 +416,25 @@ fn crosses_volumes(err: &io::Error) -> bool {
 }
 
 /// Copy `from` to `to`, which is not there: files, directories, and symlinks as symlinks.
-fn copy(from: &Path, to: &Path) -> io::Result<()> {
+/// A link that cannot be made again (Windows lets only an administrator, or developer
+/// mode, make one) is not copied but added to `skipped`, and the rest is copied all the
+/// same.
+fn copy(from: &Path, to: &Path, skipped: &mut Vec<PathBuf>) -> io::Result<()> {
     let kind = std::fs::symlink_metadata(from)?.file_type();
     if kind.is_symlink() {
-        copy_symlink(from, to)
+        if let Err(err) = make_symlink(from, to) {
+            tracing::warn!(
+                "the link {} could not be made again, left in Roaming: {err}",
+                from.display()
+            );
+            skipped.push(from.to_path_buf());
+        }
+        Ok(())
     } else if kind.is_dir() {
         std::fs::create_dir(to)?;
         for entry in std::fs::read_dir(from)? {
             let name = entry?.file_name();
-            copy(&from.join(&name), &to.join(&name))?;
+            copy(&from.join(&name), &to.join(&name), skipped)?;
         }
         Ok(())
     } else {
@@ -413,43 +442,13 @@ fn copy(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-/// A symlink or junction that could not be made again in Local: Windows lets only an
-/// administrator, or a machine in developer mode, make one.
-#[derive(Debug)]
-struct LinkNotCopied {
-    path: PathBuf,
-    err: io::Error,
-}
-
-impl std::fmt::Display for LinkNotCopied {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "the link {} could not be made again: {}",
-            self.path.display(),
-            self.err
-        )
-    }
-}
-
-impl std::error::Error for LinkNotCopied {}
-
 #[cfg(test)]
 thread_local! {
-    /// Makes [`copy_symlink`] fail, as an unprivileged Windows user's would.
+    /// Makes [`make_symlink`] fail, as an unprivileged Windows user's would.
     static FAIL_LINKS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Make `to` a symlink to where `from` points.
-fn copy_symlink(from: &Path, to: &Path) -> io::Result<()> {
-    make_symlink(from, to).map_err(|err| {
-        io::Error::other(LinkNotCopied {
-            path: from.to_path_buf(),
-            err,
-        })
-    })
-}
-
 fn make_symlink(from: &Path, to: &Path) -> io::Result<()> {
     #[cfg(test)]
     if FAIL_LINKS.get() {
@@ -818,14 +817,14 @@ mod tests {
 
         let migrated = migrate_across_volumes(&roaming, &local).unwrap();
 
-        assert_eq!(migrated, Migrated::Moved);
+        assert_eq!(migrated, Migrated::Moved { left: vec![] });
         assert_eq!(read(local.join("app/config.toml")), "a");
         assert_eq!(read(local.join("app/data/index")), "b");
         assert!(!local.join("app/stale").exists());
         assert!(!local.join("app.corundum-migrating").exists());
         assert!(!roaming.join("app").exists());
-        // Done, the lock is not left behind.
-        assert!(!local.join("app.migrate.lock").exists());
+        // The lock stays: removing it would let two starts each lock a file of their own.
+        assert!(local.join("app.migrate.lock").exists());
     }
 
     #[test]
@@ -946,7 +945,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn a_link_that_cannot_be_made_leaves_its_entry_in_roaming() {
+    fn a_link_that_cannot_be_made_is_left_in_roaming_alone() {
         let (_temp, roaming, local) = roots();
         std::fs::create_dir_all(roaming.join("app")).unwrap();
         std::os::unix::fs::symlink("elsewhere", roaming.join("app/link")).unwrap();
@@ -967,13 +966,76 @@ mod tests {
         assert_eq!(read(local.join("app/config.toml")), "a");
     }
 
+    /// Roaming's `app` with a link deep in `data`, beside files at each level.
+    #[cfg(unix)]
+    fn a_deep_link(roaming: &Path) {
+        std::fs::create_dir_all(roaming.join("app/data/deep")).unwrap();
+        std::os::unix::fs::symlink("elsewhere", roaming.join("app/data/deep/link")).unwrap();
+        std::fs::write(roaming.join("app/data/deep/sibling"), "s").unwrap();
+        std::fs::write(roaming.join("app/data/index"), "b").unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+    }
+
+    /// Only the link and the directories holding it are left in Roaming; all else is in
+    /// Local.
+    #[cfg(unix)]
+    fn only_the_deep_link_is_left(roaming: &Path, local: &Path) {
+        assert_eq!(read(local.join("app/config.toml")), "a");
+        assert_eq!(read(local.join("app/data/index")), "b");
+        assert_eq!(read(local.join("app/data/deep/sibling")), "s");
+        assert!(!local.join("app/data/deep/link").is_symlink());
+        assert!(roaming.join("app/data/deep/link").is_symlink());
+        let left: Vec<_> = walk(&roaming.join("app"));
+        assert_eq!(
+            left,
+            vec![
+                roaming.join("app/data"),
+                roaming.join("app/data/deep"),
+                roaming.join("app/data/deep/link"),
+            ]
+        );
+    }
+
+    /// Every path under `dir`, sorted.
+    #[cfg(unix)]
+    fn walk(dir: &Path) -> Vec<PathBuf> {
+        let mut paths = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            paths.push(path.clone());
+            if std::fs::symlink_metadata(&path).unwrap().is_dir() {
+                paths.extend(walk(&path));
+            }
+        }
+        paths.sort();
+        paths
+    }
+
     #[cfg(unix)]
     #[test]
-    fn a_link_deep_in_a_whole_move_leaves_only_its_entry() {
+    fn a_link_deep_in_a_whole_move_is_all_that_is_left() {
         let (_temp, roaming, local) = roots();
-        std::fs::create_dir_all(roaming.join("app/linked")).unwrap();
-        std::os::unix::fs::symlink("elsewhere", roaming.join("app/linked/link")).unwrap();
-        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        a_deep_link(&roaming);
+        FAIL_LINKS.set(true);
+
+        let migrated = migrate_across_volumes(&roaming, &local).unwrap();
+
+        assert_eq!(
+            migrated,
+            Migrated::Moved {
+                left: vec![roaming.join("app/data/deep/link")]
+            }
+        );
+        only_the_deep_link_is_left(&roaming, &local);
+        assert!(!local.join("app.corundum-migrating").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_deep_in_a_merged_entry_is_all_that_is_left() {
+        let (_temp, roaming, local) = roots();
+        a_deep_link(&roaming);
+        std::fs::create_dir_all(local.join("app/cache")).unwrap();
         FAIL_LINKS.set(true);
 
         let migrated = migrate_across_volumes(&roaming, &local).unwrap();
@@ -981,13 +1043,10 @@ mod tests {
         assert_eq!(
             migrated,
             Migrated::Merged {
-                left: vec![roaming.join("app/linked")]
+                left: vec![roaming.join("app/data/deep/link")]
             }
         );
-        assert!(roaming.join("app/linked/link").is_symlink());
-        assert!(!local.join("app/linked").exists());
-        assert_eq!(read(local.join("app/config.toml")), "a");
-        assert!(!local.join("app.corundum-migrating").exists());
+        only_the_deep_link_is_left(&roaming, &local);
     }
 
     #[cfg(unix)]
@@ -1085,7 +1144,7 @@ mod tests {
 
         let migrated = migrate(&roaming, &local).unwrap();
 
-        assert_eq!(migrated, Migrated::Moved);
+        assert_eq!(migrated, Migrated::Moved { left: vec![] });
         assert!(!roaming.join("app").exists());
         assert_eq!(
             std::fs::read_to_string(local.join("app/settings.toml")).unwrap(),
