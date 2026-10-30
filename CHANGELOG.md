@@ -10,6 +10,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.4.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.3.0...v0.4.0) - 2026-10-30
 
+### Breaking
+
+- *(corundum-framework-gui)* `UpdatesPanel::new` takes `Vec<Target>`: an `UpdateTarget` goes in as `.into()`. `Target::Package` and `Target::this_app` (feature `package`) add this app's Velopack package; `Target::Delegated` adds another package that updates itself ([#63](https://github.com/sapphire-turtle/corundum-framework/pull/63)).
+- *(corundum-framework-platform)* On Windows, `dirs::config_dir()` and `data_dir()` return `%LOCALAPPDATA%` instead of `%APPDATA%` (Roaming), and `AppDirs::cache()` is `<app>\cache`. An app calls `AppDirs::migrate_from_roaming(app_name)` once at start, before it reads its settings, and must not touch its config or data when that returns an error ([#67](https://github.com/sapphire-turtle/corundum-framework/pull/67)).
+- *(corundum-framework-platform)* `icon` and `launcher` are features, both on by default; a crate that depends on the platform crate with `default-features = false` and uses them names them ([#66](https://github.com/sapphire-turtle/corundum-framework/pull/66)).
+- *(corundum-framework-platform)* Identifiers use the publisher namespace `net.sapphire-turtle` (`net.sapphire_turtle` where a hyphen is not allowed: Android, D-Bus). The demo's macOS bundle id, its Windows app id and its MPRIS names change with it ([#65](https://github.com/sapphire-turtle/corundum-framework/pull/65)).
+
 ### Added
 
 - *(corundum-framework-platform)* run a desktop app once, a second start bringing the first to the front ([#61](https://github.com/sapphire-turtle/corundum-framework/pull/61))
