@@ -148,3 +148,26 @@ corundum-first-run-step = Step { $step } of { $count }
 corundum-first-run-back = Back
 corundum-first-run-next = Next
 corundum-first-run-finish = Finish
+
+# The first-run page asking to keep the app's services running in the background
+# (`first_run::ServicePage`): its answers, a development build's note, and a failed install.
+corundum-service-yes = Yes, keep it running
+corundum-service-no = Not now
+corundum-service-dev-build = This is a development build; nothing is registered.
+corundum-service-failed = Could not register: { $error }
+corundum-service-try-again = Try again
+corundum-service-continue-without = Continue without it
+
+# The About page's row for a background service (`settings::ServiceRow`): its label, the
+# service's state, and its buttons.
+corundum-service-row = Background: { $name }
+corundum-service-run = Keep running in the background
+corundum-service-running = Running
+corundum-service-stopped = Stopped
+corundum-service-stop = Stop
+corundum-service-start = Start
+corundum-service-remove = Remove
+corundum-service-needs-approval = Waiting for your approval in Login Items
+corundum-service-open-login-items = Open Login Items
+corundum-service-broken = Not working: { $reason }
+corundum-service-repair = Repair

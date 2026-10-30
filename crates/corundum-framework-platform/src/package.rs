@@ -58,6 +58,20 @@ pub fn current_with(exe: &Path, appimage: Option<&Path>) -> Option<PackageLayout
         .or_else(|| app_image(exe, appimage))
 }
 
+/// Whether `exe` was built by cargo and runs from its `target` directory (`target/debug`,
+/// `target/release`, with a target triple between them when cross-compiled). Such a build
+/// is a development one: nothing the system keeps (a launcher entry, a background service)
+/// should point into a directory the next `cargo clean` empties.
+pub fn is_cargo_build(exe: &Path) -> bool {
+    let parts: Vec<_> = exe.components().map(|c| c.as_os_str()).collect();
+    let profile = |s: &std::ffi::OsStr| s == "debug" || s == "release";
+    parts.iter().enumerate().any(|(i, c)| {
+        *c == "target"
+            && (parts.get(i + 1).is_some_and(|p| profile(p))
+                || parts.get(i + 2).is_some_and(|p| profile(p)))
+    })
+}
+
 /// `exe` with its links resolved, or as it is when that fails. Not on Windows: the canonical
 /// form there is a `\\?\` path, which would end up on the user `Path`, and a Windows
 /// package is started from its `current` directory, never through a link.
@@ -217,5 +231,20 @@ mod tests {
         let exe = d.join("target/debug/demo");
         touch(&exe);
         assert_eq!(current_with(&exe, None), None);
+    }
+
+    #[test]
+    fn a_build_under_a_target_profile_is_a_cargo_build() {
+        assert!(is_cargo_build(Path::new("/w/target/debug/app")));
+        assert!(is_cargo_build(Path::new(
+            "/w/target/x86_64-unknown-linux-gnu/release/app"
+        )));
+    }
+
+    #[test]
+    fn an_installed_program_is_not_a_cargo_build() {
+        assert!(!is_cargo_build(Path::new("/opt/app")));
+        // A directory merely named `target`, with no profile under it.
+        assert!(!is_cargo_build(Path::new("/w/target/app")));
     }
 }

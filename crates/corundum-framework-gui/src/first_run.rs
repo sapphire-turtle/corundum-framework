@@ -5,6 +5,18 @@
 //! The app hands [`FirstRun::new`] its name and its pages, and each frame, until [`FirstRun::done`] says
 //! so, draws [`FirstRun::ui`] in place of its window's content.
 
+#[cfg(all(
+    feature = "service",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+mod service;
+
+#[cfg(all(
+    feature = "service",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+pub use service::ServicePage;
+
 use crate::store;
 use crate::tr;
 

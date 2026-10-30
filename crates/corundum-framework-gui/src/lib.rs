@@ -52,6 +52,11 @@ pub mod media_session;
 pub mod platform;
 #[cfg(feature = "qr-code")]
 pub mod qr;
+#[cfg(all(
+    feature = "service",
+    not(any(target_os = "ios", target_os = "android"))
+))]
+mod service;
 pub mod settings;
 mod shell;
 #[cfg(feature = "serde")]

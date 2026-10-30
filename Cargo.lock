@@ -922,6 +922,7 @@ dependencies = [
  "android_log-sys",
  "corundum-framework-package",
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
  "eframe",
  "egui",
