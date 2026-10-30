@@ -311,7 +311,6 @@ fn acquire_with(data_dir: &Path, socket: Option<SocketName>) -> Result<Instance,
         inner: desktop::Held {
             listener,
             accepting: None,
-            socket,
             lock,
         },
     })
@@ -331,17 +330,20 @@ mod desktop {
     use std::thread::JoinHandle;
     use std::time::Duration;
 
+    use interprocess::ConnectWaitMode;
     #[cfg(unix)]
     use interprocess::local_socket::GenericFilePath;
     #[cfg(windows)]
     use interprocess::local_socket::GenericNamespaced;
     use interprocess::local_socket::prelude::*;
-    use interprocess::local_socket::{Listener, ListenerOptions, Name, Stream};
+    use interprocess::local_socket::{
+        ConnectOptions, Listener, ListenerNonblockingMode, ListenerOptions, Name, Stream,
+    };
 
     use super::{LOCK_FILE, MAX_MESSAGE, Message, REPLY, SocketName};
 
-    /// What an instance holds: the lock, unless it could not be taken, and its socket, whose
-    /// listener moves to the accepting thread once the app listens.
+    /// What an instance holds: the lock, unless it could not be taken, and the listener on
+    /// its socket, which moves to the accepting thread once the app listens.
     ///
     /// Fields drop in this order: the listener lets go of the socket before the lock is let
     /// go of, so the next instance finds the socket free.
@@ -349,7 +351,6 @@ mod desktop {
     pub(super) struct Held {
         pub(super) listener: Option<Listener>,
         pub(super) accepting: Option<Accepting>,
-        pub(super) socket: Option<SocketName>,
         /// Never read: holding the open file is holding the lock.
         #[allow(dead_code)]
         pub(super) lock: Option<File>,
@@ -358,11 +359,16 @@ mod desktop {
     /// How long a connection may take to send its message, and a message to be sent.
     const IO_TIMEOUT: Duration = Duration::from_secs(1);
 
-    /// The thread that accepts the second starts' connections, and how to stop it.
+    /// The thread that accepts the second starts' connections, how to stop it, and how to
+    /// learn that it has: its end of `done` is dropped as it returns.
     pub(super) struct Accepting {
         stop: Arc<AtomicBool>,
+        done: mpsc::Receiver<()>,
         thread: JoinHandle<()>,
     }
+
+    /// How often the accepting thread looks for a connection, and at its stop flag.
+    const ACCEPT_POLL: Duration = Duration::from_millis(50);
 
     /// The lock in `data_dir`, made if need be: `None` when another start holds it.
     pub(super) fn lock(data_dir: &Path) -> io::Result<Option<File>> {
@@ -397,6 +403,9 @@ mod desktop {
             ListenerOptions::new()
                 .name(name)
                 .try_overwrite(locked)
+                // Polled, so the thread sees its stop flag: a blocking accept on a named pipe
+                // is not woken by a connection of the same process.
+                .nonblocking(ListenerNonblockingMode::Accept)
                 .max_spin_time(Duration::from_secs(1))
                 .create_sync()
         });
@@ -419,14 +428,18 @@ mod desktop {
             };
             let stop = Arc::new(AtomicBool::new(false));
             let f = Arc::new(Mutex::new(f));
+            let (done_tx, done) = mpsc::channel::<()>();
             let thread = std::thread::Builder::new()
                 .name("instance".to_owned())
                 .spawn({
                     let stop = stop.clone();
-                    move || accept(&listener, stop, &f)
+                    move || {
+                        let _done = done_tx;
+                        accept(&listener, stop, &f);
+                    }
                 });
             match thread {
-                Ok(thread) => self.accepting = Some(Accepting { stop, thread }),
+                Ok(thread) => self.accepting = Some(Accepting { stop, done, thread }),
                 Err(err) => tracing::warn!("could not start the instance's listener: {err}"),
             }
         }
@@ -445,38 +458,41 @@ mod desktop {
     impl Drop for Held {
         /// Stop the accepting thread, so its listener lets go of the socket before the
         /// lock is: the next instance listens there.
+        ///
+        /// Waited for no longer than [`IO_TIMEOUT`]: a thread that has not returned by then
+        /// (stuck in the OS) is left to the process's end, and the next instance may find
+        /// the socket taken.
         fn drop(&mut self) {
-            let Some(Accepting { stop, thread }) = self.accepting.take() else {
+            let Some(Accepting { stop, done, thread }) = self.accepting.take() else {
                 return;
             };
             stop.store(true, Ordering::SeqCst);
-            // A connection wakes the thread from `accept`. Without one it may still be
-            // waiting there, and is left to the process's end rather than waited for.
-            let woken = self
-                .socket
-                .as_ref()
-                .is_some_and(|socket| name(socket).and_then(Stream::connect).is_ok());
-            if woken || thread.is_finished() {
-                let _ = thread.join();
+            match done.recv_timeout(IO_TIMEOUT) {
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    tracing::warn!("the instance's listener did not stop; leaving it");
+                }
+                _ => {
+                    let _ = thread.join();
+                }
             }
         }
     }
 
     /// Accept connections until told to stop, answering each on a thread of its own: one
-    /// that sends nothing does not hold up the next. A failed accept (out of file
-    /// descriptors, say) is waited out, not taken as the end.
+    /// that sends nothing does not hold up the next (nor, on a named pipe, which may not
+    /// take a read timeout, does anything wait for that thread). A failed accept (out of
+    /// file descriptors, say) is waited out, not taken as the end.
     fn accept<F: Fn() + Send + 'static>(
         listener: &Listener,
         stop: Arc<AtomicBool>,
         f: &Arc<Mutex<F>>,
     ) {
         let mut failing = false;
-        loop {
-            let connection = listener.accept();
-            if stop.load(Ordering::SeqCst) {
-                return;
-            }
-            match connection {
+        while !stop.load(Ordering::SeqCst) {
+            match listener.accept() {
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(ACCEPT_POLL);
+                }
                 Ok(stream) => {
                     failing = false;
                     let (f, stop) = (f.clone(), stop.clone());
@@ -542,7 +558,12 @@ mod desktop {
     /// answered. A failure is only logged: the first start may be closing.
     pub(super) fn send(socket: &SocketName, message: Message) -> bool {
         let sent = name(socket)
-            .and_then(Stream::connect)
+            .and_then(|name| {
+                ConnectOptions::new()
+                    .name(name)
+                    .wait_mode(ConnectWaitMode::Timeout(IO_TIMEOUT))
+                    .connect_sync()
+            })
             .and_then(|mut stream| {
                 let _ = stream.set_send_timeout(Some(IO_TIMEOUT));
                 let _ = stream.set_recv_timeout(Some(IO_TIMEOUT));
