@@ -64,9 +64,60 @@ pub(crate) fn words(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|part| (*part).to_owned()).collect()
 }
 
+/// The program a unit starts: the first word of its `ExecStart=` line; `None` when it has none.
+///
+/// A path with a space in it is not told apart from its arguments, which is how systemd
+/// itself reads the line without quoting.
+pub fn exec_of(unit: &str) -> Option<PathBuf> {
+    unit.lines()
+        .find_map(|line| line.trim().strip_prefix("ExecStart="))
+        .and_then(|command| command.split_whitespace().next())
+        .map(PathBuf::from)
+}
+
+/// Whether the answer of `systemctl --user is-active` says the unit is running.
+///
+/// `activating` is not running yet, and `failed` is not running any more.
+pub fn is_running(is_active: &str) -> bool {
+    is_active.trim() == "active"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_program_is_the_first_word_of_exec_start() {
+        let golden = include_str!("../tests/golden/user.service");
+        for (unit, expected) in [
+            (
+                "[Service]\nExecStart=/opt/a.AppImage serve\n",
+                Some("/opt/a.AppImage"),
+            ),
+            (
+                "[Service]\nExecStart=/opt/a.AppImage\n",
+                Some("/opt/a.AppImage"),
+            ),
+            (golden, Some("/usr/bin/sapphire-agent")),
+            ("[Service]\nType=simple\n", None),
+            ("", None),
+        ] {
+            assert_eq!(exec_of(unit), expected.map(PathBuf::from), "{unit}");
+        }
+    }
+
+    #[test]
+    fn only_active_is_running() {
+        for (answer, expected) in [
+            ("active\n", true),
+            ("inactive", false),
+            ("failed", false),
+            ("activating", false),
+            ("", false),
+        ] {
+            assert_eq!(is_running(answer), expected, "{answer}");
+        }
+    }
 
     fn commands(words: &[&[&str]]) -> Vec<Vec<String>> {
         words

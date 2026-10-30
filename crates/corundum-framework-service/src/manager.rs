@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 use crate::error::{Error, Result};
 use crate::launchd::{agent_path, label, labelled_agent_path, relabel, render_launch_agent};
 use crate::scope::{Environment, InstallContext, Os, ServiceSpec};
+use crate::state::ServiceState;
 use crate::systemd::{activation, render_unit, unit_path, words};
 use crate::windows::render_task;
 
@@ -46,6 +47,12 @@ pub trait ServiceManager {
 
     /// Remove a unit file. Removing one that is not there is not an error.
     fn remove_unit(&self, path: &Path) -> Result<()>;
+
+    /// Whether a file exists — the program a unit starts, for [`state`] to tell a working
+    /// registration from one whose program has since gone.
+    fn exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
 
     /// Read a unit file; `None` when there is none.
     fn read_unit(&self, path: &Path) -> Result<Option<String>> {
@@ -137,6 +144,8 @@ pub struct RecordingManager {
     output: String,
     order: Option<Arc<Mutex<Vec<String>>>>,
     existing: Vec<(PathBuf, String)>,
+    files: Vec<PathBuf>,
+    answers: Vec<(String, String)>,
 }
 
 impl RecordingManager {
@@ -177,6 +186,19 @@ impl RecordingManager {
     /// The same manager, answering a read of `path` with `body`, as if the file were there.
     pub fn with_unit(mut self, path: impl Into<PathBuf>, body: &str) -> Self {
         self.existing.push((path.into(), body.to_owned()));
+        self
+    }
+
+    /// The same manager, saying that a file exists at `path`, as `exists` is asked.
+    pub fn with_file(mut self, path: impl Into<PathBuf>) -> Self {
+        self.files.push(path.into());
+        self
+    }
+
+    /// The same manager, answering commands containing the word `needle` with `text` rather
+    /// than its default output. May be chained: the first matching answer wins.
+    pub fn answering(mut self, needle: &str, text: &str) -> Self {
+        self.answers.push((needle.to_owned(), text.to_owned()));
         self
     }
 
@@ -230,7 +252,15 @@ impl ServiceManager for RecordingManager {
         if self.fails(command) {
             return Err(Error::Manager(format!("refused: {}", command.join(" "))));
         }
-        Ok(self.output.clone())
+        let answer = self
+            .answers
+            .iter()
+            .find(|(needle, _)| command.iter().any(|word| word == needle));
+        Ok(answer.map_or_else(|| self.output.clone(), |(_, text)| text.clone()))
+    }
+
+    fn exists(&self, path: &Path) -> bool {
+        self.files.iter().any(|file| file == path)
     }
 
     fn remove_unit(&self, path: &Path) -> Result<()> {
@@ -402,6 +432,133 @@ pub fn status(
     env: &Environment,
     manager: &dyn ServiceManager,
 ) -> Result<String> {
+    adopt_legacy_agent(spec, env, manager)?;
+    manager.run(&status_command(spec, env))
+}
+
+/// What the service is doing now: not installed, stopped, running, or broken.
+///
+/// Reads the registration's own file for the program it starts, so a service whose program
+/// was moved or deleted is [`Broken`](ServiceState::Broken) rather than merely stopped.
+/// A legacy macOS agent is adopted first, as [`status`] does.
+pub fn state(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Result<ServiceState> {
+    adopt_legacy_agent(spec, env, manager)?;
+    let (program, running_command, is_running): (_, _, fn(&str) -> bool) = match env.os {
+        Os::Linux => {
+            let Some(unit) = manager.read_unit(&install_path(spec, env)?)? else {
+                return Ok(ServiceState::NotInstalled);
+            };
+            (
+                crate::systemd::exec_of(&unit),
+                words(&["systemctl", "--user", "is-active", spec.app_name]),
+                crate::systemd::is_running,
+            )
+        }
+        Os::MacOs => {
+            let Some(plist) = manager.read_unit(&install_path(spec, env)?)? else {
+                return Ok(ServiceState::NotInstalled);
+            };
+            (
+                crate::launchd::program_of(&plist),
+                status_command(spec, env),
+                crate::launchd::is_running,
+            )
+        }
+        Os::Windows => {
+            // The scheduler keeps the task, not a file; ask it for the XML it holds.
+            let Ok(xml) = manager.run(&words(&[
+                "schtasks",
+                "/query",
+                "/tn",
+                spec.app_name,
+                "/xml",
+            ])) else {
+                return Ok(ServiceState::NotInstalled);
+            };
+            (
+                crate::windows::command_of(&xml),
+                // `schtasks` prints a localised state; the task object's own is not.
+                words(&[
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    &format!("(Get-ScheduledTask -TaskName '{}').State", spec.app_name),
+                ]),
+                crate::windows::is_running,
+            )
+        }
+    };
+    let Some(program) = program else {
+        return Ok(ServiceState::Broken {
+            reason: "the registration names no program to run".to_owned(),
+        });
+    };
+    if !manager.exists(&program) {
+        return Ok(ServiceState::Broken {
+            reason: format!("the program {} no longer exists", program.display()),
+        });
+    }
+    // A command that fails — `is-active` on an inactive unit, `print` of an unloaded
+    // agent — is how the manager says "not running".
+    Ok(match manager.run(&running_command) {
+        Ok(output) if is_running(&output) => ServiceState::Running,
+        _ => ServiceState::Stopped,
+    })
+}
+
+/// Stop the service. A service that is not running is already stopped, so that is not an
+/// error.
+pub fn stop(spec: &ServiceSpec, env: &Environment, manager: &dyn ServiceManager) -> Result<()> {
+    let _ = manager.run(&stop_command(spec, env));
+    Ok(())
+}
+
+/// Start the service. Unlike [`stop`], a failure is an error: the user asked for it to run.
+pub fn start(spec: &ServiceSpec, env: &Environment, manager: &dyn ServiceManager) -> Result<()> {
+    manager.run(&start_command(spec, env)).map(|_| ())
+}
+
+/// The command that stops the service.
+fn stop_command(spec: &ServiceSpec, env: &Environment) -> Vec<String> {
+    match env.os {
+        Os::Linux => words(&["systemctl", "--user", "stop", spec.app_name]),
+        // `kill` rather than `bootout`: the agent stays registered and loaded.
+        Os::MacOs => words(&[
+            "launchctl",
+            "kill",
+            "SIGTERM",
+            &format!("gui/{}/{}", env.euid, label(spec.app_name)),
+        ]),
+        Os::Windows => words(&["schtasks", "/end", "/tn", spec.app_name]),
+    }
+}
+
+/// The command that starts the service.
+fn start_command(spec: &ServiceSpec, env: &Environment) -> Vec<String> {
+    match env.os {
+        Os::Linux => words(&["systemctl", "--user", "start", spec.app_name]),
+        // `-k` restarts an agent that is running already, so it also works as a restart.
+        Os::MacOs => words(&[
+            "launchctl",
+            "kickstart",
+            "-k",
+            &format!("gui/{}/{}", env.euid, label(spec.app_name)),
+        ]),
+        Os::Windows => words(&["schtasks", "/run", "/tn", spec.app_name]),
+    }
+}
+
+/// Give an agent installed under a legacy label the current one, if none is installed there.
+fn adopt_legacy_agent(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Result<()> {
     // An agent under the legacy label is the service, renamed: it keeps running, under the
     // current label, unless one is installed there already.
     if let Some((from_label, legacy)) = retire_legacy_agent(spec, env, manager)? {
@@ -411,7 +568,7 @@ pub fn status(
             manager.run(&bootstrap_command(&path, env))?;
         }
     }
-    manager.run(&status_command(spec, env))
+    Ok(())
 }
 
 /// Take every agent installed under one of the spec's [`legacy_labels`] off launchd and
@@ -585,6 +742,204 @@ mod tests {
             os: Os::Windows,
             home: Some(PathBuf::from("/home/user")),
         }
+    }
+
+    fn command(parts: &[&str]) -> Vec<String> {
+        words(parts)
+    }
+
+    fn unit_file(env: &Environment) -> PathBuf {
+        install_path(&spec(), env).unwrap()
+    }
+
+    const PROGRAM: &str = "/usr/bin/sapphire-agent";
+
+    fn linux_unit() -> String {
+        include_str!("../tests/golden/user.service").to_owned()
+    }
+
+    fn macos_plist() -> String {
+        include_str!("../tests/golden/launchagent.plist").to_owned()
+    }
+
+    fn task_xml() -> String {
+        include_str!("../tests/golden/task.xml").to_owned()
+    }
+
+    const POWERSHELL_STATE: &str = "(Get-ScheduledTask -TaskName 'sapphire-agent').State";
+
+    fn powershell() -> Vec<String> {
+        command(&[
+            "powershell",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            POWERSHELL_STATE,
+        ])
+    }
+
+    #[test]
+    fn linux_without_a_unit_is_not_installed() {
+        let manager = RecordingManager::new();
+        assert_eq!(
+            state(&spec(), &linux(), &manager).unwrap(),
+            ServiceState::NotInstalled
+        );
+        assert!(manager.calls().commands.is_empty());
+    }
+
+    #[test]
+    fn linux_with_a_missing_program_is_broken() {
+        let manager = RecordingManager::new().with_unit(unit_file(&linux()), &linux_unit());
+        match state(&spec(), &linux(), &manager).unwrap() {
+            ServiceState::Broken { reason } => assert!(reason.contains(PROGRAM), "{reason}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn linux_running() {
+        let manager = RecordingManager::returning("active\n")
+            .with_unit(unit_file(&linux()), &linux_unit())
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &linux(), &manager).unwrap(),
+            ServiceState::Running
+        );
+        assert_eq!(
+            manager.calls().commands,
+            vec![command(&[
+                "systemctl",
+                "--user",
+                "is-active",
+                "sapphire-agent"
+            ])]
+        );
+    }
+
+    #[test]
+    fn linux_stopped_when_is_active_fails() {
+        let manager = RecordingManager::failing_on("is-active")
+            .with_unit(unit_file(&linux()), &linux_unit())
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &linux(), &manager).unwrap(),
+            ServiceState::Stopped
+        );
+    }
+
+    #[test]
+    fn macos_without_a_plist_is_not_installed() {
+        let manager = RecordingManager::new();
+        assert_eq!(
+            state(&spec(), &macos(), &manager).unwrap(),
+            ServiceState::NotInstalled
+        );
+    }
+
+    #[test]
+    fn macos_running() {
+        let manager = RecordingManager::returning("\tstate = running\n")
+            .with_unit(unit_file(&macos()), &macos_plist())
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &macos(), &manager).unwrap(),
+            ServiceState::Running
+        );
+        assert_eq!(
+            manager.calls().commands,
+            vec![command(&[
+                "launchctl",
+                "print",
+                "gui/1000/net.sapphire-turtle.sapphire-agent"
+            ])]
+        );
+    }
+
+    #[test]
+    fn macos_not_loaded_is_stopped() {
+        let manager = RecordingManager::failing_on("print")
+            .with_unit(unit_file(&macos()), &macos_plist())
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &macos(), &manager).unwrap(),
+            ServiceState::Stopped
+        );
+    }
+
+    #[test]
+    fn windows_without_a_task_is_not_installed() {
+        let manager = RecordingManager::failing_on("/query");
+        assert_eq!(
+            state(&spec(), &windows(), &manager).unwrap(),
+            ServiceState::NotInstalled
+        );
+    }
+
+    #[test]
+    fn windows_running() {
+        let manager = RecordingManager::new()
+            .answering("/query", &task_xml())
+            .answering("powershell", "Running\r\n")
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &windows(), &manager).unwrap(),
+            ServiceState::Running
+        );
+        assert!(manager.calls().commands.contains(&powershell()));
+    }
+
+    #[test]
+    fn windows_ready_is_stopped() {
+        let manager = RecordingManager::new()
+            .answering("/query", &task_xml())
+            .answering("powershell", "Ready\r\n")
+            .with_file(PROGRAM);
+        assert_eq!(
+            state(&spec(), &windows(), &manager).unwrap(),
+            ServiceState::Stopped
+        );
+    }
+
+    #[test]
+    fn stop_and_start_run_each_backend_s_command() {
+        let label = "gui/1000/net.sapphire-turtle.sapphire-agent";
+        for (env, stop_command, start_command) in [
+            (
+                linux(),
+                command(&["systemctl", "--user", "stop", "sapphire-agent"]),
+                command(&["systemctl", "--user", "start", "sapphire-agent"]),
+            ),
+            (
+                macos(),
+                command(&["launchctl", "kill", "SIGTERM", label]),
+                command(&["launchctl", "kickstart", "-k", label]),
+            ),
+            (
+                windows(),
+                command(&["schtasks", "/end", "/tn", "sapphire-agent"]),
+                command(&["schtasks", "/run", "/tn", "sapphire-agent"]),
+            ),
+        ] {
+            let manager = RecordingManager::new();
+            stop(&spec(), &env, &manager).unwrap();
+            start(&spec(), &env, &manager).unwrap();
+            assert_eq!(manager.calls().commands, vec![stop_command, start_command]);
+        }
+    }
+
+    #[test]
+    fn stopping_a_stopped_service_is_not_an_error() {
+        for (env, needle) in [(linux(), "stop"), (macos(), "kill"), (windows(), "/end")] {
+            let manager = RecordingManager::failing_on(needle);
+            stop(&spec(), &env, &manager).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_failing_start_is_an_error() {
+        let manager = RecordingManager::failing_on("start");
+        assert!(start(&spec(), &linux(), &manager).is_err());
     }
 
     #[test]

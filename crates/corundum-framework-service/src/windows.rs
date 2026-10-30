@@ -5,6 +5,8 @@
 //! services (and LaunchDaemons) are per-machine services this crate does not install; it
 //! installs the per-user kind everywhere — the counterpart of a systemd user unit.
 
+use std::path::PathBuf;
+
 use crate::scope::{InstallContext, ServiceSpec};
 
 /// Escape a string for inclusion as XML character data.
@@ -98,9 +100,53 @@ pub fn render_task(spec: &ServiceSpec, ctx: &InstallContext) -> String {
     task
 }
 
+/// The program a task runs: the text of its `<Command>` element; `None` when it has none.
+pub fn command_of(task_xml: &str) -> Option<PathBuf> {
+    let (_, after) = task_xml.split_once("<Command>")?;
+    let (command, _) = after.split_once("</Command>")?;
+    Some(PathBuf::from(
+        command
+            .trim()
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&"),
+    ))
+}
+
+/// Whether the task state PowerShell printed says the task is running.
+pub fn is_running(state: &str) -> bool {
+    state.trim() == "Running"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_program_is_the_command_element() {
+        let golden = include_str!("../tests/golden/task.xml");
+        assert_eq!(
+            command_of(golden),
+            Some(PathBuf::from("/usr/bin/sapphire-agent"))
+        );
+        assert_eq!(command_of("<Task></Task>"), None);
+        assert_eq!(
+            command_of("<Command>C:\\A &amp; B\\a.exe</Command>"),
+            Some(PathBuf::from("C:\\A & B\\a.exe"))
+        );
+    }
+
+    #[test]
+    fn only_running_is_running() {
+        for (state, expected) in [
+            ("Running\r\n", true),
+            ("Ready", false),
+            ("Disabled", false),
+            ("", false),
+        ] {
+            assert_eq!(is_running(state), expected, "{state}");
+        }
+    }
 
     #[test]
     fn entity_text_escapes_to_a_single_pass() {

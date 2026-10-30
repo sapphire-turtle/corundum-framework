@@ -113,9 +113,64 @@ pub fn render_launch_agent(spec: &ServiceSpec, ctx: &InstallContext) -> String {
     agent
 }
 
+/// The program an agent runs: the first `ProgramArguments` string; `None` when there is none.
+pub fn program_of(plist: &str) -> Option<PathBuf> {
+    let (_, after) = plist.split_once("<key>ProgramArguments</key>")?;
+    let (_, after) = after.split_once("<string>")?;
+    let (program, _) = after.split_once("</string>")?;
+    Some(PathBuf::from(unescape(program)))
+}
+
+/// Whether the output of `launchctl print` says the agent is running.
+///
+/// The line `state = not running` also contains `running`, so the whole value is compared.
+pub fn is_running(print: &str) -> bool {
+    print
+        .lines()
+        .any(|line| line.trim().strip_prefix("state = ") == Some("running"))
+}
+
+/// Undo [`escape`] for text read back out of a plist.
+fn unescape(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_program_is_the_first_program_argument() {
+        let golden = include_str!("../tests/golden/launchagent.plist");
+        assert_eq!(
+            program_of(golden),
+            Some(PathBuf::from("/usr/bin/sapphire-agent"))
+        );
+        assert_eq!(program_of("<plist></plist>"), None);
+        assert_eq!(
+            program_of(&render_launch_agent(
+                &spec(),
+                &InstallContext {
+                    exe: PathBuf::from("/Applications/A & B/agent"),
+                    ..ctx()
+                }
+            )),
+            Some(PathBuf::from("/Applications/A & B/agent"))
+        );
+    }
+
+    #[test]
+    fn only_a_running_state_is_running() {
+        for (print, expected) in [
+            ("net.x = {\n\tstate = running\n\tpid = 4\n}\n", true),
+            ("net.x = {\n\tstate = not running\n}\n", false),
+            ("", false),
+        ] {
+            assert_eq!(is_running(print), expected, "{print}");
+        }
+    }
 
     #[test]
     fn an_agent_lives_under_the_users_launch_agents() {
