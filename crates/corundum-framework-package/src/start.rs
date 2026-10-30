@@ -8,6 +8,7 @@ use semver::Version;
 use velopack::VelopackApp;
 
 use crate::backend::{self, Located};
+use crate::services::Services;
 
 #[cfg(windows)]
 use crate::cli_path;
@@ -45,9 +46,8 @@ pub struct PackageSpec {
     pub cli: Option<CliSpec>,
     /// The app's background services: the running ones are stopped before an update is
     /// applied and started again at the next start, and on Windows each is uninstalled
-    /// with the app. Functions, as a spec holds owned values a static cannot.
-    #[cfg(feature = "service")]
-    pub services: &'static [fn() -> corundum_framework_service::ServiceSpec],
+    /// with the app. An app without services writes [`Services::NONE`].
+    pub services: Services,
 }
 
 /// Which start this is, against the version the app last ran with.

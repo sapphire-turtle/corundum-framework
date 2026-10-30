@@ -21,7 +21,7 @@ use corundum_framework::gui::egui;
 use corundum_framework::gui::settings::SettingsSection;
 use corundum_framework::gui::tr;
 use corundum_framework::package::cli_path::CliSpec;
-use corundum_framework::package::{PackageSpec, Source, Start, Updater};
+use corundum_framework::package::{PackageSpec, Services, Source, Start, Updater};
 
 /// The repository the demo's packages are released in, as `demo-v<version>` pre-releases.
 const REPO: &str = "https://github.com/sapphire-turtle/corundum-framework";
@@ -52,7 +52,7 @@ pub static PACKAGE: PackageSpec = PackageSpec {
         command: "corundum-demo",
     }),
     // Its daemon becomes a registered service later; until then `before_apply` stops it.
-    services: &[],
+    services: Services::NONE,
 };
 
 /// The updater [`start_updates`] made: unset outside a package and on a command-line start.

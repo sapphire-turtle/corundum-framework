@@ -30,6 +30,8 @@ pub use error::Error;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use semver::Version;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub use services::Services;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use start::{PackageSpec, Start, start};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use updater::{After, Source, Updater};

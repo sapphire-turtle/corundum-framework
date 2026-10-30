@@ -2,6 +2,43 @@
 //! is applied, noted in the data directory, and started again at the next start (or at
 //! once, when the apply fails).
 
+/// An app's background services, for [`PackageSpec::services`](crate::PackageSpec::services):
+/// [`Services::NONE`], or with the `service` feature a list given to `Services::new`.
+/// Functions, as a service's spec holds owned values a static cannot.
+#[derive(Clone, Copy, Debug)]
+pub struct Services {
+    #[cfg(feature = "service")]
+    list: &'static [fn() -> corundum_framework_service::ServiceSpec],
+}
+
+impl Services {
+    /// No background services.
+    pub const NONE: Services = Services {
+        #[cfg(feature = "service")]
+        list: &[],
+    };
+
+    /// These services: each function builds one's spec.
+    #[cfg(feature = "service")]
+    pub const fn new(
+        services: &'static [fn() -> corundum_framework_service::ServiceSpec],
+    ) -> Services {
+        Services { list: services }
+    }
+
+    /// Whether there are none.
+    #[cfg(feature = "service")]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    /// Each service's spec, built.
+    #[cfg(feature = "service")]
+    pub(crate) fn specs(&self) -> impl Iterator<Item = corundum_framework_service::ServiceSpec> {
+        self.list.iter().map(|service| service())
+    }
+}
+
 /// What the updater asks of the app's services around an apply. The real one drives the
 /// OS's service manager; without the `service` feature, and in an updater's tests, `()`
 /// stands in and does nothing.
@@ -92,8 +129,10 @@ mod with_services {
     /// `data`'s [`RESTART_MARKER`]; returns them.
     ///
     /// The marker is written before anything is stopped, so a service is never left
-    /// stopped without a note to start it again. A service whose state cannot be read is
-    /// an error, as it may be running, and nothing is stopped then.
+    /// stopped without a note to start it again. A service whose state cannot be read may
+    /// be running: it is stopped and noted all the same, rather than refusing every update
+    /// until the cause goes away. `stop` cannot fail ("not running" is stopped), so only a
+    /// marker that cannot be written refuses the update.
     pub(crate) fn stop_running(
         spec: &PackageSpec,
         data: &Path,
@@ -101,15 +140,16 @@ mod with_services {
         manager: &dyn ServiceManager,
     ) -> Result<Vec<&'static str>, String> {
         let mut running = Vec::new();
-        for service in spec.services.iter().map(|service| service()) {
+        for service in spec.services.specs() {
             match state(&service, env, manager) {
                 Ok(ServiceState::Running) => running.push(service),
                 Ok(_) => {}
                 Err(e) => {
-                    return Err(format!(
-                        "could not tell whether {} runs: {e}",
+                    tracing::warn!(
+                        "could not tell whether {} runs, stopping it anyway: {e}",
                         service.app_name
-                    ));
+                    );
+                    running.push(service);
                 }
             }
         }
@@ -124,17 +164,9 @@ mod with_services {
         fs::create_dir_all(data)
             .and_then(|()| fs::write(&marker, names))
             .map_err(|e| format!("could not write {}: {e}", marker.display()))?;
-        for (index, service) in running.iter().enumerate() {
-            if let Err(e) = stop(service, env, manager) {
-                // The ones stopped already run again, as nothing is applied.
-                for stopped in &running[..index] {
-                    if let Err(e) = start(stopped, env, manager) {
-                        tracing::warn!("could not start {} again: {e}", stopped.app_name);
-                    }
-                }
-                let _ = fs::remove_file(&marker);
-                return Err(format!("could not stop {}: {e}", service.app_name));
-            }
+        for service in &running {
+            // Never an error: see above.
+            let _ = stop(service, env, manager);
         }
         Ok(running.iter().map(|service| service.app_name).collect())
     }
@@ -162,8 +194,7 @@ mod with_services {
         for name in names.lines().map(str::trim).filter(|name| !name.is_empty()) {
             let Some(service) = spec
                 .services
-                .iter()
-                .map(|service| service())
+                .specs()
                 .find(|service| service.app_name == name)
             else {
                 tracing::warn!(
@@ -188,7 +219,7 @@ mod with_services {
         env: &Environment,
         manager: &dyn ServiceManager,
     ) {
-        for service in spec.services.iter().map(|service| service()) {
+        for service in spec.services.specs() {
             if let Err(e) = corundum_framework_service::uninstall(&service, env, manager) {
                 tracing::warn!("could not uninstall {}: {e}", service.app_name);
             }
@@ -205,6 +236,7 @@ mod with_services {
         };
 
         use super::*;
+        use crate::services::Services;
 
         fn demo() -> ServiceSpec {
             ServiceSpec {
@@ -230,7 +262,7 @@ mod with_services {
                 on_uninstalling: None,
                 before_apply: None,
                 cli: None,
-                services,
+                services: Services::new(services),
             }
         }
 
@@ -349,18 +381,24 @@ mod with_services {
         }
 
         #[test]
-        fn a_failed_stop_is_an_error_naming_the_service() {
-            // `stop` itself takes "not running" for stopped; what fails is telling whether
-            // the service runs, here for want of a home directory to find its unit in.
+        fn a_service_whose_state_cannot_be_read_is_stopped_and_marked() {
+            // Without a home directory the unit cannot be found: the service may be
+            // running, so it is stopped and marked, and the update goes on.
             let data = tempfile::tempdir().unwrap();
             let env = Environment {
                 home: None,
                 ..linux()
             };
             let manager = installed();
-            let err = stop_running(&package(&[demo]), data.path(), &env, &manager).unwrap_err();
-            assert!(err.contains("demo"), "{err}");
-            assert!(!marker(data.path()).exists());
+            let stopped = stop_running(&package(&[demo]), data.path(), &env, &manager).unwrap();
+            assert_eq!(stopped, ["demo"]);
+            assert_eq!(fs::read_to_string(marker(data.path())).unwrap(), "demo\n");
+            assert!(manager.calls().commands.contains(&command(&[
+                "systemctl",
+                "--user",
+                "stop",
+                "demo"
+            ])));
         }
 
         #[test]

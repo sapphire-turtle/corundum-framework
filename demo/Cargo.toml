@@ -79,4 +79,4 @@ corundum-framework = { path = "../crates/corundum-framework", features = ["andro
 # Built by the release workflow (demo-release.yml), not by `cargo run`: the demo as a
 # Velopack package, with its updates, its command line, and the daemon its update stops
 # (src/velopack.rs).
-velopack = ["corundum-framework/gui-package", "corundum-framework/service"]
+velopack = ["corundum-framework/gui-package"]

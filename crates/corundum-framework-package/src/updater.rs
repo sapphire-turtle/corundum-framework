@@ -152,8 +152,7 @@ impl Updater {
             on_uninstalling: None,
             before_apply: None,
             cli: None,
-            #[cfg(feature = "service")]
-            services: &[],
+            services: crate::Services::NONE,
         };
         let updater = Updater::with_backend(&SPEC, Arc::new(Inert), Arc::new(()));
         let downloaded = match &state {
@@ -506,8 +505,7 @@ mod tests {
             on_uninstalling: None,
             before_apply,
             cli: None,
-            #[cfg(feature = "service")]
-            services: &[],
+            services: crate::Services::NONE,
         }))
     }
 
@@ -584,11 +582,11 @@ mod tests {
 
     /// Services that record their stop and restart in the apply log, and fail the stop
     /// when asked to.
-    struct Services {
+    struct RecordedServices {
         fails_stop: bool,
     }
 
-    impl ServiceDriver for Services {
+    impl ServiceDriver for RecordedServices {
         fn stop_running(&self) -> Result<(), String> {
             log("stop services");
             if self.fails_stop {
@@ -611,7 +609,7 @@ mod tests {
         fake: Arc<Fake>,
         fails_stop: bool,
     ) -> Updater {
-        Updater::with_backend(spec, fake, Arc::new(Services { fails_stop }))
+        Updater::with_backend(spec, fake, Arc::new(RecordedServices { fails_stop }))
     }
 
     /// Polls the state until `done` holds, for 5 seconds at most.
