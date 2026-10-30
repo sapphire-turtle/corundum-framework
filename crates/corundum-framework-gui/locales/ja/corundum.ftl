@@ -131,3 +131,9 @@ corundum-media-videos = 動画
 
 # QR コード（`qr::QrCode`）：文字列が長すぎて QR コードにできないとき。
 corundum-qr-too-long = 長すぎて QR コードにできません。
+
+# 初回起動の流れ（`first_run::FirstRun`）: 見出しのステップ表示と、下部のボタン。
+corundum-first-run-step = ステップ { $step } / { $count }
+corundum-first-run-back = 戻る
+corundum-first-run-next = 次へ
+corundum-first-run-finish = 完了

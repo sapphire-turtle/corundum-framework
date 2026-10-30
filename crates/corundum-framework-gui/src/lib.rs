@@ -37,6 +37,8 @@ pub use eframe;
 
 pub mod detail;
 pub mod explorer;
+#[cfg(feature = "serde")]
+pub mod first_run;
 pub mod fonts;
 #[cfg(feature = "eframe")]
 pub mod gpu;

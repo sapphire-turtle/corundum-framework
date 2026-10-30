@@ -142,3 +142,9 @@ corundum-media-videos = Videos
 
 # A QR code (`qr::QrCode`) whose text is too long for one.
 corundum-qr-too-long = Too long to show as a QR code.
+
+# The first-run flow (`first_run::FirstRun`): the step in the header, and the footer buttons.
+corundum-first-run-step = Step { $step } of { $count }
+corundum-first-run-back = Back
+corundum-first-run-next = Next
+corundum-first-run-finish = Finish
