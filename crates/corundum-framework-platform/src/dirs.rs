@@ -24,7 +24,13 @@
 //! itself on a phone, whose sandbox is the app's alone.
 //!
 //! An app that kept its directory in Roaming before calls
-//! [`AppDirs::migrate_from_roaming`] once at start, before it reads anything there.
+//! [`AppDirs::migrate_from_roaming`] once at start, before it reads anything there, and
+//! does not start on an error from it.
+//!
+//! On Windows the cache used to be the app's directory itself (`%LOCALAPPDATA%\<app>`).
+//! An existing user's Local directory may still hold old cache entries at its top level,
+//! beside the settings and data moved in from Roaming; they are not moved, and the app may
+//! clear them.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -115,14 +121,32 @@ impl AppDirs {
     /// cache, written before this ran, makes one), the two are merged: each entry at the
     /// top of the Roaming directory that Local does not have is renamed into it, one at a
     /// time; an entry Local has too is left in Roaming and logged, and the Roaming
-    /// directory is removed once it is empty. Nothing is copied, so nothing is ever half
-    /// there: when a rename fails (a file in use, Roaming on another volume) the error is
-    /// returned, what was moved stays moved, and the rest is moved at a later start.
+    /// directory is removed once it is empty. A rename never replaces what is there.
+    ///
+    /// Roaming on another volume (redirected AppData) cannot be renamed into Local, so
+    /// there the directory, or each entry, is copied next to its place
+    /// (`<app>.migrating`, `<app>\.<name>.migrating`), renamed into place, and only then
+    /// removed from Roaming. Nothing is ever half there: a copy that fails is removed and
+    /// its source stays in Roaming.
+    ///
+    /// A Local directory that is a Velopack install (`Update.exe`, or `current` with
+    /// `packages`: one made under a `packId` equal to the app's name) is never merged into,
+    /// as an uninstall would delete it whole; this returns an error naming it. An app's
+    /// `packId` must differ from its data directory's name (corundum-framework#57).
+    ///
+    /// **When this returns an error, the app must not read or write its settings or data in
+    /// this run**: the move may have stopped halfway, some entries in Local and the rest
+    /// still in Roaming, and an app that ran on Local alone would start over without them,
+    /// then never move them. It reports the error and exits; the next start goes on from
+    /// where this one stopped, once whatever stopped it (a file in use, say) is gone.
+    ///
     /// Outside Windows there is no Roaming, and nothing is moved.
     pub fn migrate_from_roaming(app_name: &str) -> io::Result<Migrated> {
         #[cfg(windows)]
         return match (::dirs::config_dir(), ::dirs::data_local_dir()) {
-            (Some(roaming), Some(local)) => migrate_from_roaming_with(&roaming, &local, app_name),
+            (Some(roaming), Some(local)) => {
+                migrate_from_roaming_with(&roaming, &local, app_name, &rename_no_replace)
+            }
             _ => Ok(Migrated::Nothing),
         };
         #[cfg(not(windows))]
@@ -136,7 +160,7 @@ impl AppDirs {
 /// What [`AppDirs::migrate_from_roaming`] did.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Migrated {
-    /// The Roaming directory was renamed to Local whole.
+    /// The Roaming directory was moved to Local whole.
     Moved,
     /// There was a Local directory already, and the Roaming one was merged into it. `left`
     /// are the Roaming entries Local had too, left where they were; when it is empty the
@@ -163,31 +187,46 @@ fn migration(roaming_exists: bool, local_exists: bool) -> Migration {
     }
 }
 
-/// [`AppDirs::migrate_from_roaming`] between the roots given, so it can be tried on any OS.
+/// A rename that fails rather than replace its destination, as [`rename_no_replace`].
+type Rename<'a> = dyn Fn(&Path, &Path) -> io::Result<()> + 'a;
+
+/// [`AppDirs::migrate_from_roaming`] between the roots given and through `rename`, so it
+/// can be tried on any OS, Roaming on another volume included.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn migrate_from_roaming_with(
     roaming_root: &Path,
     local_root: &Path,
     app_name: &str,
+    rename: &Rename,
 ) -> io::Result<Migrated> {
     let roaming = roaming_root.join(app_name);
     let local = local_root.join(app_name);
-    match migration(roaming.try_exists()?, local.try_exists()?) {
+    match migration(is_there(&roaming)?, is_there(&local)?) {
         Migration::Move => {
             std::fs::create_dir_all(local_root)?;
-            // One rename: the directory is either all in Roaming or all in Local.
-            std::fs::rename(&roaming, &local)?;
+            let temporary = local_root.join(format!("{app_name}.migrating"));
+            move_entry(&roaming, &local, &temporary, rename)?;
             tracing::info!("moved {} to {}", roaming.display(), local.display());
             Ok(Migrated::Moved)
         }
-        Migration::Merge => merge(&roaming, &local),
+        Migration::Merge => {
+            if is_velopack_install(&local)? {
+                return Err(io::Error::other(format!(
+                    "{} is a Velopack install, not merged into: an app's packId must differ \
+                     from its data directory's name; {} is left as it is",
+                    local.display(),
+                    roaming.display()
+                )));
+            }
+            merge(&roaming, &local, rename)
+        }
         Migration::Nothing => Ok(Migrated::Nothing),
     }
 }
 
 /// Rename each entry of `roaming` that `local` does not have into `local`, and remove
-/// `roaming` if that empties it.
-fn merge(roaming: &Path, local: &Path) -> io::Result<Migrated> {
+/// `roaming` if that empties it. The first entry that cannot be moved stops it.
+fn merge(roaming: &Path, local: &Path, rename: &Rename) -> io::Result<Migrated> {
     let mut names = std::fs::read_dir(roaming)?
         .map(|entry| entry.map(|entry| entry.file_name()))
         .collect::<io::Result<Vec<_>>>()?;
@@ -197,11 +236,19 @@ fn merge(roaming: &Path, local: &Path) -> io::Result<Migrated> {
     for name in names {
         let from = roaming.join(&name);
         let to = local.join(&name);
-        if to.try_exists()? {
+        let mut temporary_name = std::ffi::OsString::from(".");
+        temporary_name.push(&name);
+        temporary_name.push(".migrating");
+        let temporary = local.join(temporary_name);
+        if is_there(&to)? {
             left.push(from);
-        } else {
-            std::fs::rename(&from, &to)?;
-            tracing::info!("moved {} to {}", from.display(), to.display());
+            continue;
+        }
+        match move_entry(&from, &to, &temporary, rename) {
+            Ok(()) => tracing::info!("moved {} to {}", from.display(), to.display()),
+            // Made in Local since it was looked at: Local's is the one kept.
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => left.push(from),
+            Err(err) => return Err(err),
         }
     }
     if left.is_empty() {
@@ -215,6 +262,157 @@ fn merge(roaming: &Path, local: &Path) -> io::Result<Migrated> {
         );
     }
     Ok(Migrated::Merged { left })
+}
+
+/// Move `from` to `to`, which is not there: one rename, or across volumes a copy to
+/// `temporary` (beside `to`), renamed to `to`, and only then `from` removed.
+fn move_entry(from: &Path, to: &Path, temporary: &Path, rename: &Rename) -> io::Result<()> {
+    match rename(from, to) {
+        Err(err) if crosses_volumes(&err) => {}
+        done => return done,
+    }
+    // What a copy cut off before left is no use: it is made again whole.
+    remove(temporary)?;
+    if let Err(err) = copy(from, temporary).and_then(|()| rename(temporary, to)) {
+        if let Err(remove_err) = remove(temporary) {
+            tracing::warn!("could not remove {}: {remove_err}", temporary.display());
+        }
+        return Err(err);
+    }
+    remove(from)
+}
+
+/// Whether `err` is a rename's from one volume to another.
+fn crosses_volumes(err: &io::Error) -> bool {
+    // ERROR_NOT_SAME_DEVICE, should std not map it.
+    err.kind() == io::ErrorKind::CrossesDevices || (cfg!(windows) && err.raw_os_error() == Some(17))
+}
+
+/// Copy `from` to `to`, which is not there: files, directories, and symlinks as symlinks.
+fn copy(from: &Path, to: &Path) -> io::Result<()> {
+    let kind = std::fs::symlink_metadata(from)?.file_type();
+    if kind.is_symlink() {
+        copy_symlink(from, to)
+    } else if kind.is_dir() {
+        std::fs::create_dir(to)?;
+        for entry in std::fs::read_dir(from)? {
+            let name = entry?.file_name();
+            copy(&from.join(&name), &to.join(&name))?;
+        }
+        Ok(())
+    } else {
+        std::fs::copy(from, to).map(|_| ())
+    }
+}
+
+/// Make `to` a symlink to where `from` points.
+fn copy_symlink(from: &Path, to: &Path) -> io::Result<()> {
+    let target = std::fs::read_link(from)?;
+    #[cfg(unix)]
+    return std::os::unix::fs::symlink(target, to);
+    #[cfg(windows)]
+    {
+        // Windows tells a link to a directory from one to a file; a link to nothing is
+        // made to a file.
+        let to_dir = std::fs::metadata(from).is_ok_and(|meta| meta.is_dir());
+        if to_dir {
+            std::os::windows::fs::symlink_dir(target, to)
+        } else {
+            std::os::windows::fs::symlink_file(target, to)
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (target, to);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            format!("cannot copy the symlink {}", from.display()),
+        ))
+    }
+}
+
+/// Remove `path`, a directory with all in it or a file or symlink, if it is there.
+fn remove(path: &Path) -> io::Result<()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(path),
+        Ok(_) => std::fs::remove_file(path).or_else(|err| {
+            // A symlink to a directory on Windows is removed as a directory.
+            if cfg!(windows) {
+                std::fs::remove_dir(path)
+            } else {
+                Err(err)
+            }
+        }),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
+    }
+}
+
+/// Whether there is anything at `path`, a dangling symlink included.
+fn is_there(path: &Path) -> io::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err),
+    }
+}
+
+/// Whether `dir` is a Velopack install: `Update.exe`, or `current` with `packages`.
+fn is_velopack_install(dir: &Path) -> io::Result<bool> {
+    Ok(is_there(&dir.join("Update.exe"))?
+        || (is_there(&dir.join("current"))? && is_there(&dir.join("packages"))?))
+}
+
+/// Rename `from` to `to`, failing with [`io::ErrorKind::AlreadyExists`] rather than
+/// replace what is at `to`. On Windows this is `MoveFileExW` without
+/// `MOVEFILE_REPLACE_EXISTING` (nor `MOVEFILE_COPY_ALLOWED`: across volumes it fails).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+
+        use windows::Win32::Storage::FileSystem::{MOVE_FILE_FLAGS, MoveFileExW};
+        use windows::core::PCWSTR;
+
+        let wide = |path: &Path| {
+            path.as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect::<Vec<u16>>()
+        };
+        let (from, to) = (wide(from), wide(to));
+        // SAFETY: both are NUL-terminated UTF-16 strings that outlive the call.
+        unsafe {
+            MoveFileExW(
+                PCWSTR(from.as_ptr()),
+                PCWSTR(to.as_ptr()),
+                MOVE_FILE_FLAGS(0),
+            )
+        }
+        .map_err(|err| {
+            // An HRESULT from a Win32 error code (facility 7) carries the code in its
+            // low word, which std maps to its kinds.
+            let code = err.code().0 as u32;
+            if code & 0xFFFF_0000 == 0x8007_0000 {
+                io::Error::from_raw_os_error((code & 0xFFFF) as i32)
+            } else {
+                io::Error::other(err)
+            }
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        // Checked just before: the rename of a directory onto an empty one would replace
+        // it, and of a file onto a file always does.
+        if is_there(to)? {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("{} is there already", to.display()),
+            ));
+        }
+        std::fs::rename(from, to)
+    }
 }
 
 /// How a platform lays out an app's directories under the roots.
@@ -398,6 +596,211 @@ mod tests {
         (temp, roaming, local)
     }
 
+    /// The migration between `roaming` and `local`, through the real rename.
+    fn migrate(roaming: &Path, local: &Path) -> io::Result<Migrated> {
+        migrate_from_roaming_with(roaming, local, "app", &rename_no_replace)
+    }
+
+    /// The migration with Roaming on another volume: renaming anything out of `roaming`
+    /// fails as across volumes; a rename within Local is a real one.
+    fn migrate_across_volumes(roaming: &Path, local: &Path) -> io::Result<Migrated> {
+        let rename = |from: &Path, to: &Path| {
+            if from.starts_with(roaming) {
+                Err(io::Error::from(io::ErrorKind::CrossesDevices))
+            } else {
+                rename_no_replace(from, to)
+            }
+        };
+        migrate_from_roaming_with(roaming, local, "app", &rename)
+    }
+
+    fn read(path: impl AsRef<Path>) -> String {
+        std::fs::read_to_string(path).unwrap()
+    }
+
+    #[test]
+    fn a_failure_mid_merge_leaves_what_moved_in_local_and_the_rest_in_roaming() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        for name in ["a", "b", "c"] {
+            std::fs::write(roaming.join("app").join(name), name).unwrap();
+        }
+        std::fs::create_dir_all(local.join("app/cache")).unwrap();
+        // `b`'s destination is blocked: its rename fails, after `a`'s and before `c`'s.
+        let rename = |from: &Path, to: &Path| {
+            if from.ends_with("b") {
+                Err(io::Error::from(io::ErrorKind::PermissionDenied))
+            } else {
+                rename_no_replace(from, to)
+            }
+        };
+
+        let err = migrate_from_roaming_with(&roaming, &local, "app", &rename).unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(read(local.join("app/a")), "a");
+        assert!(!roaming.join("app/a").exists());
+        assert_eq!(read(roaming.join("app/b")), "b");
+        assert_eq!(read(roaming.join("app/c")), "c");
+        assert!(!local.join("app/b").exists());
+        assert!(!local.join("app/c").exists());
+    }
+
+    #[test]
+    fn a_failed_merge_moves_the_rest_at_the_next_start() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        std::fs::write(roaming.join("app/a"), "a").unwrap();
+        std::fs::create_dir_all(local.join("app/cache")).unwrap();
+        let failing = |_: &Path, _: &Path| Err(io::Error::from(io::ErrorKind::PermissionDenied));
+        assert!(migrate_from_roaming_with(&roaming, &local, "app", &failing).is_err());
+
+        let migrated = migrate(&roaming, &local).unwrap();
+
+        assert_eq!(migrated, Migrated::Merged { left: vec![] });
+        assert_eq!(read(local.join("app/a")), "a");
+        assert!(!roaming.join("app").exists());
+    }
+
+    #[test]
+    fn across_volumes_the_roaming_directory_is_copied_then_swapped_in() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app/data")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        std::fs::write(roaming.join("app/data/index"), "b").unwrap();
+        // What an earlier copy that was cut off left.
+        std::fs::create_dir_all(local.join("app.migrating/stale")).unwrap();
+
+        let migrated = migrate_across_volumes(&roaming, &local).unwrap();
+
+        assert_eq!(migrated, Migrated::Moved);
+        assert_eq!(read(local.join("app/config.toml")), "a");
+        assert_eq!(read(local.join("app/data/index")), "b");
+        assert!(!local.join("app/stale").exists());
+        assert!(!local.join("app.migrating").exists());
+        assert!(!roaming.join("app").exists());
+    }
+
+    #[test]
+    fn across_volumes_each_entry_is_copied_then_swapped_into_local() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app/data")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        std::fs::write(roaming.join("app/data/index"), "b").unwrap();
+        std::fs::create_dir_all(local.join("app/cache")).unwrap();
+
+        let migrated = migrate_across_volumes(&roaming, &local).unwrap();
+
+        assert_eq!(migrated, Migrated::Merged { left: vec![] });
+        assert_eq!(read(local.join("app/config.toml")), "a");
+        assert_eq!(read(local.join("app/data/index")), "b");
+        let names: Vec<_> = std::fs::read_dir(local.join("app"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert!(
+            names
+                .iter()
+                .all(|name| !name.to_string_lossy().ends_with(".migrating")),
+            "{names:?}"
+        );
+        assert!(!roaming.join("app").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_copy_that_fails_leaves_roaming_whole_and_no_copy_behind() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        std::fs::write(roaming.join("app/unreadable"), "b").unwrap();
+        let unreadable = roaming.join("app/unreadable");
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&unreadable).is_ok() {
+            // Root reads it anyway: there is no failure to try.
+            return;
+        }
+
+        assert!(migrate_across_volumes(&roaming, &local).is_err());
+
+        assert_eq!(read(roaming.join("app/config.toml")), "a");
+        assert!(unreadable.exists());
+        assert!(!local.join("app").exists());
+        assert!(!local.join("app.migrating").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlink_is_copied_as_a_symlink() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        std::os::unix::fs::symlink("elsewhere", roaming.join("app/link")).unwrap();
+
+        migrate_across_volumes(&roaming, &local).unwrap();
+
+        assert_eq!(
+            std::fs::read_link(local.join("app/link")).unwrap(),
+            Path::new("elsewhere")
+        );
+    }
+
+    #[test]
+    fn a_velopack_install_is_never_merged_into() {
+        for install in [&["Update.exe"][..], &["current/", "packages/"][..]] {
+            let (_temp, roaming, local) = roots();
+            std::fs::create_dir_all(roaming.join("app")).unwrap();
+            std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+            std::fs::create_dir_all(local.join("app")).unwrap();
+            for entry in install {
+                match entry.strip_suffix('/') {
+                    Some(dir) => std::fs::create_dir(local.join("app").join(dir)).unwrap(),
+                    None => std::fs::write(local.join("app").join(entry), "").unwrap(),
+                }
+            }
+
+            let err = migrate(&roaming, &local).unwrap_err();
+
+            assert!(err.to_string().contains("Velopack"), "{err}");
+            assert_eq!(read(roaming.join("app/config.toml")), "a");
+            assert!(!local.join("app/config.toml").exists());
+        }
+    }
+
+    #[test]
+    fn a_rename_never_replaces_what_is_there() {
+        let temp = tempfile::tempdir().unwrap();
+        let (from, to) = (temp.path().join("from"), temp.path().join("to"));
+        std::fs::create_dir(&from).unwrap();
+        std::fs::create_dir(&to).unwrap();
+
+        let err = rename_no_replace(&from, &to).unwrap_err();
+
+        assert_eq!(err.kind(), io::ErrorKind::AlreadyExists);
+        assert!(from.is_dir());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_symlink_in_local_counts_as_there() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        std::fs::create_dir_all(local.join("app")).unwrap();
+        std::os::unix::fs::symlink("nowhere", local.join("app/config.toml")).unwrap();
+
+        let migrated = migrate(&roaming, &local).unwrap();
+
+        assert_eq!(
+            migrated,
+            Migrated::Merged {
+                left: vec![roaming.join("app/config.toml")]
+            }
+        );
+        assert_eq!(read(roaming.join("app/config.toml")), "a");
+    }
+
     #[test]
     fn the_roaming_directory_moves_to_local_with_its_files() {
         let (_temp, roaming, local) = roots();
@@ -405,7 +808,7 @@ mod tests {
         std::fs::write(roaming.join("app/settings.toml"), "a").unwrap();
         std::fs::write(roaming.join("app/sub/data"), "b").unwrap();
 
-        let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
+        let migrated = migrate(&roaming, &local).unwrap();
 
         assert_eq!(migrated, Migrated::Moved);
         assert!(!roaming.join("app").exists());
@@ -428,7 +831,7 @@ mod tests {
         std::fs::create_dir_all(local.join("app/cache")).unwrap();
         std::fs::write(local.join("app/cache/sample"), "c").unwrap();
 
-        let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
+        let migrated = migrate(&roaming, &local).unwrap();
 
         assert_eq!(migrated, Migrated::Merged { left: vec![] });
         assert!(!roaming.join("app").exists());
@@ -455,7 +858,7 @@ mod tests {
         std::fs::create_dir_all(local.join("app")).unwrap();
         std::fs::write(local.join("app/config.toml"), "local").unwrap();
 
-        let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
+        let migrated = migrate(&roaming, &local).unwrap();
 
         assert_eq!(
             migrated,
@@ -482,7 +885,7 @@ mod tests {
     fn no_roaming_directory_makes_no_local_one() {
         let (_temp, roaming, local) = roots();
 
-        let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
+        let migrated = migrate(&roaming, &local).unwrap();
 
         assert_eq!(migrated, Migrated::Nothing);
         assert!(!local.join("app").exists());
@@ -496,7 +899,7 @@ mod tests {
         // A file where the Local root should be: the move cannot happen.
         std::fs::write(&local, "").unwrap();
 
-        assert!(migrate_from_roaming_with(&roaming, &local, "app").is_err());
+        assert!(migrate(&roaming, &local).is_err());
         assert_eq!(
             std::fs::read_to_string(roaming.join("app/settings.toml")).unwrap(),
             "a"

@@ -304,8 +304,11 @@ pub fn init_logging() {
 /// Move the demo's directory from Roaming to Local on Windows, where an older demo kept it
 /// (corundum-framework#57), before anything reads it. Called again, it does nothing: as
 /// with [`init_logging`], `main` calls it before `package::start`, which reads the data
-/// directory, and [`run`] for the other starts. A move that fails is tried at the next
-/// start.
+/// directory, and [`run`] for the other starts.
+///
+/// A move that fails may have stopped halfway, so the demo does not run on what is in
+/// Local: it says why on standard error and exits with 1. The next start goes on with the
+/// move.
 #[cfg(not(target_os = "android"))]
 pub fn migrate_dirs() {
     use corundum_framework::platform::dirs::AppDirs;
@@ -313,7 +316,9 @@ pub fn migrate_dirs() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         if let Err(err) = AppDirs::migrate_from_roaming(APP_NAME) {
-            tracing::warn!("corundum demo: could not move the directory from Roaming: {err}");
+            tracing::error!("corundum demo: could not move the directory from Roaming: {err}");
+            eprintln!("corundum demo: could not move the directory from Roaming: {err}");
+            std::process::exit(1);
         }
     });
 }
