@@ -1,6 +1,10 @@
 //! Writes the demo's icon as `icon.ico`, `icon.icns` and `icon.png` (512 px) into the
 //! directory given, for `vpk pack --icon` in the release workflow (`demo-release.yml`).
+//!
+//! A desktop tool: the platform crate renders icons only there, so on a phone (where the
+//! mobile CI still builds every target) it does nothing.
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn main() -> std::io::Result<()> {
     use corundum_framework::platform::icon;
 
@@ -12,3 +16,6 @@ fn main() -> std::io::Result<()> {
     std::fs::write(dir.join("icon.png"), icon::render_png(svg, 512)?)?;
     Ok(())
 }
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+fn main() {}
