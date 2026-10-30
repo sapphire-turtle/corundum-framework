@@ -2,7 +2,7 @@
 //! window until the person has been through them. That the flow was finished is kept in the
 //! [store](crate::store), so it is not shown again on the next start.
 //!
-//! The app hands [`FirstRun::new`] its pages, and each frame, until [`FirstRun::done`] says
+//! The app hands [`FirstRun::new`] its name and its pages, and each frame, until [`FirstRun::done`] says
 //! so, draws [`FirstRun::ui`] in place of its window's content.
 
 use crate::store;
@@ -37,6 +37,8 @@ pub enum PageAction {
 
 /// The first-run flow over a list of pages.
 pub struct FirstRun {
+    /// The app's name, shown above each page's title.
+    app_name: String,
     pages: Vec<Box<dyn FirstRunPage>>,
     /// The page shown. Kept only while the app runs: a flow left unfinished starts again.
     current: usize,
@@ -46,9 +48,11 @@ pub struct FirstRun {
 }
 
 impl FirstRun {
-    /// The flow over `pages`, in order.
-    pub fn new(pages: Vec<Box<dyn FirstRunPage>>) -> FirstRun {
+    /// The flow over `pages`, in order, for the app called `app_name`: the name heads every
+    /// page, above its title.
+    pub fn new(app_name: impl Into<String>, pages: Vec<Box<dyn FirstRunPage>>) -> FirstRun {
         FirstRun {
+            app_name: app_name.into(),
             pages,
             current: 0,
             #[cfg(test)]
@@ -79,6 +83,7 @@ impl FirstRun {
         egui::Panel::top("corundum_first_run_header").show(ui, |ui| {
             let title = self.pages[current].title(ui.ctx());
             ui.add_space(8.0);
+            ui.label(egui::RichText::new(&self.app_name).small().weak());
             ui.heading(title);
             ui.label(tr!(
                 ui,
@@ -122,7 +127,9 @@ impl FirstRun {
                 });
         });
         #[cfg(test)]
-        if let Some(pressed) = self.pressed.take() {
+        if let Some(pressed) = self.pressed.take()
+            && pressed != PageAction::Stay
+        {
             action = pressed;
         }
         self.apply(ui.ctx(), action)
@@ -164,6 +171,8 @@ mod tests {
         number: usize,
         open: Rc<Cell<bool>>,
         drawn: Rc<Cell<usize>>,
+        /// What the page asks for on its next frame, once.
+        asks: Rc<Cell<Option<PageAction>>>,
     }
 
     impl FirstRunPage for Page {
@@ -172,7 +181,7 @@ mod tests {
         }
         fn ui(&mut self, _: &mut egui::Ui) -> PageAction {
             self.drawn.set(self.number);
-            PageAction::Stay
+            self.asks.take().unwrap_or(PageAction::Stay)
         }
         fn can_continue(&self) -> bool {
             self.open.get()
@@ -184,26 +193,30 @@ mod tests {
         ctx: egui::Context,
         open: Rc<Cell<bool>>,
         drawn: Rc<Cell<usize>>,
+        asks: Rc<Cell<Option<PageAction>>>,
     }
 
     impl Flow {
         fn new(count: usize) -> Flow {
             let open = Rc::new(Cell::new(true));
             let drawn = Rc::new(Cell::new(0));
+            let asks = Rc::new(Cell::new(None));
             let pages = (1..=count)
                 .map(|number| {
                     Box::new(Page {
                         number,
                         open: open.clone(),
                         drawn: drawn.clone(),
+                        asks: asks.clone(),
                     }) as Box<dyn FirstRunPage>
                 })
                 .collect();
             Flow {
-                flow: FirstRun::new(pages),
+                flow: FirstRun::new("App", pages),
                 ctx: egui::Context::default(),
                 open,
                 drawn,
+                asks,
             }
         }
 
@@ -253,6 +266,29 @@ mod tests {
         flow.open.set(true);
         flow.press(PageAction::Next);
         assert_eq!(flow.page(), 2);
+    }
+
+    #[test]
+    fn a_page_can_ask_to_move_on() {
+        let mut flow = Flow::new(2);
+        flow.asks.set(Some(PageAction::Next));
+        assert_eq!(flow.page(), 2);
+    }
+
+    #[test]
+    fn a_page_asking_to_move_on_is_held_while_it_cannot_continue() {
+        let mut flow = Flow::new(2);
+        flow.open.set(false);
+        flow.asks.set(Some(PageAction::Next));
+        assert_eq!(flow.page(), 1);
+    }
+
+    #[test]
+    fn a_page_can_ask_to_go_back() {
+        let mut flow = Flow::new(2);
+        flow.press(PageAction::Next);
+        flow.asks.set(Some(PageAction::Back));
+        assert_eq!(flow.page(), 1);
     }
 
     #[test]
