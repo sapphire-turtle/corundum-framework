@@ -14,12 +14,14 @@
 //!   these are `None` there.
 //!
 //! Config and data are one directory on Apple's platforms, on Android and on Windows, as
-//! `dirs` has it on macOS, and on Windows the cache is that directory too: an app that
-//! keeps more than one must not give a file in each the same name.
+//! `dirs` has it on macOS: an app that keeps both must not give a file in each the same
+//! name. On Windows the cache's root is that one too; [`AppDirs`] keeps the app's cache in
+//! a `cache` folder of its directory there.
 //!
 //! These are the roots, shared by every app on a desktop. [`AppDirs`] is an app's own
 //! directory under each: `<root>/<app name>` on the desktops, as the sapphire apps lay
-//! theirs out, and the root itself on a phone, whose sandbox is the app's alone.
+//! theirs out (with the cache in `<root>\<app name>\cache` on Windows), and the root
+//! itself on a phone, whose sandbox is the app's alone.
 //!
 //! An app that kept its directory in Roaming before calls
 //! [`AppDirs::migrate_from_roaming`] once at start, before it reads anything there.
@@ -52,6 +54,10 @@ pub fn data_dir() -> Option<PathBuf> {
 
 /// The root the apps keep their cache in, which the system may clear, or `None` where the
 /// platform has none.
+///
+/// On Windows this is the same root as [`config_dir`] and [`data_dir`] (Local): a caller
+/// that uses the roots directly keeps its cache in a folder of its own, apart from its
+/// settings and data, as [`AppDirs::cache`] does.
 pub fn cache_dir() -> Option<PathBuf> {
     #[cfg(target_os = "android")]
     return android::cache_dir();
@@ -63,7 +69,9 @@ pub fn cache_dir() -> Option<PathBuf> {
 
 /// An app's own directories under [`config_dir`], [`data_dir`] and [`cache_dir`]:
 /// `<root>/<app name>` on the desktops, and the roots themselves on iOS and Android, where
-/// they are already the app's. Nothing is created; the app makes them as it writes.
+/// they are already the app's. On Windows, where the three roots are one, the cache is
+/// `<root>\<app name>\cache`, so that clearing it never takes the settings or data with
+/// it. Nothing is created; the app makes them as it writes.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AppDirs {
     config: PathBuf,
@@ -75,10 +83,11 @@ impl AppDirs {
     /// `app_name`'s directories (`sapphire-journal`, say), or `None` where the platform
     /// has no root for one of them. A phone does not use `app_name`.
     pub fn new(app_name: &str) -> Option<AppDirs> {
+        let layout = Layout::current();
         Some(AppDirs {
-            config: own(config_dir()?, app_name),
-            data: own(data_dir()?, app_name),
-            cache: own(cache_dir()?, app_name),
+            config: own(layout, &config_dir()?, app_name),
+            data: own(layout, &data_dir()?, app_name),
+            cache: own_cache(layout, &cache_dir()?, app_name),
         })
     }
 
@@ -102,11 +111,14 @@ impl AppDirs {
     /// [`config_dir`] and [`data_dir`] are now. An app calls this once at start, before it
     /// reads its settings or data.
     ///
-    /// It moves only when there is a Roaming directory and no Local one yet; an existing
-    /// Local directory is the app's, and the Roaming one is left as it is. The directory is
-    /// renamed, not copied: when that fails (a file in use, Roaming on another volume) the
-    /// error is returned and the Roaming directory stays whole, to be moved at a later
-    /// start. Outside Windows there is no Roaming, and nothing is moved.
+    /// With no Local directory yet, the Roaming one is renamed to it whole. With one (its
+    /// cache, written before this ran, makes one), the two are merged: each entry at the
+    /// top of the Roaming directory that Local does not have is renamed into it, one at a
+    /// time; an entry Local has too is left in Roaming and logged, and the Roaming
+    /// directory is removed once it is empty. Nothing is copied, so nothing is ever half
+    /// there: when a rename fails (a file in use, Roaming on another volume) the error is
+    /// returned, what was moved stays moved, and the rest is moved at a later start.
+    /// Outside Windows there is no Roaming, and nothing is moved.
     pub fn migrate_from_roaming(app_name: &str) -> io::Result<Migrated> {
         #[cfg(windows)]
         return match (::dirs::config_dir(), ::dirs::data_local_dir()) {
@@ -122,22 +134,32 @@ impl AppDirs {
 }
 
 /// What [`AppDirs::migrate_from_roaming`] did.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Migrated {
-    /// The Roaming directory was moved to Local.
+    /// The Roaming directory was renamed to Local whole.
     Moved,
-    /// Both were there: the Local one is kept, and the Roaming one is left as it is.
-    KeptLocal,
+    /// There was a Local directory already, and the Roaming one was merged into it. `left`
+    /// are the Roaming entries Local had too, left where they were; when it is empty the
+    /// Roaming directory is gone.
+    Merged { left: Vec<PathBuf> },
     /// There was no Roaming directory to move, or the platform has none.
     Nothing,
 }
 
+/// What to do with an app's Roaming directory.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Migration {
+    Move,
+    Merge,
+    Nothing,
+}
+
 /// What to do with an app's Roaming directory, from whether it and the Local one exist.
-fn migration(roaming_exists: bool, local_exists: bool) -> Migrated {
+fn migration(roaming_exists: bool, local_exists: bool) -> Migration {
     match (roaming_exists, local_exists) {
-        (true, false) => Migrated::Moved,
-        (true, true) => Migrated::KeptLocal,
-        (false, _) => Migrated::Nothing,
+        (true, false) => Migration::Move,
+        (true, true) => Migration::Merge,
+        (false, _) => Migration::Nothing,
     }
 }
 
@@ -150,30 +172,89 @@ fn migrate_from_roaming_with(
 ) -> io::Result<Migrated> {
     let roaming = roaming_root.join(app_name);
     let local = local_root.join(app_name);
-    let migrated = migration(roaming.try_exists()?, local.try_exists()?);
-    match migrated {
-        Migrated::Moved => {
+    match migration(roaming.try_exists()?, local.try_exists()?) {
+        Migration::Move => {
             std::fs::create_dir_all(local_root)?;
             // One rename: the directory is either all in Roaming or all in Local.
             std::fs::rename(&roaming, &local)?;
             tracing::info!("moved {} to {}", roaming.display(), local.display());
+            Ok(Migrated::Moved)
         }
-        Migrated::KeptLocal => tracing::info!(
-            "both {} and {} exist: keeping the second, the first is left as it is",
-            roaming.display(),
-            local.display()
-        ),
-        Migrated::Nothing => {}
+        Migration::Merge => merge(&roaming, &local),
+        Migration::Nothing => Ok(Migrated::Nothing),
     }
-    Ok(migrated)
 }
 
-/// An app's directory under `root`: its own on the desktops, and `root` on a phone.
-fn own(root: PathBuf, app_name: &str) -> PathBuf {
-    if cfg!(any(target_os = "android", target_os = "ios")) {
-        root
+/// Rename each entry of `roaming` that `local` does not have into `local`, and remove
+/// `roaming` if that empties it.
+fn merge(roaming: &Path, local: &Path) -> io::Result<Migrated> {
+    let mut names = std::fs::read_dir(roaming)?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<io::Result<Vec<_>>>()?;
+    // Sorted, so the entries are moved and reported in the same order on every start.
+    names.sort();
+    let mut left = Vec::new();
+    for name in names {
+        let from = roaming.join(&name);
+        let to = local.join(&name);
+        if to.try_exists()? {
+            left.push(from);
+        } else {
+            std::fs::rename(&from, &to)?;
+            tracing::info!("moved {} to {}", from.display(), to.display());
+        }
+    }
+    if left.is_empty() {
+        std::fs::remove_dir(roaming)?;
     } else {
-        root.join(app_name)
+        let names: Vec<_> = left.iter().map(|path| path.display().to_string()).collect();
+        tracing::warn!(
+            "{} has these too, kept; left in Roaming: {}",
+            local.display(),
+            names.join(", ")
+        );
+    }
+    Ok(Migrated::Merged { left })
+}
+
+/// How a platform lays out an app's directories under the roots.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Layout {
+    /// A phone: the roots are the app's sandbox already.
+    Phone,
+    /// Windows: one root (Local) for config, data and cache.
+    Windows,
+    /// macOS and Linux: a root of its own for the cache.
+    Desktop,
+}
+
+impl Layout {
+    fn current() -> Layout {
+        if cfg!(any(target_os = "android", target_os = "ios")) {
+            Layout::Phone
+        } else if cfg!(windows) {
+            Layout::Windows
+        } else {
+            Layout::Desktop
+        }
+    }
+}
+
+/// An app's settings or data directory under `root`: its own on the desktops, and `root`
+/// on a phone.
+fn own(layout: Layout, root: &Path, app_name: &str) -> PathBuf {
+    match layout {
+        Layout::Phone => root.to_path_buf(),
+        Layout::Windows | Layout::Desktop => root.join(app_name),
+    }
+}
+
+/// An app's cache directory under `root`: as [`own`], but a folder of the app's directory
+/// on Windows, where the cache's root is the settings' and data's too.
+fn own_cache(layout: Layout, root: &Path, app_name: &str) -> PathBuf {
+    match layout {
+        Layout::Windows => root.join(app_name).join("cache"),
+        Layout::Phone | Layout::Desktop => own(layout, root, app_name),
     }
 }
 
@@ -262,18 +343,42 @@ mod tests {
 
     #[test]
     fn only_a_roaming_directory_is_moved() {
-        assert_eq!(migration(true, false), Migrated::Moved);
+        assert_eq!(migration(true, false), Migration::Move);
     }
 
     #[test]
-    fn a_local_directory_is_kept_over_a_roaming_one() {
-        assert_eq!(migration(true, true), Migrated::KeptLocal);
+    fn a_roaming_directory_is_merged_into_a_local_one() {
+        assert_eq!(migration(true, true), Migration::Merge);
     }
 
     #[test]
     fn without_a_roaming_directory_there_is_nothing_to_move() {
-        assert_eq!(migration(false, false), Migrated::Nothing);
-        assert_eq!(migration(false, true), Migrated::Nothing);
+        assert_eq!(migration(false, false), Migration::Nothing);
+        assert_eq!(migration(false, true), Migration::Nothing);
+    }
+
+    #[test]
+    fn a_desktop_keeps_an_app_under_each_root() {
+        let root = Path::new("/root");
+        assert_eq!(own(Layout::Desktop, root, "app"), root.join("app"));
+        assert_eq!(own_cache(Layout::Desktop, root, "app"), root.join("app"));
+    }
+
+    #[test]
+    fn windows_keeps_the_cache_in_a_folder_of_the_apps_directory() {
+        let root = Path::new("/root");
+        assert_eq!(own(Layout::Windows, root, "app"), root.join("app"));
+        assert_eq!(
+            own_cache(Layout::Windows, root, "app"),
+            root.join("app").join("cache")
+        );
+    }
+
+    #[test]
+    fn a_phone_uses_the_roots_themselves() {
+        let root = Path::new("/root");
+        assert_eq!(own(Layout::Phone, root, "app"), root);
+        assert_eq!(own_cache(Layout::Phone, root, "app"), root);
     }
 
     #[cfg(not(windows))]
@@ -315,23 +420,61 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_local_directory_leaves_both_as_they_are() {
+    fn a_local_directory_a_cache_made_takes_in_all_of_roaming() {
         let (_temp, roaming, local) = roots();
-        std::fs::create_dir_all(roaming.join("app")).unwrap();
-        std::fs::write(roaming.join("app/settings.toml"), "roaming").unwrap();
-        std::fs::create_dir_all(local.join("app")).unwrap();
-        std::fs::write(local.join("app/settings.toml"), "local").unwrap();
+        std::fs::create_dir_all(roaming.join("app/data")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "a").unwrap();
+        std::fs::write(roaming.join("app/data/index"), "b").unwrap();
+        std::fs::create_dir_all(local.join("app/cache")).unwrap();
+        std::fs::write(local.join("app/cache/sample"), "c").unwrap();
 
         let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
 
-        assert_eq!(migrated, Migrated::KeptLocal);
+        assert_eq!(migrated, Migrated::Merged { left: vec![] });
+        assert!(!roaming.join("app").exists());
         assert_eq!(
-            std::fs::read_to_string(roaming.join("app/settings.toml")).unwrap(),
+            std::fs::read_to_string(local.join("app/config.toml")).unwrap(),
+            "a"
+        );
+        assert_eq!(
+            std::fs::read_to_string(local.join("app/data/index")).unwrap(),
+            "b"
+        );
+        assert_eq!(
+            std::fs::read_to_string(local.join("app/cache/sample")).unwrap(),
+            "c"
+        );
+    }
+
+    #[test]
+    fn an_entry_local_has_too_is_left_in_roaming_and_reported() {
+        let (_temp, roaming, local) = roots();
+        std::fs::create_dir_all(roaming.join("app")).unwrap();
+        std::fs::write(roaming.join("app/config.toml"), "roaming").unwrap();
+        std::fs::write(roaming.join("app/other.toml"), "moved").unwrap();
+        std::fs::create_dir_all(local.join("app")).unwrap();
+        std::fs::write(local.join("app/config.toml"), "local").unwrap();
+
+        let migrated = migrate_from_roaming_with(&roaming, &local, "app").unwrap();
+
+        assert_eq!(
+            migrated,
+            Migrated::Merged {
+                left: vec![roaming.join("app/config.toml")]
+            }
+        );
+        assert_eq!(
+            std::fs::read_to_string(roaming.join("app/config.toml")).unwrap(),
             "roaming"
         );
         assert_eq!(
-            std::fs::read_to_string(local.join("app/settings.toml")).unwrap(),
+            std::fs::read_to_string(local.join("app/config.toml")).unwrap(),
             "local"
+        );
+        assert!(!roaming.join("app/other.toml").exists());
+        assert_eq!(
+            std::fs::read_to_string(local.join("app/other.toml")).unwrap(),
+            "moved"
         );
     }
 
@@ -377,16 +520,23 @@ mod tests {
         let Some(dirs) = AppDirs::new("corundum-test") else {
             return;
         };
-        let own = |root: Option<PathBuf>| {
-            let root = root.unwrap();
-            if cfg!(any(target_os = "android", target_os = "ios")) {
-                root
-            } else {
-                root.join("corundum-test")
-            }
+        let layout = Layout::current();
+        let app = "corundum-test";
+        assert_eq!(dirs.config(), own(layout, &config_dir().unwrap(), app));
+        assert_eq!(dirs.data(), own(layout, &data_dir().unwrap(), app));
+        assert_eq!(dirs.cache(), own_cache(layout, &cache_dir().unwrap(), app));
+    }
+
+    // The cache can be cleared whole without touching the settings or the data.
+    #[test]
+    fn an_apps_cache_is_never_its_config_or_data() {
+        let Some(dirs) = AppDirs::new("corundum-test") else {
+            return;
         };
-        assert_eq!(dirs.config(), own(config_dir()));
-        assert_eq!(dirs.data(), own(data_dir()));
-        assert_eq!(dirs.cache(), own(cache_dir()));
+        if cfg!(any(target_os = "android", target_os = "ios")) {
+            return;
+        }
+        assert!(!dirs.config().starts_with(dirs.cache()));
+        assert!(!dirs.data().starts_with(dirs.cache()));
     }
 }

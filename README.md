@@ -108,8 +108,10 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   and Android (the context's files and cache directories). `AppDirs` is
   `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone. On
   Windows all of them are in Local (`%LOCALAPPDATA%`), not Roaming, which a domain carries
-  to the user's other PCs; an app that kept its directory in Roaming calls
-  `AppDirs::migrate_from_roaming` once at start to move it.
+  to the user's other PCs, and `AppDirs` keeps the cache in `<app>\cache` there, apart
+  from the settings and data. An app that kept its directory in Roaming calls
+  `AppDirs::migrate_from_roaming` once at start to move it (merged into a Local directory
+  that is already there, entry by entry).
 - **Languages**: `locale::system_languages`, the system's preferred languages (Android's
   whole `LocaleList`, where `sys-locale` gives only one).
 - **Launcher**: `launcher`, the app's entry in the desktop's app menu (a `.desktop` file
