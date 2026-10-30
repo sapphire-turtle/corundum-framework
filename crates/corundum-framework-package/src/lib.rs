@@ -17,6 +17,8 @@ pub mod console;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod error;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod services;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod start;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod updater;

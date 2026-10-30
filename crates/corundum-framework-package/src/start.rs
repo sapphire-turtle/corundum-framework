@@ -43,6 +43,11 @@ pub struct PackageSpec {
     pub before_apply: Option<fn() -> Result<(), String>>,
     /// The command line to put on `PATH`, if the app has one.
     pub cli: Option<CliSpec>,
+    /// The app's background services: the running ones are stopped before an update is
+    /// applied and started again at the next start, and on Windows each is uninstalled
+    /// with the app. Functions, as a spec holds owned values a static cannot.
+    #[cfg(feature = "service")]
+    pub services: &'static [fn() -> corundum_framework_service::ServiceSpec],
 }
 
 /// Which start this is, against the version the app last ran with.
@@ -82,6 +87,18 @@ pub fn start(spec: &PackageSpec) -> Start {
     let app = windows_hooks(app, spec);
     let mut app = app;
     app.run();
+
+    // Whatever this start is, as the first process to start after an update starts the
+    // services it stopped: the GUI, the command line, or one installed by the scripts.
+    #[cfg(feature = "service")]
+    if let Some(dirs) = AppDirs::new(spec.app_name) {
+        crate::services::restart_stopped(
+            spec,
+            dirs.data(),
+            &corundum_framework_service::Environment::detect(),
+            &corundum_framework_service::SystemManager,
+        );
+    }
 
     if package::current().is_none() {
         return Start::NotPackaged;
@@ -135,6 +152,8 @@ fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a
     let on_installed = spec.on_installed;
     let on_uninstalling = spec.on_uninstalling;
     let cli = spec.cli;
+    #[cfg(feature = "service")]
+    let services = spec.clone();
     // A hook has 30 seconds and no window: a failure is logged, never shown or panicked on.
     app.on_after_install_fast_callback(move |_| {
         if let Some(cli) = cli
@@ -147,6 +166,13 @@ fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a
         }
     })
     .on_before_uninstall_fast_callback(move |_| {
+        // First, so the services' programs are no longer running when the files go.
+        #[cfg(feature = "service")]
+        crate::services::uninstall_all(
+            &services,
+            &corundum_framework_service::Environment::detect(),
+            &corundum_framework_service::SystemManager,
+        );
         if let Some(on_uninstalling) = on_uninstalling {
             on_uninstalling();
         }

@@ -957,6 +957,7 @@ name = "corundum-framework-package"
 version = "0.4.0"
 dependencies = [
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
  "semver",
  "tempfile",

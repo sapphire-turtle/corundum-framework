@@ -35,8 +35,14 @@ self-update = ["update", "corundum-framework-update/self-update"]
 # and Android.
 package = ["dep:corundum-framework-package", "platform"]
 # The app's background service registered with the OS's user-level service manager (systemd,
-# launchd, Task Scheduler) on the desktops. Empty on iOS and Android.
-service = ["dep:corundum-framework-service", "platform"]
+# launchd, Task Scheduler) on the desktops. Empty on iOS and Android. With `package` too,
+# `package::PackageSpec::services`: an update stops the running services and the next start
+# starts them again.
+service = [
+    "dep:corundum-framework-service",
+    "platform",
+    "corundum-framework-package?/service",
+]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.

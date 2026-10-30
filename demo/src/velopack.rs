@@ -51,6 +51,8 @@ pub static PACKAGE: PackageSpec = PackageSpec {
     cli: Some(CliSpec {
         command: "corundum-demo",
     }),
+    // Its daemon becomes a registered service later; until then `before_apply` stops it.
+    services: &[],
 };
 
 /// The updater [`start_updates`] made: unset outside a package and on a command-line start.
