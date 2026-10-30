@@ -72,17 +72,21 @@ pub fn on_path(dir: &Path) -> bool {
     on_path_in(dir, &std::env::var_os("PATH").unwrap_or_default())
 }
 
-/// Whether `dir` is on the `PATH` a terminal gets: the one the user's login shell sets up.
-/// A window started from the desktop's menu often has a shorter one, since shells add
+/// Whether `dir` is on the `PATH` a terminal gets: the one the user's login shell sets up,
+/// or `None` when the shell does not answer within [`LOGIN_PATH_WAIT`]. A window started from
+/// the desktop's menu often has a shorter `PATH` than a terminal, since shells add
 /// `~/.local/bin` in their own start files, so [`on_path`] would warn about a directory every
-/// terminal has. This process's `PATH` is used when the shell cannot be asked in time.
+/// terminal has; and a busy machine can take seconds to start a shell, so a missing answer
+/// is not a "no". It blocks while the shell starts: call it off the UI thread.
 #[cfg(unix)]
-pub fn on_login_path(dir: &Path) -> bool {
-    match login_path() {
-        Some(path_var) => on_path_in(dir, &path_var),
-        None => on_path(dir),
-    }
+pub fn on_login_path(dir: &Path) -> Option<bool> {
+    login_path().map(|path_var| on_path_in(dir, &path_var))
 }
+
+/// How long [`on_login_path`] waits for the shell: an interactive shell's start files can
+/// take several seconds on a machine busy with its disk.
+#[cfg(unix)]
+pub const LOGIN_PATH_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// What a terminal's `PATH` would be: asked of `$SHELL` as a login, interactive shell, which
 /// reads the start files a terminal does. Its output is searched for a marker, since start
@@ -102,7 +106,7 @@ fn login_path() -> Option<std::ffi::OsString> {
         .stderr(Stdio::null())
         .spawn()
         .ok()?;
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + LOGIN_PATH_WAIT;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
@@ -220,8 +224,8 @@ mod tests {
     fn the_login_shell_is_asked_for_its_path() {
         // This test process's shell sees at least the directories its own `PATH` has.
         let dir = tempfile::tempdir().unwrap();
-        assert!(!on_login_path(dir.path()));
-        assert!(on_login_path(Path::new("/usr/bin")) || on_path(Path::new("/usr/bin")));
+        assert_ne!(on_login_path(dir.path()), Some(true));
+        assert_ne!(on_login_path(Path::new("/usr/bin")), Some(false));
     }
 
     #[test]
