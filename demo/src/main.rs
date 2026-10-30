@@ -15,8 +15,23 @@ fn main() -> corundum_framework::eframe::Result<()> {
     if command_line() {
         return Ok(());
     }
+    // A downloaded update is applied at start, which a second start must not do under the
+    // first: the lock is taken here, before it, rather than by the window.
     #[cfg(feature = "velopack")]
-    corundum_demo::velopack::start_updates();
+    {
+        use corundum_framework::platform::instance;
+        let instance = match instance::acquire(corundum_demo::APP_NAME) {
+            Ok(instance) => instance,
+            Err(running) => {
+                tracing::info!("corundum demo: running already; bringing it to the front");
+                running.activate();
+                return Ok(());
+            }
+        };
+        corundum_demo::velopack::start_updates();
+        corundum_demo::run_as(instance)
+    }
+    #[cfg(not(feature = "velopack"))]
     corundum_demo::run()
 }
 

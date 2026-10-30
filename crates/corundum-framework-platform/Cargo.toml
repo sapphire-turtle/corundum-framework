@@ -29,7 +29,12 @@ categories = ["os"]
 # player's. Off by default: it pulls in D-Bus (zbus) on Linux and Apple's MediaPlayer, and
 # on a phone it asks the OS for more than a window (background audio on iOS), which an app
 # turns on knowingly.
+#
+# `single-instance`: `instance`, one running copy of a desktop app, the second start handing
+# over to the first. Off by default: a server or a CLI runs as many times as it is started,
+# and it adds interprocess's local sockets.
 [features]
+single-instance = ["dep:interprocess"]
 media-session = [
     "dep:raw-window-handle",
     "dep:zbus",
@@ -95,6 +100,9 @@ unic-langid = "0.9"
 # Desktop icons: an SVG rendered to PNG, icns and ico. No text feature: icons carry no text.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 resvg = { version = "0.45", default-features = false }
+# `single-instance`: the local socket (a Unix socket, a named pipe on Windows) a second start
+# asks the first to come to the front on.
+interprocess = { version = "2.4", optional = true }
 
 # iOS: the sandbox's directories, from NSFileManager rather than $HOME.
 [target.'cfg(target_os = "ios")'.dependencies]

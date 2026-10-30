@@ -361,8 +361,13 @@ impl UpdatesPanel {
                         package.applying = false;
                         // Velopack's updater waits for this app to end: the window closes,
                         // as for a relaunched binary, so what the app saves on exit is saved.
+                        // The app's main window, wherever the panel is drawn: closing a
+                        // settings window of its own would leave the app running.
                         if applied.is_ok() && target.closes_on_apply() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            ctx.send_viewport_cmd_to(
+                                egui::ViewportId::ROOT,
+                                egui::ViewportCommand::Close,
+                            );
                         }
                         package.failure = applied.err();
                     }

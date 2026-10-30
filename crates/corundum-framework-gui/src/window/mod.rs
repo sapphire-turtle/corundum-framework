@@ -38,6 +38,8 @@
 //! }
 //! ```
 
+#[cfg(feature = "single-instance")]
+use corundum_framework_platform::instance;
 use corundum_framework_platform::launcher::{self, LauncherSpec};
 
 use crate::gpu;
@@ -72,6 +74,15 @@ pub struct WindowOptions {
     launcher: Option<LauncherSpec>,
     #[cfg(feature = "serde")]
     store: Option<crate::store::Store>,
+    #[cfg(feature = "single-instance")]
+    single_instance: Option<SingleInstance>,
+}
+
+/// How [`run`] keeps the app to one window: the lock it takes, or the one the app took.
+#[cfg(feature = "single-instance")]
+enum SingleInstance {
+    Acquire(&'static str),
+    Held(instance::Instance),
 }
 
 impl WindowOptions {
@@ -85,6 +96,8 @@ impl WindowOptions {
             launcher: None,
             #[cfg(feature = "serde")]
             store: None,
+            #[cfg(feature = "single-instance")]
+            single_instance: None,
         }
     }
 
@@ -142,6 +155,28 @@ impl WindowOptions {
         self
     }
 
+    /// Run the app once: [`run`] takes `app_name`'s lock
+    /// ([`instance::acquire`]) before the window opens. A start that finds the app already
+    /// running asks it to come to the front and returns without a window; the app's
+    /// `main` then ends. The running window, asked, is unminimized and focused.
+    ///
+    /// Set only where the app opens its window: a server or a command line started from
+    /// the same binary runs beside it. On iOS and Android this does nothing.
+    #[cfg(feature = "single-instance")]
+    pub fn single_instance(mut self, app_name: &'static str) -> WindowOptions {
+        self.single_instance = Some(SingleInstance::Acquire(app_name));
+        self
+    }
+
+    /// [`single_instance`](Self::single_instance) with a lock the app already took, for an
+    /// app that must know it is the instance before the window opens: one that applies a
+    /// downloaded update at start, which a second start must not do under the first.
+    #[cfg(feature = "single-instance")]
+    pub fn instance(mut self, instance: instance::Instance) -> WindowOptions {
+        self.single_instance = Some(SingleInstance::Held(instance));
+        self
+    }
+
     /// `create`, after attaching corundum's store to the context when there is one.
     #[cfg_attr(not(feature = "serde"), allow(unused_mut))]
     pub(crate) fn wrap_create<'f>(
@@ -163,12 +198,29 @@ impl WindowOptions {
 /// Open a desktop window and run it until it closes.
 ///
 /// Installs [`gpu::install_panic_hook`], opens the window on wgpu with
-/// [`gpu::wgpu_options`], and builds the app with `create` once the window exists.
+/// [`gpu::wgpu_options`], and builds the app with `create` once the window exists. With
+/// [`WindowOptions::single_instance`], a start that finds the app running brings its window
+/// to the front instead, and returns at once.
 pub fn run(
     options: WindowOptions,
     create: impl FnOnce(&eframe::CreationContext<'_>) -> Box<dyn eframe::App>,
 ) -> eframe::Result<()> {
     let mut options = options;
+    // First of all: a second start opens nothing and writes nothing.
+    #[cfg(feature = "single-instance")]
+    let Some(mut instance) = options.take_instance() else {
+        return Ok(());
+    };
+    #[cfg(feature = "single-instance")]
+    let create = {
+        let instance = &mut instance;
+        move |cc: &eframe::CreationContext<'_>| {
+            if let Some(instance) = instance {
+                come_to_front_on_activate(instance, &cc.egui_ctx);
+            }
+            create(cc)
+        }
+    };
     // Before the store is handed to the context: it is read here for the launcher.
     let wants_launcher = options.wants_launcher();
     let create = options.wrap_create(create);
@@ -197,6 +249,45 @@ pub fn run(
         ..Default::default()
     };
     open(&title, native, fonts, create)
+}
+
+impl WindowOptions {
+    /// The app's instance, `Some(None)` when it is not kept to one, or `None` when another
+    /// start runs, which has been asked to come to the front.
+    #[cfg(feature = "single-instance")]
+    fn take_instance(&mut self) -> Option<Option<instance::Instance>> {
+        match self.single_instance.take() {
+            None => Some(None),
+            Some(SingleInstance::Held(instance)) => Some(Some(instance)),
+            Some(SingleInstance::Acquire(app_name)) => match instance::acquire(app_name) {
+                Ok(instance) => Some(Some(instance)),
+                Err(running) => {
+                    tracing::info!("{app_name} is running already: bringing it to the front");
+                    running.activate();
+                    None
+                }
+            },
+        }
+    }
+}
+
+/// Bring the app's main window to the front whenever a second start asks.
+#[cfg(feature = "single-instance")]
+fn come_to_front_on_activate(instance: &mut instance::Instance, ctx: &egui::Context) {
+    let ctx = ctx.clone();
+    instance.on_activate(move || come_to_front(&ctx));
+}
+
+/// Unminimize and focus the app's main window, from any thread: the commands wait for the
+/// frame the repaint asks for.
+#[cfg(feature = "single-instance")]
+fn come_to_front(ctx: &egui::Context) {
+    ctx.send_viewport_cmd_to(
+        egui::ViewportId::ROOT,
+        egui::ViewportCommand::Minimized(false),
+    );
+    ctx.send_viewport_cmd_to(egui::ViewportId::ROOT, egui::ViewportCommand::Focus);
+    ctx.request_repaint();
 }
 
 /// `viewport` with `spec`'s id, and its icon where it can be rendered, so the OS matches the
@@ -295,5 +386,29 @@ mod tests {
             options.launcher_spec().map(|s| s.id),
             Some("net.example.Test")
         );
+    }
+
+    #[cfg(feature = "single-instance")]
+    #[test]
+    fn options_run_any_number_of_times_unless_asked_not_to() {
+        let mut options = WindowOptions::new("x");
+        assert!(matches!(options.take_instance(), Some(None)));
+        let options = WindowOptions::new("x").single_instance("example-app");
+        assert!(matches!(
+            options.single_instance,
+            Some(SingleInstance::Acquire("example-app"))
+        ));
+    }
+
+    #[cfg(feature = "single-instance")]
+    #[test]
+    fn an_activation_unminimizes_and_focuses_the_main_window() {
+        let ctx = egui::Context::default();
+        come_to_front(&ctx);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |_| {});
+        output.textures_delta.clear();
+        let commands = &output.viewport_output[&egui::ViewportId::ROOT].commands;
+        assert!(commands.contains(&egui::ViewportCommand::Minimized(false)));
+        assert!(commands.contains(&egui::ViewportCommand::Focus));
     }
 }

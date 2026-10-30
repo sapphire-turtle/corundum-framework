@@ -31,6 +31,7 @@ session.
 | `qr-code` | yes | yes | yes | nothing |
 | `qr-scan` | none | the camera (AVFoundation) | Google's code scanner | iOS: `NSCameraUsageDescription` in `project.yml`. Android: `play-services-code-scanner` in `app/build.gradle.kts`, and the `com.google.mlkit.vision.DEPENDENCIES` meta-data in the manifest, so Play installs the scanner with the app |
 | `media-session` | MPRIS (Linux), the media flyout (Windows), Now Playing (macOS) | the lock screen and Control Centre | none yet | iOS: `UIBackgroundModes: audio` in `project.yml`, and MediaPlayer and AVFAudio linked |
+| `single-instance` | one window: a second start brings the first's to the front and exits | not turned on (the OS runs an app once) | not turned on | nothing |
 
 On a device, from the Platform screen:
 
@@ -83,7 +84,9 @@ The `velopack` feature builds the demo as a Velopack package (corundum-framework
 pre-releases (checked at start and daily, applied from the About page's row or the status
 bar's badge), and the command line `corundum-demo` (on `Path` by the installer on Windows,
 through the console shim `corundum-framework-demo-console`; installed from the About page
-on macOS and Linux). A Settings › Velopack page starts `corundum-framework-demo-daemon`,
+on macOS and Linux). A second start of the package exits before it applies a
+downloaded update: `main` takes the single-instance lock first and hands it to the window.
+A Settings › Velopack page starts `corundum-framework-demo-daemon`,
 which an update stops first, and shows the log the package's steps write. Pushing a tag
 `demo-v<x.y.z>` packages it on each desktop (`demo-release.yml`) and puts the installers on
 that pre-release.

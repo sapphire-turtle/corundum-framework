@@ -72,6 +72,10 @@ qr-code = ["dep:qrcode"]
 # crate's is: it builds D-Bus and MediaPlayer bindings, and on iOS the app must declare
 # background audio (see corundum-framework-platform's `media_session`).
 media-session = ["corundum-framework-platform/media-session"]
+# `WindowOptions::single_instance`: the desktop app runs once, a second start bringing the
+# first's window to the front and exiting (corundum-framework-platform's `instance`). Off by
+# default: it adds a local socket, and an app made to open several windows leaves it off.
+single-instance = ["corundum-framework-platform/single-instance"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.

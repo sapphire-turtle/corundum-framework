@@ -17,6 +17,9 @@
 //!
 //! With the `media-session` feature, `media_session` is the OS's media keys and its "now
 //! playing", for a music player.
+//!
+//! With the `single-instance` feature, `instance` keeps a desktop app to one running copy:
+//! a second start brings the first's window to the front and exits.
 
 #[cfg(target_os = "android")]
 pub mod android;
@@ -25,6 +28,8 @@ pub mod dirs;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub mod icon;
 pub mod insets;
+#[cfg(feature = "single-instance")]
+pub mod instance;
 #[cfg(all(target_os = "ios", any(feature = "media-picker", feature = "qr-scan")))]
 mod ios;
 pub mod launcher;

@@ -263,8 +263,9 @@ impl corundum_framework::eframe::App for Demo {
     }
 }
 
-/// The window's options: its title and size, the fonts, recording the CJK font found, and
-/// the look and the rail's order, kept in the app's config directory.
+/// The window's options: its title and size, the fonts, recording the CJK font found, the
+/// look and the rail's order, kept in the app's config directory, and on a desktop, one
+/// window: a second start brings the first's to the front.
 fn window_options() -> corundum_framework::gui::window::WindowOptions {
     let options = corundum_framework::gui::window::WindowOptions::new("corundum-framework demo")
         .inner_size([960.0, 680.0])
@@ -274,6 +275,8 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
             let family = corundum_framework::gui::fonts::install_system_cjk_fallback(ctx);
             let _ = CJK_FAMILY.set(family);
         });
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let options = options.single_instance(APP_NAME);
     match Store::for_app(APP_NAME) {
         Some(store) => {
             tracing::info!(path = %store.path().display(), "corundum demo: corundum file");
@@ -302,12 +305,30 @@ pub fn init_logging() {
 }
 
 /// Open the demo in a window and run it until it closes. On iOS this runs on the main
-/// thread and does not return while the app runs.
+/// thread and does not return while the app runs. On a desktop, a start that finds the demo
+/// running brings that one's window to the front and returns at once.
 #[cfg(not(target_os = "android"))]
 pub fn run() -> corundum_framework::eframe::Result<()> {
+    open(window_options())
+}
+
+/// [`run`] as the instance `main` took before applying a downloaded update, which a second
+/// start must not do under the first (`velopack::start_updates`).
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn run_as(
+    instance: corundum_framework::platform::instance::Instance,
+) -> corundum_framework::eframe::Result<()> {
+    open(window_options().instance(instance))
+}
+
+/// Open the demo's window with `options`.
+#[cfg(not(target_os = "android"))]
+fn open(
+    options: corundum_framework::gui::window::WindowOptions,
+) -> corundum_framework::eframe::Result<()> {
     init_logging();
     tracing::info!("corundum demo: start");
-    corundum_framework::gui::window::run(window_options(), |cc| {
+    corundum_framework::gui::window::run(options, |cc| {
         let mut demo = Demo::new(&cc.egui_ctx);
         // The media session belongs to the window, which exists from here.
         demo.app.state.media.connect(cc);
