@@ -450,12 +450,22 @@ pub fn install(
     if let Some((plist_name, unit_path)) = bundled_agent(spec, env, manager) {
         // An agent file left by an install from outside the package would run a second
         // copy under the same label; it goes before SMAppService registers the bundle's.
-        retire_agent_file(spec, env, manager)?;
+        let retired = retire_agent_file(spec, env, manager)?;
         let context = InstallContext {
             unit_path,
             exe: crate::exe::service_exe()?,
         };
-        manager.app_service(&plist_name, AppServiceAction::Register)?;
+        if let Err(error) = manager.app_service(&plist_name, AppServiceAction::Register) {
+            // SMAppService errors on an agent registered already and on one it has just
+            // registered pending the person's approval; the status says whether it holds one.
+            let registered = matches!(
+                manager.app_service(&plist_name, AppServiceAction::Status),
+                Ok(AppServiceStatus::Enabled | AppServiceStatus::RequiresApproval)
+            );
+            if !registered {
+                return Err(restore_agent_file(retired, env, manager, error));
+            }
+        }
         run_post_install(spec, &context)?;
         return Ok(context);
     }
@@ -757,20 +767,21 @@ fn bundled_agent(
 }
 
 /// Take a LaunchAgent file under the current label off launchd and remove it, if one is
-/// there: one an install from outside the package left.
+/// there: one an install from outside the package left. Returns its path and body, so a
+/// failed registration can put it back.
 fn retire_agent_file(
     spec: &ServiceSpec,
     env: &Environment,
     manager: &dyn ServiceManager,
-) -> Result<()> {
+) -> Result<Option<(PathBuf, String)>> {
     // Without a home there is no `~/Library/LaunchAgents` to have left a file in.
     let Some(home) = env.home.as_deref() else {
-        return Ok(());
+        return Ok(None);
     };
     let path = agent_path(spec.app_name, home);
-    if manager.read_unit(&path)?.is_none() {
-        return Ok(());
-    }
+    let Some(body) = manager.read_unit(&path)? else {
+        return Ok(None);
+    };
     // Not loaded is what this wants anyway.
     let _ = manager.run(&words(&[
         "launchctl",
@@ -778,7 +789,34 @@ fn retire_agent_file(
         &format!("gui/{}", env.euid),
         &label(spec.app_name),
     ]));
-    manager.remove_unit(&path)
+    manager.remove_unit(&path)?;
+    Ok(Some((path, body)))
+}
+
+/// After a registration that failed, put back the agent file [`retire_agent_file`] took
+/// away, so the service runs as it did before, and return `error` saying so.
+fn restore_agent_file(
+    retired: Option<(PathBuf, String)>,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+    error: Error,
+) -> Error {
+    let Some((path, body)) = retired else {
+        return error;
+    };
+    let restored = manager
+        .write_unit(&path, &body)
+        .and_then(|()| manager.run(&bootstrap_command(&path, env)));
+    match restored {
+        Ok(_) => Error::Manager(format!(
+            "{error}; the earlier agent file at {} was kept",
+            path.display()
+        )),
+        Err(restore) => Error::Manager(format!(
+            "{error}; the earlier agent file at {} could not be put back either ({restore})",
+            path.display()
+        )),
+    }
 }
 
 /// Where each platform keeps the file an install writes: the invoking user's own directory;
@@ -1459,6 +1497,64 @@ mod tests {
             .with_app_service(AppServiceStatus::NotRegistered)
             .failing_app_service_on(AppServiceAction::Register);
         assert!(install(&spec(), &macos_bundle(), &manager).is_err());
+        assert_eq!(
+            manager.calls().app_service,
+            vec![
+                app_service_call(AppServiceAction::Register),
+                app_service_call(AppServiceAction::Status),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_refused_registration_that_left_the_service_registered_is_an_install() {
+        // SMAppService errors on an agent already registered, and on one now waiting for
+        // approval; the status afterwards is what counts.
+        for status in [
+            AppServiceStatus::Enabled,
+            AppServiceStatus::RequiresApproval,
+        ] {
+            let manager = bundle_manager()
+                .with_app_service(status)
+                .failing_app_service_on(AppServiceAction::Register);
+            install(&spec(), &macos_bundle(), &manager)
+                .unwrap_or_else(|error| panic!("{status:?}: {error}"));
+            assert_eq!(
+                manager.calls().app_service,
+                vec![
+                    app_service_call(AppServiceAction::Register),
+                    app_service_call(AppServiceAction::Status),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn a_failed_registration_puts_the_earlier_agent_file_back() {
+        let manager = bundle_manager()
+            .with_app_service(AppServiceStatus::NotRegistered)
+            .failing_app_service_on(AppServiceAction::Register)
+            .with_unit(current_plist(), &macos_plist());
+        let error = install(&spec(), &macos_bundle(), &manager)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("refused"), "{error}");
+        assert!(error.contains("kept"), "{error}");
+
+        let calls = manager.calls();
+        assert_eq!(calls.removed, vec![current_plist()]);
+        assert_eq!(calls.units, vec![(current_plist(), macos_plist())]);
+        assert_eq!(
+            calls.commands.last(),
+            Some(&words(&[
+                "launchctl",
+                "bootstrap",
+                "gui/1000",
+                &current_plist().display().to_string(),
+            ])),
+            "{:?}",
+            calls.commands
+        );
     }
 
     #[test]

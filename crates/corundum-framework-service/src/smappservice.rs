@@ -12,19 +12,20 @@ use crate::manager::{AppServiceAction, AppServiceStatus};
 /// Carry out `action` on the agent whose plist the running `.app` carries as
 /// `Contents/Library/LaunchAgents/<plist_name>`, and return its status afterwards.
 pub(crate) fn app_service(plist_name: &str, action: AppServiceAction) -> Result<AppServiceStatus> {
-    // SAFETY: `agentServiceWithPlistName:` takes any string and returns a service object;
-    // a name the bundle does not carry is reported by the status as `NotFound`.
+    // SAFETY: the argument is a valid, live `NSString`, the only thing the class method
+    // requires; it has no other preconditions.
     let service =
         unsafe { SMAppService::agentServiceWithPlistName(&NSString::from_str(plist_name)) };
-    // SAFETY: both are plain synchronous calls on the service object, which is alive for the
-    // whole call; any refusal comes back as the `NSError`.
+    // SAFETY: each is a method with no arguments and no preconditions, called on a valid
+    // `SMAppService` the `Retained` keeps alive for the call.
     let outcome = match action {
         AppServiceAction::Register => unsafe { service.registerAndReturnError() },
         AppServiceAction::Unregister => unsafe { service.unregisterAndReturnError() },
         AppServiceAction::Status => Ok(()),
     };
     outcome.map_err(|error| Error::Manager(error.localizedDescription().to_string()))?;
-    // SAFETY: a read of the service object's status, which has no preconditions.
+    // SAFETY: a method with no arguments and no preconditions, called on a valid
+    // `SMAppService` the `Retained` keeps alive for the call.
     let status = unsafe { service.status() };
     Ok(match status {
         SMAppServiceStatus::NotRegistered => AppServiceStatus::NotRegistered,
