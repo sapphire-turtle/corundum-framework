@@ -52,7 +52,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 
 アプリが OS に求めるもののうち、egui に依存しない部分です。ウィンドウを持たないクレート（サーバー、CLI）でも使えます。アプリが JNI や Objective-C を直接呼ばずに済むようにします。
 
-- **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。`AppDirs` はデスクトップでは `<root>/<アプリ名>`、スマートフォンではサンドボックスのディレクトリそのもの。
+- **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。`AppDirs` はデスクトップでは `<root>/<アプリ名>`、スマートフォンではサンドボックスのディレクトリそのもの。Windows ではどれも Roaming ではなく Local（`%LOCALAPPDATA%`）に置く。Roaming はドメインでユーザーの別の PC に持ち回られるため。`AppDirs` はそこでキャッシュを `<アプリ名>\cache` に置き、設定・データと分ける。以前 Roaming に置いていたアプリは、起動時に一度 `AppDirs::migrate_from_roaming` を呼んで Local へ移す（Local にすでにディレクトリがあれば、項目ごとにまとめる）。
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
 - **ランチャー**（feature `launcher`、既定で有効）：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
 - **アイコン**（feature `icon`、既定で有効。`launcher` が使います）：`icon`。SVG を resvg で PNG・icns・ico に描画します。
