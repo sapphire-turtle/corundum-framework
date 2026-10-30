@@ -109,10 +109,16 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone.
 - **Languages**: `locale::system_languages`, the system's preferred languages (Android's
   whole `LocaleList`, where `sys-locale` gives only one).
-- **Launcher**: `launcher`, the app's entry in the desktop's app menu (a `.desktop` file
-  and icon on Linux, an app bundle on macOS, a Start menu shortcut on Windows), written
-  from a `LauncherSpec`, and the process's Windows taskbar id. Skipped for a build that
-  runs from a cargo target directory.
+- **Launcher** (feature `launcher`, on by default): `launcher`, the app's entry in the
+  desktop's app menu (a `.desktop` file and icon on Linux, an app bundle on macOS, a Start
+  menu shortcut on Windows), written from a `LauncherSpec`, and the process's Windows
+  taskbar id. Skipped for a build that runs from a cargo target directory.
+- **Icon** (feature `icon`, on by default; `launcher` uses it): `icon`, an SVG rendered to
+  PNG, icns and ico with resvg.
+- **Headless use**: a crate that needs only the directories, the languages or `package`
+  (the update and package crates do) depends on the platform crate with
+  `default-features = false`, which builds neither resvg nor, on Windows, the shell's COM
+  bindings.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
 - **The system's screens** (features, off by default): `media`, the phone's photo picker

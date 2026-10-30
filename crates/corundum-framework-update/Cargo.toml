@@ -20,7 +20,7 @@ cli = ["dep:clap"]
 
 [dependencies]
 clap = { workspace = true, optional = true }
-corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform" }
+corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", default-features = false }
 reqwest.workspace = true
 self-replace = { version = "1.5", optional = true }
 semver = { version = "1", features = ["serde"] }
