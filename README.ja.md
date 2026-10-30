@@ -59,7 +59,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **システムの画面**（feature。既定では無効）：`media`。スマートフォンの写真ピッカー（`media-picker`）。選ばれたファイルはキャッシュにコピーします。`qr`。スマートフォンの QR コードスキャナー（`qr-scan`）。どちらも `pending::Pending` で結果を返します。
 - **メディアセッション**（feature `media-session`、既定では無効）：`media_session::MediaSession`。音楽プレイヤーを OS のメディアキーと「再生中」の表示に連動させます。アプリは曲（曲名、アーティスト、アルバム、長さ、ファイルかバイト列のジャケット）と、再生中かどうか・再生位置を渡し、再生、一時停止、切り替え、停止、次、前、シークをイベントとして受け取ります。フレームは止めません。Linux は zbus による MPRIS（libdbus に依存しない）、Windows はウィンドウの SystemMediaTransportControls、macOS と iOS は MediaPlayer の Now Playing とリモートコマンド、iOS ではさらにオーディオセッション（着信などによる中断、イヤホンを抜いたとき）。Android はまだなく、何もしません。有効にする iOS アプリは Info.plist の `UIBackgroundModes` に `audio` を入れます。また、音を鳴らしている間だけ表示されます。
-- **単一インスタンス**（feature `single-instance`、既定では無効）：`instance::acquire`。アプリのロック（データディレクトリの `instance.lock` を OS のファイルロックで保持）と、ローカルソケット（Linux は抽象ソケット、Windows は名前付きパイプ、macOS はソケットファイル）。最初の起動がロックを持ち、`Instance::on_activate` で知らせを受けます。2つ目は `AlreadyRunning` を受け取り、1つ目に前面に出るよう伝えます。ほかの理由でロックを取れなくても、アプリの起動は止めません。iOS と Android では何もしません。
+- **単一インスタンス**（feature `single-instance`、既定では無効）：`instance::acquire`。アプリのロック（データディレクトリの `instance.lock` を OS のファイルロックで保持）と、ユーザーごとのローカルソケット（Windows は名前付きパイプ。macOS はデータディレクトリのソケットファイル、Linux は `$XDG_RUNTIME_DIR`、なければデータディレクトリのソケットファイル）。最初の起動がロックを持ち、`Instance::on_activate` で知らせを受けます。2つ目は `AlreadyRunning` を受け取り、1つ目に前面に出るよう伝えます。`acquire_or_activate` はこの両方を行い、1つ目が終了しかけているときは代わりに開きます。ほかの理由でロックを取れなくても、アプリの起動は止めません。iOS と Android では何もしません。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ### corundum-framework

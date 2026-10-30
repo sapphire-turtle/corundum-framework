@@ -131,10 +131,12 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   sound.
 - **Single instance** (feature `single-instance`, off by default): `instance::acquire`,
   the app's lock (`instance.lock` in its data directory, held with the OS's file lock) and
-  a local socket (an abstract socket on Linux, a named pipe on Windows, a socket file on
-  macOS): the first start holds it and hears `Instance::on_activate`, a second is told
-  `AlreadyRunning` and asks the first to come to the front. A lock that cannot be taken
-  for another reason never stops the app; on iOS and Android it does nothing.
+  a local socket, the user's own (a named pipe on Windows; a socket file in the data
+  directory on macOS, in `$XDG_RUNTIME_DIR` or else the data directory on Linux): the
+  first start holds it and hears `Instance::on_activate`, a second is told `AlreadyRunning`
+  and asks the first to come to the front. `acquire_or_activate` is both, and opens in
+  place of a first start that is closing. A lock that cannot be taken for another reason
+  never stops the app; on iOS and Android it does nothing.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
 

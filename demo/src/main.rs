@@ -20,13 +20,9 @@ fn main() -> corundum_framework::eframe::Result<()> {
     #[cfg(feature = "velopack")]
     {
         use corundum_framework::platform::instance;
-        let instance = match instance::acquire(corundum_demo::APP_NAME) {
-            Ok(instance) => instance,
-            Err(running) => {
-                tracing::info!("corundum demo: running already; bringing it to the front");
-                running.activate();
-                return Ok(());
-            }
+        let Some(instance) = instance::acquire_or_activate(corundum_demo::APP_NAME) else {
+            tracing::info!("corundum demo: running already; brought it to the front");
+            return Ok(());
         };
         corundum_demo::velopack::start_updates();
         corundum_demo::run_as(instance)

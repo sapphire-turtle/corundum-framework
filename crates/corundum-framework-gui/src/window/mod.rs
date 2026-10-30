@@ -156,9 +156,9 @@ impl WindowOptions {
     }
 
     /// Run the app once: [`run`] takes `app_name`'s lock
-    /// ([`instance::acquire`]) before the window opens. A start that finds the app already
-    /// running asks it to come to the front and returns without a window; the app's
-    /// `main` then ends. The running window, asked, is unminimized and focused.
+    /// ([`instance::acquire_or_activate`]) before the window opens. A start that finds the
+    /// app already running asks it to come to the front and returns without a window; the
+    /// app's `main` then ends. One that finds it closing waits a moment and opens instead. The running window, asked, is unminimized and focused.
     ///
     /// Set only where the app opens its window: a server or a command line started from
     /// the same binary runs beside it. On iOS and Android this does nothing.
@@ -259,14 +259,13 @@ impl WindowOptions {
         match self.single_instance.take() {
             None => Some(None),
             Some(SingleInstance::Held(instance)) => Some(Some(instance)),
-            Some(SingleInstance::Acquire(app_name)) => match instance::acquire(app_name) {
-                Ok(instance) => Some(Some(instance)),
-                Err(running) => {
-                    tracing::info!("{app_name} is running already: bringing it to the front");
-                    running.activate();
-                    None
+            Some(SingleInstance::Acquire(app_name)) => {
+                let instance = instance::acquire_or_activate(app_name);
+                if instance.is_none() {
+                    tracing::info!("{app_name} is running already: brought it to the front");
                 }
-            },
+                Some(instance)
+            }
         }
     }
 }

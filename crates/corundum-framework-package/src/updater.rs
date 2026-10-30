@@ -193,10 +193,9 @@ impl Updater {
     /// window so that what it saves on exit is saved.
     ///
     /// Once this returns `Ok`, the update is Velopack's: if the app cancels the close (a
-    /// "save your changes?" it answers with Cancel) or otherwise keeps running, the update
-    /// cannot be applied again in this process, as a later call fails with
-    /// [`Error::Applying`]. The downloaded package stays where it is, so the app's next
-    /// start applies it ([`apply_pending_at_start`](Self::apply_pending_at_start)).
+    /// "save your changes?" it answers with Cancel) or otherwise keeps running, a later
+    /// call in this process fails with [`Error::Applying`]. Whether the update is applied
+    /// then is up to Velopack's updater, which waits for this process to end.
     ///
     /// An error: nothing downloaded, an apply already running on another thread
     /// ([`Error::Applying`]), `before_apply` refused (nothing is applied, and a later call
