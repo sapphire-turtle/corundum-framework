@@ -13,5 +13,5 @@ categories = ["development-tools::build-utils"]
 # An app lists this under [build-dependencies]; it renders the icon with the platform crate
 # and hands it to the Windows resource compiler.
 [dependencies]
-corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform" }
+corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", default-features = false, features = ["icon"] }
 winresource = "0.1"

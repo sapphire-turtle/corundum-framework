@@ -40,7 +40,7 @@ pub(crate) const LAUNCHER: corundum_framework::platform::launcher::LauncherSpec 
         description: "Every piece corundum-framework shares",
         category: "Development",
         icon_svg: include_bytes!("../assets/app-icon.svg"),
-        bundle_prefix: "net.fireturtle.corundum",
+        bundle_prefix: "net.sapphire-turtle",
     };
 
 /// The CJK font the window installed at start, for the Fonts screen: `Some(None)` when the
@@ -304,6 +304,39 @@ pub fn init_logging() {
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }
 
+/// Move the demo's directory from Roaming to Local on Windows, where an older demo kept it
+/// (corundum-framework#57), before anything reads it. Called again, it does nothing: as
+/// with [`init_logging`], `main` calls it before `package::start`, which reads the data
+/// directory, and [`run`] for the other starts.
+///
+/// A move that fails may have stopped halfway, so the demo does not run on what is in
+/// Local: it says why on standard error and exits with 1, and the next start goes on with
+/// the move. A start for one of Velopack's hooks (`--veloapp-install`, ...) is the
+/// exception: it has 30 seconds and no window, its exit code goes to the installer, and
+/// all it writes is a line of the hooks' log (`velopack::log`), so the failure is only
+/// logged there.
+#[cfg(not(target_os = "android"))]
+pub fn migrate_dirs() {
+    use corundum_framework::platform::dirs::AppDirs;
+
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let Err(err) = AppDirs::migrate_from_roaming(APP_NAME) else {
+            return;
+        };
+        let hook = std::env::args_os()
+            .nth(1)
+            .is_some_and(|arg| arg.as_encoded_bytes().starts_with(b"--veloapp-"));
+        if hook {
+            tracing::warn!("corundum demo: could not move the directory from Roaming: {err}");
+            return;
+        }
+        tracing::error!("corundum demo: could not move the directory from Roaming: {err}");
+        eprintln!("corundum demo: could not move the directory from Roaming: {err}");
+        std::process::exit(1);
+    });
+}
+
 /// Open the demo in a window and run it until it closes. On iOS this runs on the main
 /// thread and does not return while the app runs. On a desktop, a start that finds the demo
 /// running brings that one's window to the front and returns at once.
@@ -327,6 +360,7 @@ fn open(
     options: corundum_framework::gui::window::WindowOptions,
 ) -> corundum_framework::eframe::Result<()> {
     init_logging();
+    migrate_dirs();
     tracing::info!("corundum demo: start");
     corundum_framework::gui::window::run(options, |cc| {
         let mut demo = Demo::new(&cc.egui_ctx);

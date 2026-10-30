@@ -172,7 +172,7 @@ mod tests {
         description: "Every piece corundum shares",
         category: "Development",
         icon_svg: SVG,
-        bundle_prefix: "net.fireturtle.corundum",
+        bundle_prefix: "net.sapphire-turtle",
     };
 
     fn root(dir: &Path) -> Root {
@@ -192,7 +192,7 @@ mod tests {
 <plist version=\"1.0\">
 <dict>
 \t<key>CFBundleIdentifier</key>
-\t<string>net.fireturtle.corundum.corundum-demo</string>
+\t<string>net.sapphire-turtle.corundum-demo</string>
 \t<key>CFBundleName</key>
 \t<string>Corundum Demo</string>
 \t<key>CFBundleDisplayName</key>

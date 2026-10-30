@@ -110,7 +110,7 @@ xcodebuild -project CorundumDemo.xcodeproj -scheme CorundumDemo -sdk iphonesimul
   -configuration Debug -derivedDataPath build build
 xcrun simctl boot "iPhone 16 Pro"
 xcrun simctl install booted build/Build/Products/Debug-iphonesimulator/CorundumDemo.app
-xcrun simctl launch --console-pty booted io.github.sapphireturtle.corundum.demo
+xcrun simctl launch --console-pty booted net.sapphire-turtle.corundum-demo
 ```
 
 The project's pre-build script (`build-rust.sh`) builds the demo's staticlib for the SDK
@@ -131,7 +131,7 @@ cargo install cargo-ndk
 demo/android/build-rust.sh            # arm64-v8a and x86_64; ABIS=x86_64 for one
 gradle -p demo/android assembleDebug
 adb install -r demo/android/app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n io.github.sapphireturtle.corundum.demo/.MainActivity
+adb shell am start -n net.sapphire_turtle.corundum_demo/.MainActivity
 adb logcat -s corundum-demo
 ```
 

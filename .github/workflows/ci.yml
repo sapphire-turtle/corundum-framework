@@ -43,6 +43,11 @@ jobs:
         cargo clippy -p corundum-framework-platform --all-targets --locked -- -D warnings
         cargo clippy -p corundum-framework-platform --all-targets --features media-session --locked -- -D warnings
         cargo clippy -p corundum-framework --all-targets --features media-session --locked -- -D warnings
+        # The platform crate's icon and launcher alone and off, so no edit comes to compile
+        # only with the defaults.
+        cargo clippy -p corundum-framework-platform --all-targets --no-default-features --locked -- -D warnings
+        cargo clippy -p corundum-framework-platform --all-targets --no-default-features --features icon --locked -- -D warnings
+        cargo clippy -p corundum-framework-platform --all-targets --no-default-features --features launcher --locked -- -D warnings
 
   # Without `self-update` the update crate must not link `self-replace`: an app that only
   # looks releases up carries none of the replacement code.
@@ -87,6 +92,57 @@ jobs:
           cargo tree --locked --target all -p corundum-framework --features gui-package -e normal > tree.txt
           if ! grep -q ' velopack v' tree.txt; then
             echo "velopack is not linked for --features gui-package"
+            exit 1
+          fi
+
+  # The update crate, and the package crate, ask the platform crate for its directories and
+  # `package` only: a headless user (a CLI, a server) must not build the SVG renderer.
+  headless-without-resvg:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: resvg is not built for the update crate alone
+        run: |
+          for args in \
+            "-p corundum-framework-update" \
+            "-p corundum-framework-package" \
+            "-p corundum-framework-platform --no-default-features"; do
+            cargo tree --locked --target all $args -e normal > tree.txt
+            if grep -q ' resvg v' tree.txt; then
+              echo "resvg is built for: $args"
+              exit 1
+            fi
+          done
+          cargo tree --locked --target all -p corundum-framework-platform -e normal > tree.txt
+          if ! grep -q ' resvg v' tree.txt; then
+            echo "resvg is not built for the platform crate's default features"
+            exit 1
+          fi
+      - name: the shell's COM bindings are not built for a headless Windows build
+        run: |
+          # The windows crate's features, inverted so each one lists who asks for it. A build
+          # without the windows crate at all makes `-i windows` fail with "did not match any
+          # packages", which passes; any other cargo error fails the job. Only the windows
+          # crate's own feature counts: windows-sys has a Win32_UI_Shell of its own (for `dirs`,
+          # a light binding). (The package crate is left out: velopack and its own Windows calls
+          # ask for the Shell.)
+          for args in \
+            "-p corundum-framework-update" \
+            "-p corundum-framework-platform --no-default-features"; do
+            if cargo tree --locked --target x86_64-pc-windows-msvc $args -e features -i windows > tree.txt 2> error.txt; then
+              if grep -q 'windows feature "Win32_UI_Shell"' tree.txt; then
+                echo "the windows crate's Shell features are built for: $args"
+                exit 1
+              fi
+            elif ! grep -q 'did not match any packages' error.txt; then
+              cat error.txt
+              exit 1
+            fi
+          done
+          cargo tree --locked --target x86_64-pc-windows-msvc -p corundum-framework-platform -e features -i windows > tree.txt
+          if ! grep -q 'windows feature "Win32_UI_Shell"' tree.txt; then
+            echo "the Shell features are not built for the platform crate's default features"
             exit 1
           fi
 

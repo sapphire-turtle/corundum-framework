@@ -40,8 +40,8 @@ jobs:
             channel: osx
             exe: ''
             icon: icon.icns
-            # Not the launcher's bundle id (`net.fireturtle.corundum.corundum-demo`), so the
-            # bundle the launcher writes in ~/Applications and this one stay apart.
+            # The launcher writes the same bundle id; it steps aside inside a package (#51), so the
+            # one in ~/Applications and this one do not clash.
             extra: --bundleId net.sapphire-turtle.corundum-demo
           - os: windows-latest
             channel: win

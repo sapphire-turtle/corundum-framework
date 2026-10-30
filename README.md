@@ -107,13 +107,24 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
 - **Directories**: `dirs::{config_dir, data_dir, cache_dir}` and an app's own `AppDirs`
   under them: the `dirs` crate's on the desktops, the sandbox's on iOS (`NSFileManager`)
   and Android (the context's files and cache directories). `AppDirs` is
-  `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone.
+  `<root>/<app name>` on the desktops and the sandbox's roots themselves on a phone. On
+  Windows all of them are in Local (`%LOCALAPPDATA%`), not Roaming, which a domain carries
+  to the user's other PCs, and `AppDirs` keeps the cache in `<app>\cache` there, apart
+  from the settings and data. An app that kept its directory in Roaming calls
+  `AppDirs::migrate_from_roaming` once at start to move it (merged into a Local directory
+  that is already there, entry by entry).
 - **Languages**: `locale::system_languages`, the system's preferred languages (Android's
   whole `LocaleList`, where `sys-locale` gives only one).
-- **Launcher**: `launcher`, the app's entry in the desktop's app menu (a `.desktop` file
-  and icon on Linux, an app bundle on macOS, a Start menu shortcut on Windows), written
-  from a `LauncherSpec`, and the process's Windows taskbar id. Skipped for a build that
-  runs from a cargo target directory.
+- **Launcher** (feature `launcher`, on by default): `launcher`, the app's entry in the
+  desktop's app menu (a `.desktop` file and icon on Linux, an app bundle on macOS, a Start
+  menu shortcut on Windows), written from a `LauncherSpec`, and the process's Windows
+  taskbar id. Skipped for a build that runs from a cargo target directory.
+- **Icon** (feature `icon`, on by default; `launcher` uses it): `icon`, an SVG rendered to
+  PNG, icns and ico with resvg.
+- **Headless use**: a crate that needs only the directories, the languages or `package`
+  (the update and package crates do) depends on the platform crate with
+  `default-features = false`, which builds neither resvg nor, on Windows, the shell's COM
+  bindings.
 - **Window support**: the clipboard and the window insets on Android, which the gui
   crate's `platform` reads.
 - **The system's screens** (features, off by default): `media`, the phone's photo picker

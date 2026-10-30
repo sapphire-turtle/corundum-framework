@@ -30,12 +30,30 @@ categories = ["os"]
 # on a phone it asks the OS for more than a window (background audio on iOS), which an app
 # turns on knowingly.
 #
+# `icon` and `launcher` are on by default and a headless user turns them off: `icon`
+# renders an SVG (resvg) and `launcher` writes the app menu entry, on Windows through the
+# shell's COM objects (the `windows` crate's Shell features). `launcher` needs `icon` (the
+# macOS bundle's icns). `dirs`, `locale` and `package` are always there.
+[features]
+default = ["icon", "launcher"]
+icon = ["dep:resvg"]
+launcher = [
+    "icon",
+    "windows/Win32_Foundation",
+    "windows/Win32_Storage_EnhancedStorage",
+    "windows/Win32_Storage_FileSystem",
+    "windows/Win32_System_Com",
+    "windows/Win32_System_Com_StructuredStorage",
+    "windows/Win32_System_Variant",
+    "windows/Win32_UI_Shell",
+    "windows/Win32_UI_Shell_PropertiesSystem",
+]
 # `single-instance`: `instance`, one running copy of a desktop app, the second start handing
 # over to the first. Off by default: a server or a CLI runs as many times as it is started,
 # and it adds interprocess's local sockets.
-[features]
 single-instance = ["dep:interprocess"]
 media-session = [
+    "windows/Win32_Foundation",
     "dep:raw-window-handle",
     "dep:zbus",
     "windows/Foundation",
@@ -99,7 +117,7 @@ unic-langid = "0.9"
 
 # Desktop icons: an SVG rendered to PNG, icns and ico. No text feature: icons carry no text.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
-resvg = { version = "0.45", default-features = false }
+resvg = { version = "0.45", optional = true, default-features = false }
 # `single-instance`: the local socket (a Unix socket, a named pipe on Windows) a second start
 # asks the first to come to the front on.
 interprocess = { version = "2.4", optional = true }
@@ -174,10 +192,12 @@ ndk-context = "0.1"
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
 zbus = { version = "5.19", optional = true, default-features = false, features = ["async-io"] }
 
-# Windows: the Start Menu shortcut, written through the shell's COM objects; with
-# `media-session`, the window's media controls (SystemMediaTransportControls).
+# Windows: always the file calls `dirs` moves an app's data with (`MoveFileExW`, which never
+# replaces a file); `launcher`'s Start Menu shortcut, written through the shell's COM
+# objects, and with `media-session` the window's media controls (SystemMediaTransportControls),
+# add the features listed under [features]. A headless build gets the file calls alone.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_EnhancedStorage", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 tempfile = "3"

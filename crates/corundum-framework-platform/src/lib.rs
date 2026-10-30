@@ -5,9 +5,14 @@
 //! phones alike; [`locale`] is the system's preferred languages; [`clipboard`] and
 //! [`insets`] are what a window needs and its toolkit cannot give it on a phone. On
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
-//! activity a window draws in. [`icon`] renders an app's SVG to PNG, icns and ico.
-//! [`launcher`] puts a desktop app in the OS's app menu. [`package`] tells whether the
-//! running executable is a Velopack package.
+//! activity a window draws in. [`package`] tells whether the running executable is a
+//! Velopack package.
+//!
+//! The `icon` and `launcher` features, on by default, are the desktop's extras: `icon`
+//! renders an app's SVG to PNG, icns and ico, and `launcher` puts a desktop app in the OS's
+//! app menu (it uses `icon`). A crate without a window that needs only the directories, the
+//! languages or [`package`] turns them off with `default-features = false`, which leaves
+//! out resvg and, on Windows, the shell's COM bindings.
 //!
 //! The system's screens an app opens and waits for are behind features, off by default:
 //! they need declarations of the app (an Info.plist key, a manifest entry, a Gradle
@@ -25,13 +30,14 @@
 pub mod android;
 pub mod clipboard;
 pub mod dirs;
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(all(feature = "icon", not(any(target_os = "ios", target_os = "android"))))]
 pub mod icon;
 pub mod insets;
 #[cfg(feature = "single-instance")]
 pub mod instance;
 #[cfg(all(target_os = "ios", any(feature = "media-picker", feature = "qr-scan")))]
 mod ios;
+#[cfg(feature = "launcher")]
 pub mod launcher;
 pub mod locale;
 #[cfg(feature = "media-picker")]
