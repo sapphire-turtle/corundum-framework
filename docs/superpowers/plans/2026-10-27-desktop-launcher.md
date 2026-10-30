@@ -142,7 +142,7 @@ fn an_unchanged_file_is_not_rewritten() {
 ```rust
 const SPEC: LauncherSpec = LauncherSpec { id: "corundum-demo", name: "Corundum Demo",
     description: "Every piece corundum shares", category: "Development",
-    icon_svg: b"<svg/>", bundle_prefix: "net.fireturtle.corundum" };
+    icon_svg: b"<svg/>", bundle_prefix: "net.sapphire-turtle" };
 
 #[test]
 fn the_entry_names_the_app_and_its_window() {
@@ -252,7 +252,7 @@ Skip this task if Task 1 answered "neither".
 - Produces: `pub(crate) fn info_plist(spec: &LauncherSpec) -> String`, `pub(crate) fn bundle_dir(spec, root) -> PathBuf` (`<home>/Applications/<name>.app`), `register`/`unregister`/`status` for macOS. The launcher kind is the one Task 1 kept (symlink to `exe`, or a 0755 script `exec "<exe>" "$@"` with the path quoted for `sh`).
 
 - [ ] **Step 1: Write the failing tests** (they run on every OS: the functions are pure or work under a temporary `Root`; gate the module with `#[cfg(any(target_os = "macos", test))]`)
-  - `info_plist(&SPEC)` equals the expected XML: `CFBundleIdentifier` `net.fireturtle.corundum.corundum-demo`, `CFBundleName` `Corundum Demo`, `CFBundleExecutable` `corundum-demo`, `CFBundleIconFile` `corundum-demo`, `CFBundlePackageType` `APPL`, `LSMinimumSystemVersion` `11.0`, `NSHighResolutionCapable` `<true/>`; a name with `&` or `<` is XML-escaped.
+  - `info_plist(&SPEC)` equals the expected XML: `CFBundleIdentifier` `net.sapphire-turtle.corundum-demo`, `CFBundleName` `Corundum Demo`, `CFBundleExecutable` `corundum-demo`, `CFBundleIconFile` `corundum-demo`, `CFBundlePackageType` `APPL`, `LSMinimumSystemVersion` `11.0`, `NSHighResolutionCapable` `<true/>`; a name with `&` or `<` is XML-escaped.
   - `register_at` writes `Contents/Info.plist`, `Contents/MacOS/corundum-demo`, `Contents/Resources/corundum-demo.icns`; second call `Unchanged`; moved exe `Stale` then `Written`; `unregister_at` removes the `.app` directory.
   - An unparsable `icon_svg`: `register_at` errors and the `.app` directory does not exist afterwards (the icon is rendered before anything is written).
 - [ ] **Step 2: Run** `cargo test -p corundum-framework-platform launcher::macos` — FAIL.
@@ -273,7 +273,7 @@ Skip this task if Task 1 answered "neither".
 - Produces: `pub(crate) struct LinkFields { pub target: PathBuf, pub working_dir: PathBuf, pub icon: (PathBuf, i32), pub app_id: String, pub description: String }`, `pub(crate) fn link_fields(spec, exe) -> LinkFields`, `pub(crate) fn link_path(spec, root) -> Option<PathBuf>` (`None` without `appdata`); Windows `register`/`unregister`/`status` (COM `IShellLinkW`, `IPropertyStore` with `PKEY_AppUserModel_ID`, `IPersistFile::Save`; `status` loads the link and compares its target).
 
 - [ ] **Step 1: Write the failing tests**
-  - (all OSes) `link_fields(&SPEC, Path::new(r"C:\Users\u\.local\bin\corundum-demo.exe"))`: target that path, working dir its folder, icon `(that path, 0)`, app id `net.fireturtle.corundum.corundum-demo`.
+  - (all OSes) `link_fields(&SPEC, Path::new(r"C:\Users\u\.local\bin\corundum-demo.exe"))`: target that path, working dir its folder, icon `(that path, 0)`, app id `net.sapphire-turtle.corundum-demo`.
   - (all OSes) `link_path` is `<appdata>\Microsoft\Windows\Start Menu\Programs\Corundum Demo.lnk`.
   - (`#[cfg(windows)]`) register under a temporary `appdata`: `Written`, then `Unchanged`, `status_at` `Registered`, `unregister_at` removes the file.
 - [ ] **Step 2: Run** `cargo test -p corundum-framework-platform launcher::windows` — FAIL.
@@ -332,7 +332,7 @@ Skip this task if Task 1 answered "neither".
 **Files:**
 - Create: `demo/assets/app-icon.svg` — a 24-unit rounded tile (`rx="5.5"`, fill `#1d2433`) with `demo/assets/corundum.svg`'s two paths scaled into it (stroke `#ffffff`, width 1.75, inset 3 units).
 - Create: `demo/build.rs` calling `corundum_framework_build::embed_icon("assets/app-icon.svg")`; `demo/Cargo.toml` build-dependency by path.
-- Modify: `demo/src/lib.rs` (`WindowOptions::launcher` with id `corundum-demo`, name `Corundum Demo`, category `Development`, prefix `net.fireturtle.corundum`), `demo/src/main.rs` (`#![cfg_attr(windows, windows_subsystem = "windows")]`), demo's Settings About page gets a `LauncherRow`.
+- Modify: `demo/src/lib.rs` (`WindowOptions::launcher` with id `corundum-demo`, name `Corundum Demo`, category `Development`, prefix `net.sapphire-turtle`), `demo/src/main.rs` (`#![cfg_attr(windows, windows_subsystem = "windows")]`), demo's Settings About page gets a `LauncherRow`.
 - Modify: `README.md` / `README.ja.md` (platform crate: the launcher; gui: `WindowOptions::launcher`; a note that an app sets `windows_subsystem`), `demo/README.md` (the entry appears after `cargo install --path demo`, not after `cargo run`, per the skip rule).
 
 - [ ] **Step 1: Run** `cargo build -p corundum-framework-demo` and `cargo test --workspace` — PASS.

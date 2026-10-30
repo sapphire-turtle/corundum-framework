@@ -1,4 +1,4 @@
 // The demo's defaults. Copy to Local.xcconfig (not committed) to override them.
-PRODUCT_BUNDLE_IDENTIFIER = io.github.sapphireturtle.corundum.demo
+PRODUCT_BUNDLE_IDENTIFIER = net.sapphire-turtle.corundum-demo
 // Your Apple developer team ID; needed only for a real device.
 DEVELOPMENT_TEAM =

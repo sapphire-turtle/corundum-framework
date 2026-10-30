@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "io.github.sapphireturtle.corundum.demo"
+    namespace = "net.sapphire_turtle.corundum_demo"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "io.github.sapphireturtle.corundum.demo"
+        applicationId = "net.sapphire_turtle.corundum_demo"
         // LocaleList (the system's languages, corundum-framework-platform) is API 24.
         minSdk = 24
         targetSdk = 36
