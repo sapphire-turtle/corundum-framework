@@ -82,7 +82,21 @@ pub struct WindowOptions {
 #[cfg(feature = "single-instance")]
 enum SingleInstance {
     Acquire(&'static str),
+    /// [`Acquire`](Self::Acquire) with the lock in a directory of the tests' own.
+    #[cfg(test)]
+    AcquireIn(&'static str, std::path::PathBuf),
     Held(instance::Instance),
+}
+
+/// What [`run`] does about other starts of the app.
+#[cfg(feature = "single-instance")]
+enum Instancing {
+    /// The app is not kept to one window.
+    NotAsked,
+    /// This start is the app's instance, kept while the window is open.
+    Keep(instance::Instance),
+    /// Another start runs and has been asked to come to the front: open nothing.
+    Exit,
 }
 
 impl WindowOptions {
@@ -208,8 +222,10 @@ pub fn run(
     let mut options = options;
     // First of all: a second start opens nothing and writes nothing.
     #[cfg(feature = "single-instance")]
-    let Some(mut instance) = options.take_instance() else {
-        return Ok(());
+    let mut instance = match options.take_instance() {
+        Instancing::NotAsked => None,
+        Instancing::Keep(instance) => Some(instance),
+        Instancing::Exit => return Ok(()),
     };
     #[cfg(feature = "single-instance")]
     let create = {
@@ -252,19 +268,25 @@ pub fn run(
 }
 
 impl WindowOptions {
-    /// The app's instance, `Some(None)` when it is not kept to one, or `None` when another
-    /// start runs, which has been asked to come to the front.
+    /// Whether this start is the app's instance, taking the lock where it is asked to.
     #[cfg(feature = "single-instance")]
-    fn take_instance(&mut self) -> Option<Option<instance::Instance>> {
-        match self.single_instance.take() {
-            None => Some(None),
-            Some(SingleInstance::Held(instance)) => Some(Some(instance)),
+    fn take_instance(&mut self) -> Instancing {
+        let (app_name, instance) = match self.single_instance.take() {
+            None => return Instancing::NotAsked,
+            Some(SingleInstance::Held(instance)) => return Instancing::Keep(instance),
             Some(SingleInstance::Acquire(app_name)) => {
-                let instance = instance::acquire_or_activate(app_name);
-                if instance.is_none() {
-                    tracing::info!("{app_name} is running already: brought it to the front");
-                }
-                Some(instance)
+                (app_name, instance::acquire_or_activate(app_name))
+            }
+            #[cfg(test)]
+            Some(SingleInstance::AcquireIn(app_name, dir)) => {
+                (app_name, instance::acquire_or_activate_in(app_name, &dir))
+            }
+        };
+        match instance {
+            Some(instance) => Instancing::Keep(instance),
+            None => {
+                tracing::info!("{app_name} is running already: brought it to the front");
+                Instancing::Exit
             }
         }
     }
@@ -391,12 +413,36 @@ mod tests {
     #[test]
     fn options_run_any_number_of_times_unless_asked_not_to() {
         let mut options = WindowOptions::new("x");
-        assert!(matches!(options.take_instance(), Some(None)));
+        assert!(matches!(options.take_instance(), Instancing::NotAsked));
         let options = WindowOptions::new("x").single_instance("example-app");
         assert!(matches!(
             options.single_instance,
             Some(SingleInstance::Acquire("example-app"))
         ));
+    }
+
+    #[cfg(feature = "single-instance")]
+    #[test]
+    fn a_second_start_through_the_window_options_exits() {
+        let dir = tempfile::tempdir().unwrap();
+        let options = || WindowOptions {
+            single_instance: Some(SingleInstance::AcquireIn(
+                "example-app",
+                dir.path().to_owned(),
+            )),
+            ..WindowOptions::new("x")
+        };
+        let Instancing::Keep(mut first) = options().take_instance() else {
+            panic!("the first start is the instance");
+        };
+        first.on_activate(|| {});
+        assert!(
+            matches!(options().take_instance(), Instancing::Exit),
+            "the second start opens no window"
+        );
+        // Once the first is gone, a start is the instance again.
+        drop(first);
+        assert!(matches!(options().take_instance(), Instancing::Keep(_)));
     }
 
     #[cfg(feature = "single-instance")]

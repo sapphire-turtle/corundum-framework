@@ -98,6 +98,22 @@ pub fn acquire_or_activate(app_name: &str) -> Option<Instance> {
     }
 }
 
+/// [`acquire_or_activate`] with the lock in `data_dir`: for the tests of a crate built on
+/// this one, which must not touch the app's real data directory.
+#[doc(hidden)]
+pub fn acquire_or_activate_in(app_name: &str, data_dir: &std::path::Path) -> Option<Instance> {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        let _ = (app_name, data_dir);
+        Some(Instance {})
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        let socket = socket_name(app_name, data_dir);
+        acquire_or_activate_with(data_dir, socket, CLOSING_WAIT)
+    }
+}
+
 /// How long [`acquire_or_activate`] waits for a first start that cannot be asked.
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 const CLOSING_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
@@ -120,9 +136,10 @@ impl fmt::Debug for Instance {
 }
 
 impl AlreadyRunning {
-    /// Ask the running start to come to the front: whether the ask was delivered. It is not
-    /// where the first start is closing or has no socket ([`acquire_or_activate`] then tries
-    /// the lock again).
+    /// Ask the running start to come to the front: whether it answered that it did, within
+    /// a second. It does not where it is closing, has no socket, or has not started
+    /// listening yet ([`acquire_or_activate`] then tries the lock again); one that has not
+    /// started listening still hears the ask once it does.
     pub fn activate(&self) -> bool {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         if let Some(socket) = &self.socket {
@@ -146,6 +163,10 @@ enum Message {
     /// Come to the front.
     Activate,
 }
+
+/// The first start's answer to [`Message::Activate`], once it has come to the front.
+#[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
+const REPLY: &[u8] = b"ok\n";
 
 /// The most a message is read to: anything longer is not one.
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
@@ -306,7 +327,7 @@ mod desktop {
     use std::io::{self, Read as _, Write as _};
     use std::path::Path;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, mpsc};
     use std::thread::JoinHandle;
     use std::time::Duration;
 
@@ -317,7 +338,7 @@ mod desktop {
     use interprocess::local_socket::prelude::*;
     use interprocess::local_socket::{Listener, ListenerOptions, Name, Stream};
 
-    use super::{LOCK_FILE, MAX_MESSAGE, Message, SocketName};
+    use super::{LOCK_FILE, MAX_MESSAGE, Message, REPLY, SocketName};
 
     /// What an instance holds: the lock, unless it could not be taken, and its socket, whose
     /// listener moves to the accepting thread once the app listens.
@@ -402,11 +423,21 @@ mod desktop {
                 .name("instance".to_owned())
                 .spawn({
                     let stop = stop.clone();
-                    move || accept(&listener, &stop, &f)
+                    move || accept(&listener, stop, &f)
                 });
             match thread {
                 Ok(thread) => self.accepting = Some(Accepting { stop, thread }),
                 Err(err) => tracing::warn!("could not start the instance's listener: {err}"),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    impl Held {
+        /// Tell the accepting thread to stop without waking it, as a drop has begun to.
+        pub(super) fn stop_accepting(&self) {
+            if let Some(accepting) = &self.accepting {
+                accepting.stop.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -431,10 +462,14 @@ mod desktop {
         }
     }
 
-    /// Accept connections until told to stop, reading each on a thread of its own: one that
-    /// sends nothing does not hold up the next. A failed accept (out of file descriptors,
-    /// say) is waited out, not taken as the end.
-    fn accept<F: Fn() + Send + 'static>(listener: &Listener, stop: &AtomicBool, f: &Arc<Mutex<F>>) {
+    /// Accept connections until told to stop, answering each on a thread of its own: one
+    /// that sends nothing does not hold up the next. A failed accept (out of file
+    /// descriptors, say) is waited out, not taken as the end.
+    fn accept<F: Fn() + Send + 'static>(
+        listener: &Listener,
+        stop: Arc<AtomicBool>,
+        f: &Arc<Mutex<F>>,
+    ) {
         let mut failing = false;
         loop {
             let connection = listener.accept();
@@ -444,15 +479,10 @@ mod desktop {
             match connection {
                 Ok(stream) => {
                     failing = false;
-                    let f = f.clone();
+                    let (f, stop) = (f.clone(), stop.clone());
                     let _ = std::thread::Builder::new()
                         .name("instance message".to_owned())
-                        .spawn(move || {
-                            if read(stream) == Some(Message::Activate) {
-                                let f = f.lock().unwrap_or_else(|e| e.into_inner());
-                                f();
-                            }
-                        });
+                        .spawn(move || answer(stream, &stop, &f));
                 }
                 Err(err) => {
                     // Once per run of failures: they may come many times a second.
@@ -466,33 +496,85 @@ mod desktop {
         }
     }
 
-    /// The message sent on `stream`: what was read until the sender closed it or
-    /// [`IO_TIMEOUT`] passed. More than [`MAX_MESSAGE`] bytes are no message.
-    fn read(stream: Stream) -> Option<Message> {
+    /// Read the message on `stream`, and for an activation call `f` and reply that it was.
+    /// Once the instance is told to stop, it neither calls nor replies: the asking start
+    /// then takes the lock once it frees.
+    fn answer<F: Fn()>(mut stream: Stream, stop: &AtomicBool, f: &Mutex<F>) {
         if let Err(err) = stream.set_recv_timeout(Some(IO_TIMEOUT)) {
             tracing::debug!("no read timeout on the instance's connection: {err}");
         }
-        let mut bytes = Vec::new();
-        // A named pipe whose writer has gone reads as an error, not as the end, and so does
-        // a timeout: what came before it is the message.
-        let _ = stream.take(MAX_MESSAGE + 1).read_to_end(&mut bytes);
-        Message::decode(&bytes)
+        let _ = stream.set_send_timeout(Some(IO_TIMEOUT));
+        if Message::decode(&read_line(&mut stream)) != Some(Message::Activate) {
+            return;
+        }
+        if stop.load(Ordering::SeqCst) {
+            return;
+        }
+        f.lock().unwrap_or_else(|e| e.into_inner())();
+        if stop.load(Ordering::SeqCst) {
+            return;
+        }
+        let _ = stream.write_all(REPLY).and_then(|()| stream.flush());
     }
 
-    /// Send `message` on `socket`: whether it was. A failure is only logged: the first
-    /// start may be closing.
+    /// One line from `stream`, its newline included: read a byte at a time, so nothing past
+    /// it is taken, until the newline, the end, an error or a timeout, or [`MAX_MESSAGE`]
+    /// bytes and one more, which is no message.
+    fn read_line(stream: &mut Stream) -> Vec<u8> {
+        let mut line = Vec::new();
+        let mut byte = [0];
+        while (line.len() as u64) <= MAX_MESSAGE {
+            match stream.read(&mut byte) {
+                Ok(1) => {
+                    line.push(byte[0]);
+                    if byte[0] == b'\n' {
+                        break;
+                    }
+                }
+                // The end, or a named pipe whose writer has gone, or a timeout.
+                _ => break,
+            }
+        }
+        line
+    }
+
+    /// Send `message` on `socket` and wait for the reply: whether the running start
+    /// answered. A failure is only logged: the first start may be closing.
     pub(super) fn send(socket: &SocketName, message: Message) -> bool {
         let sent = name(socket)
             .and_then(Stream::connect)
             .and_then(|mut stream| {
                 let _ = stream.set_send_timeout(Some(IO_TIMEOUT));
+                let _ = stream.set_recv_timeout(Some(IO_TIMEOUT));
                 stream.write_all(message.encode())?;
-                stream.flush()
+                stream.flush()?;
+                Ok(stream)
             });
-        if let Err(err) = &sent {
-            tracing::debug!("could not reach the running instance on {socket:?}: {err}");
+        let mut stream = match sent {
+            Ok(stream) => stream,
+            Err(err) => {
+                tracing::debug!("could not reach the running instance on {socket:?}: {err}");
+                return false;
+            }
+        };
+        // On a thread, waited for no longer than the timeout: a named pipe may not take
+        // the read timeout, and a first start that is closing may never answer.
+        let (tx, rx) = mpsc::channel();
+        let reading = std::thread::Builder::new()
+            .name("instance reply".to_owned())
+            .spawn(move || {
+                let _ = tx.send(read_line(&mut stream));
+            });
+        if reading.is_err() {
+            return false;
         }
-        sent.is_ok()
+        let answered = rx
+            .recv_timeout(IO_TIMEOUT)
+            .is_ok_and(|reply| reply.trim_ascii() == REPLY.trim_ascii());
+        if !answered {
+            tracing::debug!("the running instance on {socket:?} did not answer");
+        }
+        answered
     }
 }
 
@@ -554,7 +636,8 @@ mod tests {
     fn an_ask_made_before_the_first_listens_is_heard_once_it_does() {
         let dir = tempfile::tempdir().unwrap();
         let mut first = acquire_in(dir.path()).unwrap();
-        assert!(acquire_in(dir.path()).unwrap_err().activate());
+        // Not answered in time: the first is not listening yet.
+        assert!(!acquire_in(dir.path()).unwrap_err().activate());
         let (tx, rx) = mpsc::channel();
         first.on_activate(move || tx.send(()).unwrap());
         rx.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -660,6 +743,32 @@ mod tests {
             "the relaunch is the instance once the first is gone"
         );
         closing.join().unwrap();
+    }
+
+    #[test]
+    fn a_first_start_that_has_stopped_listening_does_not_answer_and_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate(move || tx.send(()).unwrap());
+        // Closing: told to stop, its listener and lock not yet let go of.
+        first.inner.stop_accepting();
+        assert!(!acquire_in(dir.path()).unwrap_err().activate());
+        let closing = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(first);
+        });
+        let socket = socket_name("corundum-test", dir.path());
+        let second = acquire_or_activate_with(dir.path(), socket, Duration::from_secs(5));
+        assert!(
+            second.is_some(),
+            "the relaunch is the instance once the first is gone"
+        );
+        closing.join().unwrap();
+        assert!(
+            rx.try_recv().is_err(),
+            "the closing first was not brought to the front"
+        );
     }
 
     #[test]
