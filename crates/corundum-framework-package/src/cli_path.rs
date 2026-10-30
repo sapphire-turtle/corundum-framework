@@ -72,6 +72,72 @@ pub fn on_path(dir: &Path) -> bool {
     on_path_in(dir, &std::env::var_os("PATH").unwrap_or_default())
 }
 
+/// Whether `dir` is on the `PATH` a terminal gets: the one the user's login shell sets up.
+/// A window started from the desktop's menu often has a shorter one, since shells add
+/// `~/.local/bin` in their own start files, so [`on_path`] would warn about a directory every
+/// terminal has. This process's `PATH` is used when the shell cannot be asked in time.
+#[cfg(unix)]
+pub fn on_login_path(dir: &Path) -> bool {
+    match login_path() {
+        Some(path_var) => on_path_in(dir, &path_var),
+        None => on_path(dir),
+    }
+}
+
+/// What a terminal's `PATH` would be: asked of `$SHELL` as a login, interactive shell, which
+/// reads the start files a terminal does. Its output is searched for a marker, since start
+/// files may print greetings of their own.
+#[cfg(unix)]
+fn login_path() -> Option<std::ffi::OsString> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    let shell = std::env::var_os("SHELL").unwrap_or_else(|| "/bin/sh".into());
+    let mut child = Command::new(shell)
+        .args(["-l", "-i", "-c", r#"printf '\n%s%s\n' "$1" "$PATH""#, "sh"])
+        .arg(LOGIN_PATH_MARKER)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let mut out = Vec::new();
+    child.stdout.take()?.read_to_end(&mut out).ok()?;
+    parse_login_path(&out)
+}
+
+/// Put before `$PATH` in the shell's output, so a greeting from a start file is not taken
+/// for it.
+#[cfg(unix)]
+const LOGIN_PATH_MARKER: &str = "corundum-login-path:";
+
+/// The `PATH` after the last marker in a login shell's output.
+#[cfg(unix)]
+fn parse_login_path(out: &[u8]) -> Option<std::ffi::OsString> {
+    use std::os::unix::ffi::OsStringExt;
+
+    let marker = LOGIN_PATH_MARKER.as_bytes();
+    let start = out
+        .windows(marker.len())
+        .rposition(|window| window == marker)?
+        + marker.len();
+    let line = out[start..].split(|&b| b == b'\n').next()?;
+    (!line.is_empty()).then(|| std::ffi::OsString::from_vec(line.to_vec()))
+}
+
 /// [`on_path`] for a given `PATH` value.
 pub(crate) fn on_path_in(dir: &Path, path_var: &OsStr) -> bool {
     let dir = clean(dir);
@@ -136,6 +202,27 @@ mod tests {
     use super::*;
 
     const DIR: &str = "C:\\x\\current";
+
+    #[cfg(unix)]
+    #[test]
+    fn the_login_path_is_read_after_the_marker() {
+        let out = b"Welcome back!\ncorundum-login-path: in a greeting\n\ncorundum-login-path:/home/u/.local/bin:/usr/bin\n";
+        assert_eq!(
+            parse_login_path(out),
+            Some(OsString::from("/home/u/.local/bin:/usr/bin"))
+        );
+        assert_eq!(parse_login_path(b"no marker here\n"), None);
+        assert_eq!(parse_login_path(b"\ncorundum-login-path:\n"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_login_shell_is_asked_for_its_path() {
+        // This test process's shell sees at least the directories its own `PATH` has.
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!on_login_path(dir.path()));
+        assert!(on_login_path(Path::new("/usr/bin")) || on_path(Path::new("/usr/bin")));
+    }
 
     #[test]
     fn a_dir_is_added_at_the_end_of_a_path_without_it() {

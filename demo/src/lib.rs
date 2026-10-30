@@ -290,13 +290,14 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
 
 /// Log to standard error, `RUST_LOG` or the demo's default filter. Called again, it does
 /// nothing: `main` calls it before `package::start`, whose hooks only log, and [`run`]
-/// for the other starts (iOS, a build without `velopack`).
+/// for the other starts (iOS, a build without `velopack`). Velopack's own log is kept to its
+/// errors: it notes every start, which would print before each command's output.
 #[cfg(not(target_os = "android"))]
 pub fn init_logging() {
     use tracing_subscriber::EnvFilter;
 
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug"));
+        .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug,velopack=error"));
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }
 

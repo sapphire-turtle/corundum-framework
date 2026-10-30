@@ -63,7 +63,9 @@ impl CliRow {
             #[cfg(target_os = "linux")]
             {
                 self.on_path = std::env::var_os("HOME")
-                    .map(|home| cli_path::on_path(&std::path::Path::new(&home).join(".local/bin")))
+                    .map(|home| {
+                        cli_path::on_login_path(&std::path::Path::new(&home).join(".local/bin"))
+                    })
                     .unwrap_or(true);
             }
         }
