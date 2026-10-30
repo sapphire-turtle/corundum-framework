@@ -313,7 +313,7 @@ mod tests {
         description: "Every piece corundum shares",
         category: "Development",
         icon_svg: b"<svg/>",
-        bundle_prefix: "net.fireturtle.corundum",
+        bundle_prefix: "net.sapphire-turtle",
     };
 
     #[test]
@@ -326,7 +326,7 @@ mod tests {
         #[cfg(windows)]
         assert_eq!(fields.working_dir, Path::new(r"C:\Users\u\.local\bin"));
         assert_eq!(fields.icon, (exe.to_path_buf(), 0));
-        assert_eq!(fields.app_id, "net.fireturtle.corundum.corundum-demo");
+        assert_eq!(fields.app_id, "net.sapphire-turtle.corundum-demo");
         assert_eq!(fields.description, "Every piece corundum shares");
     }
 

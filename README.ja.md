@@ -54,7 +54,9 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 
 - **ディレクトリ**：`dirs::{config_dir, data_dir, cache_dir}` と、その下のアプリごとの `AppDirs`。デスクトップでは `dirs` クレートのもの、iOS（`NSFileManager`）と Android（Context のファイル・キャッシュのディレクトリ）ではサンドボックスのもの。`AppDirs` はデスクトップでは `<root>/<アプリ名>`、スマートフォンではサンドボックスのディレクトリそのもの。Windows ではどれも Roaming ではなく Local（`%LOCALAPPDATA%`）に置く。Roaming はドメインでユーザーの別の PC に持ち回られるため。`AppDirs` はそこでキャッシュを `<アプリ名>\cache` に置き、設定・データと分ける。以前 Roaming に置いていたアプリは、起動時に一度 `AppDirs::migrate_from_roaming` を呼んで Local へ移す（Local にすでにディレクトリがあれば、項目ごとにまとめる）。
 - **言語**：`locale::system_languages`。システムの言語の優先順。Android では `LocaleList` 全体を読みます（`sys-locale` は一つしか返しません）。
-- **ランチャー**：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
+- **ランチャー**（feature `launcher`、既定で有効）：`launcher`。デスクトップのアプリメニューにアプリを載せます（Linux は `.desktop` ファイルとアイコン、macOS はアプリバンドル、Windows はスタートメニューのショートカット）。`LauncherSpec` から書き出し、Windows ではプロセスのタスクバー ID も設定します。cargo の target ディレクトリから動かしたビルドでは何もしません。
+- **アイコン**（feature `icon`、既定で有効。`launcher` が使います）：`icon`。SVG を resvg で PNG・icns・ico に描画します。
+- **ヘッドレスでの利用**：ディレクトリ、言語、`package` だけが要る crate（update と package）は platform に `default-features = false` で依存し、resvg も Windows のシェルの COM バインディングもビルドしません。
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **システムの画面**（feature。既定では無効）：`media`。スマートフォンの写真ピッカー（`media-picker`）。選ばれたファイルはキャッシュにコピーします。`qr`。スマートフォンの QR コードスキャナー（`qr-scan`）。どちらも `pending::Pending` で結果を返します。
 - **メディアセッション**（feature `media-session`、既定では無効）：`media_session::MediaSession`。音楽プレイヤーを OS のメディアキーと「再生中」の表示に連動させます。アプリは曲（曲名、アーティスト、アルバム、長さ、ファイルかバイト列のジャケット）と、再生中かどうか・再生位置を渡し、再生、一時停止、切り替え、停止、次、前、シークをイベントとして受け取ります。フレームは止めません。Linux は zbus による MPRIS（libdbus に依存しない）、Windows はウィンドウの SystemMediaTransportControls、macOS と iOS は MediaPlayer の Now Playing とリモートコマンド、iOS ではさらにオーディオセッション（着信などによる中断、イヤホンを抜いたとき）。Android はまだなく、何もしません。有効にする iOS アプリは Info.plist の `UIBackgroundModes` に `audio` を入れます。また、音を鳴らしている間だけ表示されます。

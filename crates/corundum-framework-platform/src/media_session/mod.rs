@@ -103,8 +103,8 @@ pub struct MediaSessionSpec<'a> {
     /// The name the OS shows for the player.
     pub name: &'a str,
     /// The app's `.desktop` file, without `.desktop`, from which a Linux media panel takes
-    /// the icon; [`LauncherSpec::id`](crate::launcher::LauncherSpec::id) for an app
-    /// registered with [`launcher`](crate::launcher). Not used elsewhere.
+    /// the icon; `LauncherSpec::id` for an app
+    /// registered with `launcher`. Not used elsewhere.
     pub desktop_entry: Option<&'a str>,
 }
 

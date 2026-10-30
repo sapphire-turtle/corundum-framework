@@ -1,4 +1,4 @@
-package io.github.sapphireturtle.corundum.demo;
+package net.sapphire_turtle.corundum_demo;
 
 import android.content.Intent;
 
