@@ -149,6 +149,7 @@ demo-settings-look-file = Saved in { $path } with the rail's order, and shown ag
 demo-settings-look-memory = Kept while the demo runs: this platform gives it no config directory.
 demo-settings-about = About
 demo-settings-version = Version { $version }
+demo-settings-velopack = Velopack
 
 # The Detail screen: albums, and the picked one's tracks in the side pane.
 demo-detail-intro = Pick an album to see its tracks in the side pane. Wide, the pane is a right column beside every screen, which the button at the right end of the status bar hides; with it hidden, or on a phone, picking an album opens it.

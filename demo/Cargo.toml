@@ -20,6 +20,24 @@ crate-type = ["rlib", "staticlib", "cdylib"]
 name = "corundum-framework-demo"
 path = "src/main.rs"
 
+# The Velopack spike's stand-in for a service the package leaves running (src/velopack.rs).
+[[bin]]
+name = "corundum-framework-demo-daemon"
+path = "src/bin/daemon.rs"
+required-features = ["velopack"]
+
+# The Windows console shim the package puts on `PATH` as `corundum-demo.exe`
+# (demo-release.yml), so the GUI binary answers in a terminal.
+[[bin]]
+name = "corundum-framework-demo-console"
+path = "src/bin/console.rs"
+required-features = ["velopack"]
+
+# The icon files `vpk pack --icon` takes, for the release workflow.
+[[example]]
+name = "icons"
+path = "examples/icons.rs"
+
 [dependencies]
 tracing.workspace = true
 
@@ -42,6 +60,10 @@ tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 corundum-framework = { path = "../crates/corundum-framework", features = ["gui-update"] }
 
+# The Velopack page's daemon, stopped by its pid before an update (src/velopack.rs).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 # iOS shows a player in its now-playing only while the player's audio session plays sound:
 # the Media screen's player plays silence through AVAudioPlayer while it plays.
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -51,3 +73,9 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = ["s
 
 [target.'cfg(target_os = "android")'.dependencies]
 corundum-framework = { path = "../crates/corundum-framework", features = ["android", "media-picker", "qr-code", "qr-scan", "serde"] }
+
+[features]
+# Built by the release workflow (demo-release.yml), not by `cargo run`: the demo as a
+# Velopack package, with its updates, its command line, and the daemon its update stops
+# (src/velopack.rs).
+velopack = ["corundum-framework/gui-package"]

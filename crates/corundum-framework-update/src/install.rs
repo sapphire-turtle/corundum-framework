@@ -62,6 +62,9 @@ pub enum InstallMethod {
     /// A store's own package (Flatpak, Snap, MSIX, Mac App Store): the store updates it, and
     /// replacing a file inside it would fail or be undone.
     Store(StoreKind),
+    /// A Velopack package (an installed Windows app, a macOS bundle, an AppImage): the app
+    /// updates itself from its own settings, not by replacing the file.
+    Velopack,
 }
 
 /// The store an app was installed from.
@@ -87,6 +90,8 @@ pub(crate) struct Probe {
     pub snap: bool,
     /// Running with MSIX package identity.
     pub msix: bool,
+    /// `$APPIMAGE`, the AppImage file the process runs from.
+    pub appimage: Option<PathBuf>,
 }
 
 impl Probe {
@@ -96,6 +101,9 @@ impl Probe {
             root: PathBuf::from("/"),
             snap: std::env::var_os("SNAP").is_some_and(|v| !v.is_empty()),
             msix: has_package_identity(),
+            appimage: std::env::var_os("APPIMAGE")
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from),
         }
     }
 }
@@ -159,6 +167,10 @@ pub(crate) fn install_method_with(
         && contents.join("_MASReceipt").join("receipt").exists()
     {
         return InstallMethod::Store(StoreKind::MacAppStore);
+    }
+    if corundum_framework_platform::package::current_with(exe, probe.appimage.as_deref()).is_some()
+    {
+        return InstallMethod::Velopack;
     }
     if let Some(home) = cargo_home
         && exe.starts_with(home.join("bin"))
@@ -394,6 +406,7 @@ pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod)
                 StoreKind::MacAppStore => "the Mac App Store",
             }
         ),
+        InstallMethod::Velopack => "Updated by the app itself.".to_owned(),
         InstallMethod::Release => format!("download it from {}", release.url),
     }
 }
@@ -495,7 +508,22 @@ mod tests {
             root: root.to_owned(),
             snap: false,
             msix: false,
+            appimage: None,
         }
+    }
+
+    #[test]
+    fn a_velopack_package_is_the_package_s_to_update() {
+        let tmp = tempfile::tempdir().unwrap();
+        let current = tmp.path().join("current");
+        std::fs::create_dir(&current).unwrap();
+        std::fs::write(tmp.path().join("Update.exe"), "").unwrap();
+        let exe = current.join("app.exe");
+        let empty = tempfile::tempdir().unwrap();
+        let method = install_method_with(&exe, None, &probe(empty.path()));
+        assert_eq!(method, InstallMethod::Velopack);
+        let source = ReleaseSource::github("o", "r");
+        assert_eq!(advice_command(&source, &method), None);
     }
 
     #[test]

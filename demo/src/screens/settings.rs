@@ -14,7 +14,7 @@ use corundum_framework::gui::settings::{
 use corundum_framework::gui::store;
 use corundum_framework::gui::tr;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-use corundum_framework::gui::update::{AfterUpdate, UpdateTarget, UpdatesPanel, semver};
+use corundum_framework::gui::update::{AfterUpdate, Target, UpdateTarget, UpdatesPanel, semver};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use corundum_framework::update::ReleaseSource;
 
@@ -37,7 +37,16 @@ pub(crate) fn settings() -> Settings {
             ])
             .titled("demo-settings-general"),
         )
-        .with_group(SettingsGroup::new(vec![Box::new(About::new())]))
+        .with_group(SettingsGroup::new(about_pages()))
+}
+
+/// About, and with the `velopack` feature the page of the daemon an update stops beside it.
+fn about_pages() -> Vec<Box<dyn SettingsSection>> {
+    #[allow(unused_mut)]
+    let mut pages: Vec<Box<dyn SettingsSection>> = vec![Box::new(About::new())];
+    #[cfg(feature = "velopack")]
+    pages.push(Box::new(crate::velopack::Page));
+    pages
 }
 
 /// A page of the app's own: a name, applied with a button, the entry marked until then.
@@ -135,7 +144,7 @@ fn file_line(ui: &mut egui::Ui) {
 }
 
 /// The app's name and version, its entry in the app menu, and the update row for the demo
-/// itself.
+/// itself; with the `velopack` feature, its command line too.
 ///
 /// The update row is not on Android or iOS, where the app is never updated this way (and the
 /// panel's HTTP client needs a C toolchain the phones' builds do not have).
@@ -143,6 +152,8 @@ struct About {
     launcher: corundum_framework::gui::settings::LauncherRow,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     updates: UpdatesPanel,
+    #[cfg(feature = "velopack")]
+    cli: corundum_framework::gui::settings::CliRow,
 }
 
 impl About {
@@ -165,9 +176,24 @@ impl About {
             exe: std::env::current_exe().unwrap_or_default(),
             after: AfterUpdate::Relaunch,
         };
+        // In a package, the package's row instead: its updater checks in the background.
+        #[cfg(feature = "velopack")]
+        let target = Target::this_app(
+            "corundum-framework demo".to_owned(),
+            crate::velopack::updater(),
+            target,
+        );
+        #[cfg(not(feature = "velopack"))]
+        let target = Target::from(target);
         About {
             launcher: corundum_framework::gui::settings::LauncherRow::new(crate::LAUNCHER),
             updates: UpdatesPanel::new(vec![target], "corundum-framework-demo"),
+            #[cfg(feature = "velopack")]
+            cli: corundum_framework::gui::settings::CliRow::new(
+                crate::velopack::PACKAGE
+                    .cli
+                    .expect("the demo's package has a command line"),
+            ),
         }
     }
 }
@@ -190,5 +216,7 @@ impl SettingsSection for About {
             ui.add_space(8.0);
             self.updates.ui(ui);
         }
+        #[cfg(feature = "velopack")]
+        self.cli.ui(ui);
     }
 }

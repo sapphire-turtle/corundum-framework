@@ -14,6 +14,8 @@ use corundum_framework::gui::theme::{self, ThemeSettings};
 use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, icons};
 
 mod screens;
+#[cfg(feature = "velopack")]
+pub mod velopack;
 
 pub use screens::Screen;
 
@@ -67,6 +69,9 @@ struct App {
     /// are told apart from.
     applied: Look,
     state: screens::State,
+    /// The status bar's icon for a downloaded update, in a package.
+    #[cfg(feature = "velopack")]
+    badge: Option<corundum_framework::gui::update::ReadyBadge>,
 }
 
 impl Demo {
@@ -109,6 +114,13 @@ impl Demo {
                 language: applied.language.clone(),
                 applied,
                 state: screens::State::new(CJK_FAMILY.get().cloned()),
+                #[cfg(feature = "velopack")]
+                badge: velopack::updater().map(|updater| {
+                    // The badge appears when the background download ends: draw it then.
+                    let ctx = ctx.clone();
+                    updater.on_change(move || ctx.request_repaint());
+                    corundum_framework::gui::update::ReadyBadge::new(updater)
+                }),
             },
             logged: None,
         }
@@ -159,6 +171,10 @@ impl ShellApp<Screen> for App {
     }
 
     fn status_ui(&mut self, ui: &mut egui::Ui) {
+        #[cfg(feature = "velopack")]
+        if let Some(badge) = &mut self.badge {
+            badge.ui(ui);
+        }
         ui.weak(self.state.log.text(ui.ctx()));
     }
 
@@ -272,15 +288,24 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
     }
 }
 
+/// Log to standard error, `RUST_LOG` or the demo's default filter. Called again, it does
+/// nothing: `main` calls it before `package::start`, whose hooks only log, and [`run`]
+/// for the other starts (iOS, a build without `velopack`). Velopack's own log is kept to its
+/// errors: it notes every start, which would print before each command's output.
+#[cfg(not(target_os = "android"))]
+pub fn init_logging() {
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug,velopack=error"));
+    let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
+}
+
 /// Open the demo in a window and run it until it closes. On iOS this runs on the main
 /// thread and does not return while the app runs.
 #[cfg(not(target_os = "android"))]
 pub fn run() -> corundum_framework::eframe::Result<()> {
-    use tracing_subscriber::EnvFilter;
-
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug"));
-    let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
+    init_logging();
     tracing::info!("corundum demo: start");
     corundum_framework::gui::window::run(window_options(), |cc| {
         let mut demo = Demo::new(&cc.egui_ctx);

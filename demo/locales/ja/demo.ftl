@@ -143,6 +143,7 @@ demo-settings-look-file = レールの並び順と一緒に { $path } に保存�
 demo-settings-look-memory = デモの実行中だけ保持します。このプラットフォームには設定ディレクトリがありません。
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
+demo-settings-velopack = Velopack
 
 # 詳細画面：アルバムと、選んだアルバムの曲をサイドペインに。
 demo-detail-intro = アルバムを選ぶと、曲がサイドペインに表示されます。広い画面ではどの画面でも右カラムとして表示され、ステータスバー右端のボタンで隠せます。隠しているときやスマートフォンでは、アルバムを選ぶと開きます。

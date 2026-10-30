@@ -5,7 +5,9 @@
 //! phones alike; [`locale`] is the system's preferred languages; [`clipboard`] and
 //! [`insets`] are what a window needs and its toolkit cannot give it on a phone. On
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
-//! activity a window draws in. [`icon`] renders an app's SVG to PNG, icns and ico. [`launcher`] puts a desktop app in the OS's app menu.
+//! activity a window draws in. [`icon`] renders an app's SVG to PNG, icns and ico.
+//! [`launcher`] puts a desktop app in the OS's app menu. [`package`] tells whether the
+//! running executable is a Velopack package.
 //!
 //! The system's screens an app opens and waits for are behind features, off by default:
 //! they need declarations of the app (an Info.plist key, a manifest entry, a Gradle
@@ -31,6 +33,7 @@ pub mod locale;
 pub mod media;
 #[cfg(feature = "media-session")]
 pub mod media_session;
+pub mod package;
 #[cfg(any(feature = "media-picker", feature = "qr-scan"))]
 pub mod pending;
 #[cfg(feature = "qr-scan")]

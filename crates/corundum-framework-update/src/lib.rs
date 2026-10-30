@@ -21,6 +21,7 @@
 #![warn(missing_docs)]
 
 mod install;
+mod package;
 mod release;
 #[cfg(feature = "self-update")]
 mod replace;
@@ -35,6 +36,7 @@ pub use install::{
 };
 #[cfg(feature = "self-update")]
 pub use install::{download_asset, install};
+pub use package::{PackageState, PackageStatus};
 pub use release::{Asset, Release, ReleaseSource, client, latest_release};
 #[cfg(feature = "self-update")]
 pub use replace::replace_file;

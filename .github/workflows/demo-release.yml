@@ -1,0 +1,148 @@
+name: Demo release (Velopack)
+
+# The Velopack spike (corundum-framework#51): packages the demo with Velopack on Linux,
+# macOS and Windows and puts the packages on the tag's pre-release, from which an installed
+# demo updates itself (corundum-framework-package, through demo/src/velopack.rs).
+#
+# Started by pushing a tag `demo-v<x.y.z>`; push a second, higher one to try an update. A
+# tag rather than a manual run, so that the workflow runs from a branch before it is on main.
+# The packages are not signed yet: macOS asks to allow the app in System Settings › Privacy
+# & Security, and Windows SmartScreen warns before the installer runs.
+on:
+  push:
+    tags: ['demo-v*']
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # vpk and the velopack crate (crates/corundum-framework-package/Cargo.toml) are released
+  # together; keep them the same.
+  VPK_VERSION: 1.2.161
+  # Not the data directory's name (`corundum-framework-demo`): on Windows the package is
+  # installed in %LocalAppData%\<package id>, which its uninstall deletes.
+  PACK_ID: corundum-framework-demo-desktop
+
+jobs:
+  pack:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest runner, so the AppImage runs on older glibc too.
+          - os: ubuntu-22.04
+            channel: linux
+            exe: ''
+            icon: icon.png
+            extra: --categories Development
+          - os: macos-latest
+            channel: osx
+            exe: ''
+            icon: icon.icns
+            # Not the launcher's bundle id (`net.fireturtle.corundum.corundum-demo`), so the
+            # bundle the launcher writes in ~/Applications and this one stay apart.
+            extra: --bundleId net.sapphire-turtle.corundum-demo
+          - os: windows-latest
+            channel: win
+            exe: '.exe'
+            icon: icon.ico
+            extra: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The version from the tag
+        run: echo "VERSION=${GITHUB_REF_NAME#demo-v}" >> "$GITHUB_ENV"
+
+      # rustup installs the rust-toolchain.toml toolchain on first use.
+      - name: Install the pinned toolchain
+        run: cargo --version
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk --version "$VPK_VERSION"
+
+      - name: Build
+        run: cargo build --release --locked -p corundum-framework-demo --features velopack --bins
+
+      - name: Render the icon
+        run: cargo run --release --locked -p corundum-framework-demo --example icons -- icons
+
+      - name: Pack
+        env:
+          EXE: ${{ matrix.exe }}
+          CHANNEL: ${{ matrix.channel }}
+          ICON: icons/${{ matrix.icon }}
+          EXTRA: ${{ matrix.extra }}
+        run: |
+          mkdir pack
+          cp "target/release/corundum-framework-demo$EXE" "target/release/corundum-framework-demo-daemon$EXE" pack/
+          # The console shim, under the command's name, for the install hook to put on `Path`.
+          if [ "$RUNNER_OS" = Windows ]; then
+            cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
+          fi
+          # Unquoted on purpose: EXTRA is a list of arguments.
+          vpk pack \
+            --packId "$PACK_ID" \
+            --packVersion "$VERSION" \
+            --packDir pack \
+            --mainExe "corundum-framework-demo$EXE" \
+            --packTitle "Corundum Demo" \
+            --packAuthors "sapphire-turtle" \
+            --icon "$ICON" \
+            --channel "$CHANNEL" \
+            --delta None \
+            --outputDir releases \
+            $EXTRA
+          ls -la releases
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: releases-${{ matrix.channel }}
+          path: releases/
+
+  release:
+    needs: pack
+    # A platform that failed to pack still leaves the others' packages to try.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: releases-*
+          path: releases
+      - name: Publish the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -laR releases
+          # Every platform's files side by side; their names carry the channel, so none
+          # overwrites another (the job fails below if two collide).
+          mkdir all
+          for file in releases/*/*; do
+            name=$(basename "$file")
+            if [ -e "all/$name" ]; then
+              echo "two platforms made $name"
+              exit 1
+            fi
+            cp "$file" "all/$name"
+          done
+          gh release create "$GITHUB_REF_NAME" all/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --title "corundum demo ${GITHUB_REF_NAME#demo-v} (Velopack spike)" \
+            --notes "The demo packaged with Velopack, for corundum-framework#51. Not signed. Not for use."

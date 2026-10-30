@@ -74,17 +74,38 @@ corundum-update-run = 実行：
 corundum-update-copy = コピー
 corundum-update-by-cargo = { $tool } で更新してください
 corundum-update-by-package-manager = パッケージマネージャーが更新します
+corundum-update-by-the-app = アプリ自身が更新します
 corundum-update-by-flathub = Flathub が更新します
 corundum-update-by-snap = Snap Store が更新します
 corundum-update-by-microsoft-store = Microsoft Store が更新します
 corundum-update-by-mac-app-store = Mac App Store が更新します
 corundum-update-from-release-page = リリースページからダウンロードしてください
+# パッケージの行（`update::Target::Package`、`Target::Delegated`）：パッケージは自分で更新し、ダウンロードした更新は再起動で適用する。失敗と再試行は上の行と同じ。
+corundum-update-package-current = { $version }
+corundum-update-package-uptodate = 最新です（{ $version }）
+corundum-update-package-downloading = ダウンロードしています…
+corundum-update-package-ready = { $version } の準備ができました
+corundum-update-package-restart = 再起動して更新
 
 # アプリメニューの行（`settings::LauncherRow`）：ラベル、二つのボタン、クリックが効かなかった理由。
 corundum-launcher-in-menu = アプリメニューに表示
 corundum-launcher-remove = 外す
 corundum-launcher-add = 戻す
 corundum-launcher-failed = アプリメニューを変更できませんでした: { $error }
+
+# ステータスバーの更新アイコン（`update::ReadyBadge`）：ツールチップ。
+corundum-update-badge = 再起動して { $version } に更新
+
+# 設定の「バージョン情報」にあるコマンドラインの行（`settings::CliRow`）：ラベル、ボタン、ボタンを出せないときの文、クリックが効かなかった理由。
+corundum-cli-row = コマンドライン: { $command }
+corundum-cli-install = インストール
+corundum-cli-remove = 削除
+corundum-cli-repair = 修復
+corundum-cli-taken = 別の { $command } がすでにインストールされています。先に削除してください
+corundum-cli-not-on-path = ~/.local/bin が PATH にありません
+corundum-cli-status-installed = PATH にあります
+corundum-cli-status-missing = PATH にありません
+corundum-cli-failed = コマンドラインを変更できませんでした: { $error }
 
 # ファイルエクスプローラー（`explorer::FileExplorer`）：ボタン、一覧の見出し、中身がないときの表示、
 # 項目のメニュー、複数の項目のドラッグ。

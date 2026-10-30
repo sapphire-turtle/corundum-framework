@@ -99,6 +99,11 @@ pub(crate) enum Event {
     /// The restart finished.
     #[cfg_attr(not(feature = "self-update"), allow(dead_code))]
     Restarted(RestartOutcome),
+    /// A package row's state, asked after a check, an apply, or every few seconds. Not
+    /// for `on_event`: a package row keeps no [`RowState`].
+    Status(Result<corundum_framework_update::PackageStatus, String>),
+    /// A package row's apply came back: with an error, or, for a delegated package, done.
+    Applied(Result<(), String>),
 }
 
 /// The row after the lookup. `current` is the running version, `None` when it is unknown;
@@ -278,6 +283,7 @@ mod tests {
             InstallMethod::Cargo,
             git,
             InstallMethod::Store(StoreKind::Flatpak),
+            InstallMethod::Velopack,
         ] {
             let r = release("1.1.0");
             let want = advice(&source(), &r, &method);

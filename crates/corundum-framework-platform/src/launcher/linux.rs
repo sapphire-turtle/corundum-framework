@@ -126,8 +126,47 @@ pub(crate) fn status(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
 mod tests {
     use super::*;
     use crate::launcher::{LauncherSpec, Registered, Root, Status};
-    use crate::launcher::{register_at, status_at, unregister_at};
+    use crate::launcher::{refresh_at, register_at, status_at, unregister_at};
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn an_appimage_start_writes_no_entry_of_its_own() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = Root {
+            home: dir.path().into(),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        let appimage = Path::new("/home/u/Downloads/Corundum Demo.AppImage");
+        assert_eq!(
+            refresh_at(&SPEC, &root, appimage).unwrap(),
+            Registered::Skipped
+        );
+        assert_eq!(status_at(&SPEC, &root, appimage), Status::Absent);
+    }
+
+    #[test]
+    fn an_appimage_start_follows_an_appimage_a_manager_moved() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = Root {
+            home: dir.path().into(),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        let before = Path::new("/home/u/Downloads/Corundum Demo.AppImage");
+        let after = Path::new("/home/u/Applications/corundum-demo.appimage");
+        // The user's About button.
+        register_at(&SPEC, &root, before).unwrap();
+        assert_eq!(
+            refresh_at(&SPEC, &root, after).unwrap(),
+            Registered::Written
+        );
+        assert_eq!(status_at(&SPEC, &root, after), Status::Registered);
+        assert_eq!(
+            refresh_at(&SPEC, &root, after).unwrap(),
+            Registered::Unchanged
+        );
+    }
 
     const SPEC: LauncherSpec = LauncherSpec {
         id: "corundum-demo",
@@ -172,6 +211,31 @@ Terminal=false
             appdata: None,
         };
         assert_eq!(data_home(&root), PathBuf::from("/h/.local/share"));
+    }
+
+    #[test]
+    fn an_appimage_entry_execs_the_appimage() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = Root {
+            home: dir.path().into(),
+            xdg_data_home: None,
+            appdata: None,
+        };
+        let appimage = Path::new("/home/u/Applications/Corundum Demo-x86_64.AppImage");
+        assert_eq!(
+            register_at(&SPEC, &root, appimage).unwrap(),
+            Registered::Written
+        );
+        let text = std::fs::read_to_string(
+            dir.path()
+                .join(".local/share/applications/corundum-demo.desktop"),
+        )
+        .unwrap();
+        assert!(
+            text.lines()
+                .any(|l| l == "Exec=\"/home/u/Applications/Corundum Demo-x86_64.AppImage\" %U")
+        );
+        assert_eq!(status_at(&SPEC, &root, appimage), Status::Registered);
     }
 
     #[test]

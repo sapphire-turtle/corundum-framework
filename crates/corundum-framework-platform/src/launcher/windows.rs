@@ -100,6 +100,65 @@ pub(crate) fn unregister(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     }
 }
 
+/// Whether a shortcut whose target is `target` was left by an install before the package
+/// rooted at `package_root`, and so is to go: its target is outside the package. Velopack's
+/// own shortcut sits at the same path when the package's title is the app's name, and
+/// starts the executable inside the package. A target that could not be read (`None`, or
+/// empty) is kept, as it might be the installer's. Paths are compared as Windows compares
+/// them: in any case, with `/` or `\`, a verbatim `\\?\` prefix and a trailing separator
+/// aside.
+pub(crate) fn is_left_behind(target: Option<&Path>, package_root: &Path) -> bool {
+    let Some(target) = target.filter(|t| !t.as_os_str().is_empty()) else {
+        return false;
+    };
+    let (target, root) = (comparable(target), comparable(package_root));
+    !(target == root || target.starts_with(&format!("{root}\\")))
+}
+
+/// `path` as [`is_left_behind`] compares it: lower case, `\` as the only separator, without
+/// a verbatim prefix or a trailing separator.
+fn comparable(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('/', "\\").to_lowercase();
+    let text = text.strip_prefix(r"\\?\").unwrap_or(&text);
+    text.trim_end_matches('\\').to_owned()
+}
+
+/// Removes the app's shortcut when an install before the package rooted at `package_root`
+/// left it ([`is_left_behind`]); the package's own shortcut, and one that cannot be read,
+/// is kept.
+#[cfg(windows)]
+pub(crate) fn remove_left_behind(
+    spec: &LauncherSpec,
+    root: &Root,
+    package_root: &Path,
+) -> io::Result<()> {
+    let Some(path) = link_path(spec, root) else {
+        return Ok(());
+    };
+    if !path.exists() {
+        return Ok(());
+    }
+    let target = match com::Com::init() {
+        Ok(_com) => com::read(&path).ok().map(|(target, _)| target),
+        Err(_) => None,
+    };
+    // Resolved only when both are there, so that both are spelled alike.
+    let (target, package_root) = match (
+        target.as_deref().map(Path::canonicalize),
+        package_root.canonicalize(),
+    ) {
+        (Some(Ok(target)), Ok(package_root)) => (Some(target), package_root),
+        _ => (target, package_root.to_path_buf()),
+    };
+    if !is_left_behind(target.as_deref(), &package_root) {
+        return Ok(());
+    }
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 /// Whether the app's shortcut is there and starts `exe`; `Unsupported` where `%APPDATA%`
 /// is not known.
 #[cfg(windows)]
@@ -290,6 +349,54 @@ mod tests {
         .iter()
         .collect();
         assert_eq!(link_path(&SPEC, &root), Some(want));
+    }
+
+    #[test]
+    fn a_shortcut_into_the_package_is_the_installers() {
+        let root = Path::new(r"C:\Users\u\AppData\Local\CorundumDemo");
+        // Velopack's own shortcut, its path spelled in another case or with `/`.
+        assert!(!is_left_behind(
+            Some(Path::new(
+                r"c:\users\U\appdata\local\corundumdemo\current\corundum-demo.exe"
+            )),
+            root
+        ));
+        assert!(!is_left_behind(
+            Some(Path::new(
+                "C:/Users/u/AppData/Local/CorundumDemo/current/corundum-demo.exe"
+            )),
+            Path::new(r"C:\Users\u\AppData\Local\CorundumDemo\"),
+        ));
+        // A verbatim path, as canonicalizing gives on Windows.
+        assert!(!is_left_behind(
+            Some(Path::new(
+                r"\\?\C:\Users\u\AppData\Local\CorundumDemo\current\corundum-demo.exe"
+            )),
+            root
+        ));
+    }
+
+    #[test]
+    fn a_shortcut_to_an_earlier_install_is_left_behind() {
+        let root = Path::new(r"C:\Users\u\AppData\Local\CorundumDemo");
+        assert!(is_left_behind(
+            Some(Path::new(r"C:\Users\u\.cargo\bin\corundum-demo.exe")),
+            root
+        ));
+        // A sibling whose name merely begins with the package's.
+        assert!(is_left_behind(
+            Some(Path::new(
+                r"C:\Users\u\AppData\Local\CorundumDemo2\corundum-demo.exe"
+            )),
+            root
+        ));
+    }
+
+    #[test]
+    fn a_shortcut_that_cannot_be_read_is_kept() {
+        let root = Path::new(r"C:\Users\u\AppData\Local\CorundumDemo");
+        assert!(!is_left_behind(None, root));
+        assert!(!is_left_behind(Some(Path::new("")), root));
     }
 
     #[test]

@@ -31,6 +31,9 @@ gui = ["dep:corundum-framework-gui", "platform"]
 update = ["dep:corundum-framework-update"]
 # The download and the replacement too. A store build leaves it off, as the store updates.
 self-update = ["update", "corundum-framework-update/self-update"]
+# The app as a Velopack package on the desktops: its start and install hooks. Empty on iOS
+# and Android.
+package = ["dep:corundum-framework-package", "platform"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -46,6 +49,8 @@ serde = ["corundum-framework-gui?/serde"]
 gui-update = ["gui", "update", "corundum-framework-gui/update"]
 # ... with the download and the replacement.
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
+# ... with a row for the app's own Velopack package (`gui::update::Target::Package`).
+gui-package = ["gui-update", "package", "corundum-framework-gui/package"]
 # `gui::platform::MediaPicker`: photos and videos from the phone's album, the file dialog on
 # a desktop. On Android the app's activity must forward its result
 # (`platform::media::available` has the code); iOS needs no Info.plist key.
@@ -75,3 +80,4 @@ corundum-framework-gui = { version = "0.3.0", path = "../corundum-framework-gui"
 # Without its default `self-update`, which the facade's `self-update` feature turns on: the
 # lookup and the advice, so a store build does not link the replacement.
 corundum-framework-update = { version = "0.3.0", path = "../corundum-framework-update", optional = true, default-features = false }
+corundum-framework-package = { version = "0.3.0", path = "../corundum-framework-package", optional = true }

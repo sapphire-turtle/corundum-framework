@@ -77,11 +77,20 @@ corundum-update-run = Run:
 corundum-update-copy = Copy
 corundum-update-by-cargo = Update it with { $tool }
 corundum-update-by-package-manager = Updated by your package manager
+corundum-update-by-the-app = Updated by the app itself
 corundum-update-by-flathub = Updated by Flathub
 corundum-update-by-snap = Updated by the Snap Store
 corundum-update-by-microsoft-store = Updated by the Microsoft Store
 corundum-update-by-mac-app-store = Updated by the Mac App Store
 corundum-update-from-release-page = Download it from the release page
+# A package's row (`update::Target::Package`, `Target::Delegated`): the package updates
+# itself, and a downloaded update is applied by restarting. Its failure and Retry are the
+# rows' above.
+corundum-update-package-current = { $version }
+corundum-update-package-uptodate = Up to date ({ $version })
+corundum-update-package-downloading = Downloading…
+corundum-update-package-ready = { $version } is ready
+corundum-update-package-restart = Restart to update
 
 # The app-menu row (`settings::LauncherRow`): its label, its two buttons, and why a click did
 # nothing.
@@ -89,6 +98,21 @@ corundum-launcher-in-menu = In the app menu
 corundum-launcher-remove = Remove
 corundum-launcher-add = Add back
 corundum-launcher-failed = Could not change the app menu: { $error }
+
+# The status bar's update icon (`update::ReadyBadge`): its tooltip.
+corundum-update-badge = Restart to update to { $version }
+
+# The About page's command line row (`settings::CliRow`): its label, its buttons, what it says
+# when it cannot offer one, and why a click did nothing.
+corundum-cli-row = Command line: { $command }
+corundum-cli-install = Install
+corundum-cli-remove = Remove
+corundum-cli-repair = Repair
+corundum-cli-taken = Another { $command } is installed there; remove it first
+corundum-cli-not-on-path = ~/.local/bin is not on PATH
+corundum-cli-status-installed = On PATH
+corundum-cli-status-missing = Not on PATH
+corundum-cli-failed = Could not change the command line: { $error }
 
 # The file explorer (`explorer::FileExplorer`): its buttons, the list's headings, what shows
 # with no entries, the entry's menu, and a drag of several entries.
