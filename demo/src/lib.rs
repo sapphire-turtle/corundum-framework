@@ -307,19 +307,30 @@ pub fn init_logging() {
 /// directory, and [`run`] for the other starts.
 ///
 /// A move that fails may have stopped halfway, so the demo does not run on what is in
-/// Local: it says why on standard error and exits with 1. The next start goes on with the
-/// move.
+/// Local: it says why on standard error and exits with 1, and the next start goes on with
+/// the move. A start for one of Velopack's hooks (`--veloapp-install`, ...) is the
+/// exception: it has 30 seconds and no window, its exit code goes to the installer, and
+/// all it writes is a line of the hooks' log (`velopack::log`), so the failure is only
+/// logged there.
 #[cfg(not(target_os = "android"))]
 pub fn migrate_dirs() {
     use corundum_framework::platform::dirs::AppDirs;
 
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        if let Err(err) = AppDirs::migrate_from_roaming(APP_NAME) {
-            tracing::error!("corundum demo: could not move the directory from Roaming: {err}");
-            eprintln!("corundum demo: could not move the directory from Roaming: {err}");
-            std::process::exit(1);
+        let Err(err) = AppDirs::migrate_from_roaming(APP_NAME) else {
+            return;
+        };
+        let hook = std::env::args_os()
+            .nth(1)
+            .is_some_and(|arg| arg.as_encoded_bytes().starts_with(b"--veloapp-"));
+        if hook {
+            tracing::warn!("corundum demo: could not move the directory from Roaming: {err}");
+            return;
         }
+        tracing::error!("corundum demo: could not move the directory from Roaming: {err}");
+        eprintln!("corundum demo: could not move the directory from Roaming: {err}");
+        std::process::exit(1);
     });
 }
 
