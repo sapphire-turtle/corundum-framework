@@ -56,7 +56,7 @@ pub struct LauncherSpec {
     /// The app icon, an SVG (the series tile with the app's glyph), embedded with
     /// `include_bytes!`.
     pub icon_svg: &'static [u8],
-    /// The macOS bundle identifier's prefix: `net.fireturtle.sapphire`.
+    /// The macOS bundle identifier's prefix: `net.sapphire-turtle`.
     pub bundle_prefix: &'static str,
 }
 
@@ -170,7 +170,7 @@ const LAUNCHER: LauncherSpec = LauncherSpec {
     description: "Journal, tasks and notes",
     category: "Office",
     icon_svg: include_bytes!("../assets/app-icon.svg"),
-    bundle_prefix: "net.fireturtle.sapphire",
+    bundle_prefix: "net.sapphire-turtle",
 };
 window::run(WindowOptions::new("Sapphire Journal").launcher(LAUNCHER), create)
 ```

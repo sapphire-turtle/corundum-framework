@@ -265,7 +265,7 @@ impl State {
     }
 
     fn track_id(&self) -> String {
-        format!("/net/fireturtle/corundum/track/{}", self.track)
+        format!("/net/sapphire_turtle/corundum/track/{}", self.track)
     }
 
     /// The position now: as told, moved on by the time since while playing.
@@ -572,8 +572,8 @@ mod tests {
     fn an_id_becomes_a_bus_name_element() {
         assert_eq!(bus_name_element("corundum-demo"), "corundum_demo");
         assert_eq!(
-            bus_name_element("net.fireturtle.Asteria"),
-            "net.fireturtle.Asteria"
+            bus_name_element("net.sapphire-turtle.Asteria"),
+            "net.sapphire_turtle.Asteria"
         );
         assert_eq!(bus_name_element("9lives..app"), "_9lives.app");
         assert_eq!(bus_name_element(""), "corundum");
@@ -707,7 +707,7 @@ mod tests {
         zbus::block_on(player.call_method("SetPosition", &(&track, 30_000_000i64))).unwrap();
         expect(MediaEvent::SeekTo(Duration::from_secs(30)));
         // Another track's, or past the end: let go.
-        let other = ObjectPath::try_from("/net/fireturtle/corundum/track/999").unwrap();
+        let other = ObjectPath::try_from("/net/sapphire_turtle/corundum/track/999").unwrap();
         zbus::block_on(player.call_method("SetPosition", &(&other, 1i64))).unwrap();
         zbus::block_on(player.call_method("SetPosition", &(&track, 999_000_000i64))).unwrap();
         zbus::block_on(player.call_method("Stop", &())).unwrap();
