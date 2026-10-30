@@ -48,6 +48,10 @@ launcher = [
     "windows/Win32_UI_Shell",
     "windows/Win32_UI_Shell_PropertiesSystem",
 ]
+# `single-instance`: `instance`, one running copy of a desktop app, the second start handing
+# over to the first. Off by default: a server or a CLI runs as many times as it is started,
+# and it adds interprocess's local sockets.
+single-instance = ["dep:interprocess"]
 media-session = [
     "windows/Win32_Foundation",
     "dep:raw-window-handle",
@@ -114,6 +118,9 @@ unic-langid = "0.9"
 # Desktop icons: an SVG rendered to PNG, icns and ico. No text feature: icons carry no text.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 resvg = { version = "0.45", optional = true, default-features = false }
+# `single-instance`: the local socket (a Unix socket, a named pipe on Windows) a second start
+# asks the first to come to the front on.
+interprocess = { version = "2.4", optional = true }
 
 # iOS: the sandbox's directories, from NSFileManager rather than $HOME.
 [target.'cfg(target_os = "ios")'.dependencies]

@@ -24,7 +24,8 @@
 //!
 //! With the `media-session` feature, `media_session` puts a music player under the OS's
 //! media keys and in its "now playing", and `media_session::start` makes one for an eframe
-//! window.
+//! window. With the `single-instance` feature, `WindowOptions::single_instance` keeps a
+//! desktop app to one window: a second start brings the first's to the front and exits.
 
 /// The egui this crate renders with. Apps should use this re-export so their egui is
 /// always the one the components were built against.

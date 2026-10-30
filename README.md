@@ -93,6 +93,7 @@ desktops and on phones.
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
+| `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
 
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not
@@ -139,6 +140,14 @@ CLI) can use it too, and no app has to call JNI or Objective-C itself.
   Android has none yet: there the session does nothing. An iOS app that turns it on lists
   `audio` under `UIBackgroundModes` in its Info.plist, and is shown only while it plays
   sound.
+- **Single instance** (feature `single-instance`, off by default): `instance::acquire`,
+  the app's lock (`instance.lock` in its data directory, held with the OS's file lock) and
+  a local socket, the user's own (a named pipe on Windows; a socket file in the data
+  directory on macOS, in `$XDG_RUNTIME_DIR` or else the data directory on Linux): the
+  first start holds it and hears `Instance::on_activate`, a second is told `AlreadyRunning`
+  and asks the first to come to the front. `acquire_or_activate` is both, and opens in
+  place of a first start that is closing. A lock that cannot be taken for another reason
+  never stops the app; on iOS and Android it does nothing.
 - **Android**: `android::with_env`, the process's JavaVM attached with Java exceptions
   caught, and the application context and activity, for an app's own JNI calls.
 
@@ -165,6 +174,7 @@ through to the gui crate.
 | `qr-scan` | `gui::platform::scan_qr`, the phone's QR code scanner (brings `gui`) | no |
 | `qr-code` | `gui::qr`, QR codes drawn from text (brings `gui`) | no |
 | `media-session` | `platform::media_session`, and `gui::media_session` with `gui` | no |
+| `single-instance` | `platform::instance`, and `gui::window::WindowOptions::single_instance` with `gui` | no |
 
 The default leaves egui out, for a server or a CLI; a desktop app turns on `eframe`, an
 Android app `android`.

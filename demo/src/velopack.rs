@@ -221,7 +221,8 @@ pub fn log_start(start: &Start) {
 
 /// For a GUI start in a package: apply an update downloaded at an earlier run (which
 /// restarts the demo), else look for one now and every day. Outside a package nothing is
-/// made, and the About page keeps its binary row.
+/// made, and the About page keeps its binary row. Only the demo's instance calls this
+/// (`main` holds its lock first), so a second start never applies under the first.
 pub fn start_updates() {
     let source = Source::Github {
         repo: REPO.to_owned(),

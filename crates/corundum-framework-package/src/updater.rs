@@ -192,6 +192,11 @@ impl Updater {
     /// caller must end the process soon (Velopack waits 60 seconds), a GUI by closing its
     /// window so that what it saves on exit is saved.
     ///
+    /// Once this returns `Ok`, the update is Velopack's: if the app cancels the close (a
+    /// "save your changes?" it answers with Cancel) or otherwise keeps running, a later
+    /// call in this process fails with [`Error::Applying`]. Whether the update is applied
+    /// then is up to Velopack's updater, which waits for this process to end.
+    ///
     /// An error: nothing downloaded, an apply already running on another thread
     /// ([`Error::Applying`]), `before_apply` refused (nothing is applied, and a later call
     /// tries again), or Velopack failed.
@@ -219,7 +224,8 @@ impl Updater {
     /// start.
     ///
     /// Only the app's single GUI instance may call this: an app that can run two must
-    /// prevent the second first.
+    /// prevent the second first (corundum-framework-platform's `instance`, or the gui
+    /// crate's `WindowOptions::single_instance`), or the second applies under the first.
     pub fn apply_pending_at_start(&self) -> Result<(), Error> {
         if self.apply_pending(start::restarted())? {
             std::process::exit(0);

@@ -73,6 +73,15 @@ media-session = [
     "corundum-framework-gui?/media-session",
 ]
 
+# `platform::instance`: a desktop app run once, a second start bringing the first to the
+# front and exiting, and with `eframe`, `gui::window::WindowOptions::single_instance` to turn
+# it on for the window.
+single-instance = [
+    "platform",
+    "corundum-framework-platform/single-instance",
+    "corundum-framework-gui?/single-instance",
+]
+
 [dependencies]
 corundum-framework-platform = { version = "0.3.0", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.

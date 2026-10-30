@@ -45,6 +45,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
+| `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 
@@ -60,6 +61,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **ウィンドウの補助**：Android のクリップボードとウィンドウのインセット。gui クレートの `platform` がこれを読みます。
 - **システムの画面**（feature。既定では無効）：`media`。スマートフォンの写真ピッカー（`media-picker`）。選ばれたファイルはキャッシュにコピーします。`qr`。スマートフォンの QR コードスキャナー（`qr-scan`）。どちらも `pending::Pending` で結果を返します。
 - **メディアセッション**（feature `media-session`、既定では無効）：`media_session::MediaSession`。音楽プレイヤーを OS のメディアキーと「再生中」の表示に連動させます。アプリは曲（曲名、アーティスト、アルバム、長さ、ファイルかバイト列のジャケット）と、再生中かどうか・再生位置を渡し、再生、一時停止、切り替え、停止、次、前、シークをイベントとして受け取ります。フレームは止めません。Linux は zbus による MPRIS（libdbus に依存しない）、Windows はウィンドウの SystemMediaTransportControls、macOS と iOS は MediaPlayer の Now Playing とリモートコマンド、iOS ではさらにオーディオセッション（着信などによる中断、イヤホンを抜いたとき）。Android はまだなく、何もしません。有効にする iOS アプリは Info.plist の `UIBackgroundModes` に `audio` を入れます。また、音を鳴らしている間だけ表示されます。
+- **単一インスタンス**（feature `single-instance`、既定では無効）：`instance::acquire`。アプリのロック（データディレクトリの `instance.lock` を OS のファイルロックで保持）と、ユーザーごとのローカルソケット（Windows は名前付きパイプ。macOS はデータディレクトリのソケットファイル、Linux は `$XDG_RUNTIME_DIR`、なければデータディレクトリのソケットファイル）。最初の起動がロックを持ち、`Instance::on_activate` で知らせを受けます。2つ目は `AlreadyRunning` を受け取り、1つ目に前面に出るよう伝えます。`acquire_or_activate` はこの両方を行い、1つ目が終了しかけているときは代わりに開きます。ほかの理由でロックを取れなくても、アプリの起動は止めません。iOS と Android では何もしません。
 - **Android**：`android::with_env`（Java の例外を捕まえて JavaVM にアタッチする）と、アプリケーションの Context とアクティビティ。アプリ独自の JNI 呼び出しに使います。
 
 ### corundum-framework
@@ -83,6 +85,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `qr-scan` | `gui::platform::scan_qr`：スマートフォンの QR コードスキャナー（`gui` も有効になる） | いいえ |
 | `qr-code` | `gui::qr`：文字列から描く QR コード（`gui` も有効になる） | いいえ |
 | `media-session` | `platform::media_session`、`gui` があれば `gui::media_session` も | いいえ |
+| `single-instance` | `platform::instance`、`gui` があれば `gui::window::WindowOptions::single_instance` も | いいえ |
 
 既定では egui を含みません。サーバーや CLI はそのまま使えます。デスクトップのアプリは `eframe` を、Android のアプリは `android` を有効にします。
 
