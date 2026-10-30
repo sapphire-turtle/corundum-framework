@@ -42,7 +42,7 @@ path = "examples/icons.rs"
 tracing.workspace = true
 
 [build-dependencies]
-corundum-framework-build = { version = "0.3.0", path = "../crates/corundum-framework-build" }
+corundum-framework-build = { version = "0.4.0", path = "../crates/corundum-framework-build" }
 
 # Everywhere but Android, the window is eframe's (`gui::window::run`); on Android it is
 # GameActivity's (`gui::window::run_android`), and eframe's default does not build there.

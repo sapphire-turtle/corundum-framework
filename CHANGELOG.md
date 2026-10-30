@@ -8,6 +8,79 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.3.0...v0.4.0) - 2026-10-30
+
+### Breaking
+
+- *(corundum-framework-gui)* `UpdatesPanel::new` takes `Vec<Target>`: an `UpdateTarget` goes in as `.into()`. `Target::Package` and `Target::this_app` (feature `package`) add this app's Velopack package; `Target::Delegated` adds another package that updates itself ([#63](https://github.com/sapphire-turtle/corundum-framework/pull/63)).
+- *(corundum-framework-platform)* On Windows, `dirs::config_dir()` and `data_dir()` return `%LOCALAPPDATA%` instead of `%APPDATA%` (Roaming), and `AppDirs::cache()` is `<app>\cache`. An app calls `AppDirs::migrate_from_roaming(app_name)` once at start, before it reads its settings, and must not touch its config or data when that returns an error ([#67](https://github.com/sapphire-turtle/corundum-framework/pull/67)).
+- *(corundum-framework-platform)* `icon` and `launcher` are features, both on by default; a crate that depends on the platform crate with `default-features = false` and uses them names them ([#66](https://github.com/sapphire-turtle/corundum-framework/pull/66)).
+- *(corundum-framework-platform)* Identifiers use the publisher namespace `net.sapphire-turtle` (`net.sapphire_turtle` where a hyphen is not allowed: Android, D-Bus). The demo's macOS bundle id, its Windows app id and its MPRIS names change with it ([#65](https://github.com/sapphire-turtle/corundum-framework/pull/65)).
+
+### Added
+
+- *(corundum-framework-platform)* run a desktop app once, a second start bringing the first to the front ([#61](https://github.com/sapphire-turtle/corundum-framework/pull/61))
+- *(corundum-framework-gui)* update rows for packages ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* the app's start in a Velopack package ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* QR codes, drawn (`qr-code`) and scanned (`qr-scan`)
+- *(corundum-framework-gui)* add a file explorer widget
+- *(corundum-framework)* the media-session feature
+- *(corundum-framework-gui)* MediaPicker, photos and videos from the album
+- *(corundum-framework-platform)* an AppImage writes no menu entry of its own at start
+- *(corundum-framework-platform)* the launcher steps aside in a Velopack package ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-platform)* tell a Velopack package from its files ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-platform)* the phone's QR code scanner behind `qr-scan`
+- *(corundum-framework-platform)* the media session on macOS and iOS
+- *(corundum-framework-platform)* the media session on Windows
+- *(corundum-framework-platform)* the media session, as an MPRIS player on Linux
+- *(corundum-framework-platform)* the phone's photo picker behind `media-picker`
+- *(corundum-framework-gui)* the update badge and the command line row ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-update)* package state types and InstallMethod::Velopack ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* media_session::start for an eframe window
+- *(corundum-framework-package)* the console shim for a Windows GUI binary ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* the command line on PATH ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* updates found and downloaded, applied on demand ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+
+### Fixed
+
+- *(corundum-framework-platform)* a relaunch while closing still opens, per-user socket files, macOS socket in the data dir ([#61](https://github.com/sapphire-turtle/corundum-framework/pull/61))
+- *(corundum-framework-platform)* keep the cache apart and merge an earlier Local directory ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(corundum-framework-platform)* keep settings and data in Local on Windows ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(docs)* the package crate's four parts, Taken, the apply contract and restart guard ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-platform)* keep the windows crate's file calls for every Windows build ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(corundum-framework-platform)* no wait without a bound on Windows named pipes ([#61](https://github.com/sapphire-turtle/corundum-framework/pull/61))
+- *(corundum-framework-gui)* a second start through the window options exits; activation waits for the first's reply ([#61](https://github.com/sapphire-turtle/corundum-framework/pull/61))
+- *(corundum-framework-platform)* leave only the links a copy cannot make, keep the lock file ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(corundum-framework-platform)* one migration at a time, reserved temporary names, links left in place ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(corundum-framework-platform)* keep a failed or cross-volume move from stranding data ([#57](https://github.com/sapphire-turtle/corundum-framework/pull/57))
+- *(corundum-framework-package)* find the package through a link to its binary ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-platform)* keep the package's own Start menu shortcut ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- warn about ~/.local/bin only once the login shell has said it is missing
+- judge ~/.local/bin by the login shell's PATH; keep velopack's log to errors in the demo
+- *(corundum-framework-gui)* name no About page in the by-the-app text ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* make the package dev-dependency path-only ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* close the window after an apply, one apply at a time, none after a restart ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* keep the update badge to show a failed restart ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* name the QR code's texture apart from the message ids
+- *(corundum-framework-package)* leave another program's command link alone ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* let Update.exe leave the console shim's job ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* keep a downloaded update ready across later checks ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into feat/61-single-instance
+- Merge remote-tracking branch 'origin/main' into fix/57-local-data
+- *(corundum-framework-platform)* put icon and launcher behind features ([#62](https://github.com/sapphire-turtle/corundum-framework/pull/62))
+- Merge remote-tracking branch 'origin/main' into spike/velopack-demo
+- Merge remote-tracking branch 'origin/main' into feat/qr-code
+- Merge remote-tracking branch 'origin/main' into feat/media-session
+- QR codes in the READMEs
+- the media session in the crates' READMEs
+- the media picker in the READMEs
+- Merge pull request #66 from sapphire-turtle/refactor/62-light-update
+- move the publisher namespace to net.sapphire-turtle ([#59](https://github.com/sapphire-turtle/corundum-framework/pull/59))
+- *(corundum-framework-gui)* name the media picker plainly in docs built without it
+
 ## [0.3.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.2.1...v0.3.0) - 2026-10-27
 
 ### Added
