@@ -28,11 +28,5 @@ tracing.workspace = true
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
-# SMAppService, for an app running from a macOS package that carries its agent's plist.
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.4"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSError"] }
-objc2-service-management = { version = "0.3.2", default-features = false, features = ["std", "SMAppService", "objc2", "objc2-foundation"] }
-
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dev-dependencies]
 tempfile = "3"

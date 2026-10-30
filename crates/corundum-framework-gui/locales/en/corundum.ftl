@@ -167,7 +167,5 @@ corundum-service-stopped = Stopped
 corundum-service-stop = Stop
 corundum-service-start = Start
 corundum-service-remove = Remove
-corundum-service-needs-approval = Waiting for your approval in Login Items
-corundum-service-open-login-items = Open Login Items
 corundum-service-broken = Not working: { $reason }
 corundum-service-repair = Repair

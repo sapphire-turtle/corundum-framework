@@ -275,7 +275,6 @@ mod with_services {
                 euid: 1000,
                 os: Os::Linux,
                 home: Some(home()),
-                package: None,
             }
         }
 

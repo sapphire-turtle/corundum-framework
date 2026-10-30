@@ -1,5 +1,9 @@
 # Background services, registered by corundum
 
+> 2026-10-31: SMAppService was dropped by the user's decision. macOS registers the
+> LaunchAgent file everywhere, as Linux does its unit file. The SMAppService work is in git
+> history (4981b1d..9e4929d).
+
 Issue: corundum-framework#51, part 3. Part 2 (the app as a Velopack package) is in 0.4.0:
 `docs/superpowers/specs/2026-10-29-velopack-runtime-design.md`. The spike behind both is
 `docs/superpowers/spikes/2026-10-28-velopack.md`.
@@ -19,13 +23,11 @@ Success means:
   them on Windows, macOS and Linux;
 - at the first start, the person goes through the app's own setup pages and corundum's
   "keep running in the background?" page, in the order the app chooses;
-- an About row shows each service's state and changes it, including "waiting for your
-  approval" on macOS and "the program it starts is gone";
+- an About row shows each service's state and changes it, including "the program it starts
+  is gone";
 - an update stops the app's running services before it is applied and starts them again
   at the next start, whether that start is the GUI, the command line or a restart by the
   updater;
-- in a signed macOS package a service is registered with `SMAppService`, so deleting the
-  app removes it; everywhere else it is registered as today;
 - sapphire-framework moves to this crate without changing what an installed user has.
 
 ## Decisions
@@ -37,12 +39,9 @@ Success means:
    command-line build of an app, installed by script, needs services but not Velopack.
    The platform crate is used by phones too and should not carry ServiceManagement. The
    dependencies run `platform ← service ← package (feature) ← gui (feature)`.
-3. **macOS: `SMAppService` inside a signed package, the LaunchAgent file elsewhere.** A
-   package that carries the agent's plist in `Contents/Library/LaunchAgents/` registers it
-   with `SMAppService.agent(plistName:)`, so the registration goes when the `.app` goes and
-   the person manages it in System Settings › Login Items. A `cargo install` or script
-   install keeps today's `~/Library/LaunchAgents/<label>.plist`. Trying `SMAppService` on
-   a machine waits for the Apple Developer Program enrolment and signing (part 1).
+3. **macOS: the LaunchAgent file.** `~/Library/LaunchAgents/<label>.plist`, loaded with
+   `launchctl`, as sapphire does today and as Linux uses its unit file
+   (see the note at the top).
 4. **The first start asks, with the app's reason.** A window that keeps something running
    after it closes, without saying so, costs a light user's trust. The question comes
    once, inside the app's first-run setup. Its words are the app's ("for AI tools and
@@ -57,7 +56,7 @@ Success means:
 
 | Crate | Change |
 |---|---|
-| `corundum-framework-service` | New, desktops only. `sapphire-framework-service`'s contents, generalised, plus `state`, `stop`, `start`, the `SMAppService` backend and `service_exe()` through `platform::package` |
+| `corundum-framework-service` | New, desktops only. `sapphire-framework-service`'s contents, generalised, plus `state`, `stop`, `start`, `service_exe()` through `platform::package` |
 | `corundum-framework-package` | Feature `service`: `PackageSpec.services`; stop before apply, start after; unregister in the Windows uninstall hook |
 | `corundum-framework-gui` | Feature `service` for `ServiceRow` and `ServicePage`; the new `first_run` module (no feature) |
 | `corundum-framework` | Facade features `service` and `gui-service` |
@@ -81,8 +80,6 @@ pub enum ServiceState {
     NotInstalled,
     Stopped,
     Running,
-    /// macOS: registered with SMAppService, waiting for the person in Login Items.
-    NeedsApproval,
     /// Registered, but the program it starts is gone (the app deleted or moved).
     Broken { reason: String },
 }
@@ -109,7 +106,6 @@ pub enum ServiceCommand { Install, Uninstall, Status } // clap::Subcommand, as t
   for the GUI. It is decided by pure functions over the tools' output and the files:
   - `systemctl --user is-enabled` and `is-active`;
   - `launchctl print gui/<uid>/<label>`;
-  - `SMAppService.status`;
   - `schtasks /query /fo csv`.
 - **`stop` and `start`** leave the registration as it is:
 
@@ -138,18 +134,9 @@ pub enum ServiceCommand { Install, Uninstall, Status } // clap::Subcommand, as t
   skipped rather than failing and restarting into the journal at every login.
 - `state` is `Broken` when the unit's executable is missing.
 
-### macOS: SMAppService, or the LaunchAgent file
-- **Which one:** a pure function of `platform::package::current()` and the bundle's files.
-  - `SMAppService` when the app runs from a macOS package whose
-    `Contents/Library/LaunchAgents/<label>.plist` exists.
-  - The LaunchAgent file otherwise.
-- **SMAppService:**
-  - Registered through `objc2-service-management`: `SMAppService::agentServiceWithPlistName`, then `register` / `unregister`.
-  - `status`: `RequiresApproval` → `NeedsApproval`, `Enabled` → `Running` or `Stopped` by `launchctl`, `NotRegistered` or `NotFound` → `NotInstalled`.
-  - `stop` / `start` go through `launchctl` (SMAppService has neither).
-  - A LaunchAgent file under the same label, left by an earlier install outside a package, is booted out and removed first.
-- **The bundled plist:** `launchd::bundled_agent_plist(spec)` renders it: `Label`, `BundleProgram` = `Contents/MacOS/<exe>`, `ProgramArguments`, `RunAtLoad`, `KeepAlive` on failure. Putting it into the `.app` is the packaging's job (part 1). The demo's release workflow does it for now: `vpk bundle`, add the plist, then `vpk pack --packDir <the .app>`.
-- **The LaunchAgent file:** as today. `state` is `Broken` when the plist's program is missing.
+### macOS: the LaunchAgent file
+- **The LaunchAgent file:** `launchctl bootstrap` installs it, `bootout` removes it, and `state` comes from the plist and `launchctl print`. `state` is `Broken` when the plist's program is missing. A legacy-label agent is retired.
+- **`stop` / `start`** go through `launchctl`.
 
 ### Windows: Task Scheduler
 - A logon task through `schtasks`, as today, starting the service exe.
@@ -174,9 +161,8 @@ pub struct PackageSpec {
   - A failed `stop` is a `Prepare` error: nothing is applied.
 - **At every start:** `start()` reads `services-to-restart`, `start`s each named service, then removes the file. This covers the GUI, the command line and the updater's restart, so a service is never left stopped by an update.
 - **Uninstall hook on Windows:** `uninstall`s each service, within the hook's 30 seconds.
-- **macOS and Linux run nothing at uninstall:**
-  - On macOS, an SMAppService registration goes with the `.app`.
-  - A LaunchAgent file, or a systemd unit, stays behind as `Broken`. On Linux it is skipped through `ConditionPathExists`.
+- **macOS and Linux run nothing at uninstall,** so the docs tell the person to remove the service first (About › the service row › Remove):
+  - A LaunchAgent file, or a systemd unit, left behind shows as `Broken`. On Linux it is skipped through `ConditionPathExists`.
   - A reinstall registers again from the app's first-run answer.
 
 ## corundum-framework-gui
@@ -229,7 +215,6 @@ impl FirstRun {
 |---|---|
 | NotInstalled | **Keep running in the background** |
 | Running / Stopped | the state, **Stop** or **Start**, **Remove** |
-| NeedsApproval | "Waiting for your approval in Login Items", **Open Login Items** (`x-apple.systempreferences:com.apple.LoginItems-Settings.extension`) |
 | Broken | the reason, **Repair** (install again) |
 
 ## The demo
@@ -237,7 +222,6 @@ impl FirstRun {
 - **The daemon becomes a subcommand:** `corundum-demo daemon` replaces the separate `corundum-framework-demo-daemon` binary, which is the single-binary shape the sapphire apps take. It is registered as `ServiceSpec { app_name: "corundum-demo", args: ["daemon"], .. }`.
 - **The pid-file stop goes:** the spike's code that stopped the daemon through a pid file is removed. The package's stop-and-restart replaces it.
 - **First-run setup:** two pages, a sample welcome page and `ServicePage`. About has a `ServiceRow` and a "Run first-run setup again" button.
-- **macOS packaging:** `demo-release.yml` builds the `.app` with the bundled plist, so a signed build can try `SMAppService`.
 
 ## sapphire-framework
 
@@ -256,7 +240,6 @@ Labels, unit names and task names stay what an installed user has: `net.sapphire
   - pure functions from each tool's output, tested by table;
   - `Broken` with temporary directories;
   - the systemd unit carrying `ConditionPathExists`.
-- **macOS backend choice:** a pure function of (package kind, plist present), tested by table.
 - **`stop` / `start`:** the commands each backend runs, through `RecordingManager`. `stop` of a stopped service is not an error.
 - **package:**
   - with a fake backend and `RecordingManager`, a running service is stopped before apply, written to `services-to-restart`, and started at the next start;
@@ -268,9 +251,9 @@ Labels, unit names and task names stay what an installed user has: `net.sapphire
   - `ServiceRow`: the buttons for each state, through a `status_of` seam like `CliRow`'s.
 - **On the machines:**
   - Linux and Windows: register, update with the service running (stopped, then running again), and uninstall (Windows: the task gone).
-  - macOS: the LaunchAgent-file path at once. `SMAppService`, including `NeedsApproval` and removal with the `.app`, once the package is signed.
+  - macOS: the LaunchAgent-file path.
 
 ## Not in this part
-- Signing and the packaging rules (part 1). Bundling the plist is done only in the demo's workflow here.
+- Signing and the packaging rules (part 1).
 - sapphire's move (a separate issue).
 - System services (LaunchDaemons, Windows services): every service is the user's own, as today.

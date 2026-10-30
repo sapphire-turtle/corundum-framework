@@ -5,14 +5,13 @@ use corundum_framework_service::{ServiceSpec, ServiceState};
 use crate::service::{Job, ServiceOps};
 use crate::tr;
 
-/// Where **Open Login Items** takes the person: System Settings → General → Login Items.
-const LOGIN_ITEMS: &str = "x-apple.systempreferences:com.apple.LoginItems-Settings.extension";
-
 /// The About-page row for one of the app's background services: what it is doing, and the
 /// buttons that change it. Not registered, it offers **Keep running in the background**;
-/// running or stopped, it says so and offers **Stop** or **Start**, and **Remove**; waiting
-/// for the person's approval (macOS), **Open Login Items**; broken, the reason and
-/// **Repair**, which takes the registration away and makes it again.
+/// running or stopped, it says so and offers **Stop** or **Start**, and **Remove**; broken,
+/// the reason and **Repair**, which takes the registration away and makes it again.
+///
+/// Before uninstalling the app on macOS or Linux, remove its background service (Settings ›
+/// About › Remove). Windows' uninstaller removes it.
 ///
 /// The state is found on a thread, as is every change, after which the state is found
 /// again: a frame never waits on the service manager. Hold the row on the page and call
@@ -47,7 +46,6 @@ enum Act {
     /// Take the registration away and make it again: making it over one still there is not
     /// something every manager accepts (launchd refuses to load a label already loaded).
     Repair,
-    OpenLoginItems,
 }
 
 /// A job's answer: what the change did, if there was one, and the state after it.
@@ -125,14 +123,6 @@ impl ServiceRow {
                     self.note(ui, id);
                     clicked = clicked.or(self.button(ui, act_id, act));
                     clicked = clicked.or(self.button(ui, "corundum-service-remove", Act::Remove));
-                }
-                Some(Ok(ServiceState::NeedsApproval)) => {
-                    self.note(ui, "corundum-service-needs-approval");
-                    clicked = clicked.or(self.button(
-                        ui,
-                        "corundum-service-open-login-items",
-                        Act::OpenLoginItems,
-                    ));
                 }
                 Some(Ok(ServiceState::Broken { reason })) => {
                     self.noted("corundum-service-broken");
@@ -218,26 +208,7 @@ fn perform(ops: &ServiceOps, act: Act, spec: &ServiceSpec) -> Result<(), String>
             (ops.uninstall)(spec)?;
             (ops.install)(spec)
         }
-        Act::OpenLoginItems => open_login_items(),
     }
-}
-
-/// Open System Settings at Login Items, where the person approves the service. Only macOS
-/// asks for that approval, so elsewhere there is nothing to open.
-fn open_login_items() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        let status = std::process::Command::new("open")
-            .arg(LOGIN_ITEMS)
-            .status()
-            .map_err(|err| err.to_string())?;
-        if !status.success() {
-            return Err(format!("open {LOGIN_ITEMS}: {status}"));
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = LOGIN_ITEMS;
-    Ok(())
 }
 
 #[cfg(test)]
@@ -326,17 +297,6 @@ mod tests {
                 "corundum-service-stopped",
                 "corundum-service-start",
                 "corundum-service-remove"
-            ]
-        );
-    }
-
-    #[test]
-    fn a_service_waiting_for_approval_offers_login_items() {
-        assert_eq!(
-            shown(|_| Ok(ServiceState::NeedsApproval)),
-            [
-                "corundum-service-needs-approval",
-                "corundum-service-open-login-items"
             ]
         );
     }

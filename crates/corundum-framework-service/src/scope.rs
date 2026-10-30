@@ -1,13 +1,11 @@
 //! What an application wants installed, and the facts about the machine an install needs.
 //!
-//! Every rule here turns on the effective uid, the platform, the home directory and the
-//! package the app runs from; they arrive bundled in an [`Environment`] so all combinations
-//! are testable on one machine, and so the rules are functions of values rather than of the
-//! world they run in.
+//! Every rule here turns on the effective uid, the platform and the home directory; they
+//! arrive bundled in an
+//! [`Environment`] so all combinations are testable on one machine, and so the rules are
+//! functions of values rather than of the world they run in.
 
 use std::path::PathBuf;
-
-use corundum_framework_platform::package::{self, PackageLayout};
 
 use crate::error::Result;
 
@@ -71,15 +69,11 @@ pub struct Environment {
     /// The invoking user's home directory, where a user-level install writes; `None` when
     /// the platform's variable for it (see [`Os::home_variable`]) is unset or empty.
     pub home: Option<PathBuf>,
-    /// The package the app runs from, if any: on macOS, a `.app` carrying the agent's plist
-    /// registers it with SMAppService rather than writing a LaunchAgent file
-    /// ([`mac_backend`](crate::launchd::mac_backend)).
-    pub package: Option<PackageLayout>,
 }
 
 impl Environment {
-    /// Read this machine's own facts: the effective uid, the platform, the home directory
-    /// and the package the app runs from.
+    /// Read this machine's own facts: the effective uid, the platform and the home
+    /// directory.
     ///
     /// The one place these are read from the world. Every rule in this module turns on the
     /// value this returns, which is exactly why a test builds one itself instead: the rules
@@ -92,7 +86,6 @@ impl Environment {
             home: std::env::var_os(os.home_variable())
                 .map(PathBuf::from)
                 .filter(|path| !path.as_os_str().is_empty()),
-            package: package::current(),
         }
     }
 }

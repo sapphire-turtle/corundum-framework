@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use corundum_framework_service::{
-    InstallContext, ServiceSpec, bundled_agent_plist, render_launch_agent, render_task, render_unit,
+    InstallContext, ServiceSpec, render_launch_agent, render_task, render_unit,
 };
 
 fn golden(name: &str) -> String {
@@ -77,14 +77,6 @@ fn exec_start_is_absolute_and_carries_the_arguments() {
 #[test]
 fn a_launch_agent() {
     check("launchagent.plist", &render_launch_agent(&spec(), &ctx()));
-}
-
-#[test]
-fn a_bundled_agent() {
-    check(
-        "bundled-agent.plist",
-        &bundled_agent_plist(&spec(), "sapphire-agent"),
-    );
 }
 
 #[test]

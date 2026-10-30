@@ -9,8 +9,6 @@ pub enum ServiceState {
     Stopped,
     /// Registered and running.
     Running,
-    /// Registered, but the OS wants the user's approval before it will run it.
-    NeedsApproval,
     /// Registered, but it cannot work as it is, for the reason given — such as a program
     /// that was moved or deleted after the install.
     Broken {

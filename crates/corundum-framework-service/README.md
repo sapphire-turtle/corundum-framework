@@ -10,5 +10,8 @@ or runs a command, so tests use `RecordingManager`. With the `cli` feature, `Ser
 is the `service install | uninstall | status` subcommand for a clap command line.
 
 The executable the manager starts is the running one, or inside a Velopack package the file
-that lasts: the AppImage itself on Linux. Desktops only; on iOS and Android the crate is
+that lasts: the AppImage itself on Linux.
+
+Before uninstalling the app on macOS or Linux, remove its background service (Settings ›
+About › Remove). Windows' uninstaller removes it. Desktops only; on iOS and Android the crate is
 empty.

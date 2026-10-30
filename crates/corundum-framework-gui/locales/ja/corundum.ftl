@@ -155,7 +155,5 @@ corundum-service-stopped = 停止中
 corundum-service-stop = 停止
 corundum-service-start = 開始
 corundum-service-remove = 削除
-corundum-service-needs-approval = ログイン項目で許可を待っています
-corundum-service-open-login-items = ログイン項目を開く
 corundum-service-broken = 動作していません: { $reason }
 corundum-service-repair = 修復
