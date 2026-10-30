@@ -16,6 +16,7 @@ desktops and on phones.
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
 | [`corundum-framework-update`](crates/corundum-framework-update) | Newer GitHub releases of an app's binary: finding them, and replacing the binary with one | unreleased |
 | [`corundum-framework-package`](crates/corundum-framework-package) | The app as a Velopack package on the desktops: its start and install hooks (`start`), its updates (`Updater`), its command line on `PATH` (`cli_path`) and the Windows console shim (`console`) | unreleased |
+| [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`) | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -164,6 +165,7 @@ through to the gui crate.
 | `update` | `update`: corundum-framework-update | no |
 | `self-update` | `update` with the download and the replacement; a store build leaves it off | no |
 | `package` | `package`: corundum-framework-package (brings `platform`) | no |
+| `service` | `service`: corundum-framework-service (brings `platform`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
 | `gui-package` | The gui crate's `package`: the panel's row for the app's own package (brings `gui-update` and `package`) | no |

@@ -34,6 +34,9 @@ self-update = ["update", "corundum-framework-update/self-update"]
 # The app as a Velopack package on the desktops: its start and install hooks. Empty on iOS
 # and Android.
 package = ["dep:corundum-framework-package", "platform"]
+# The app's background service registered with the OS's user-level service manager (systemd,
+# launchd, Task Scheduler) on the desktops. Empty on iOS and Android.
+service = ["dep:corundum-framework-service", "platform"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -90,3 +93,4 @@ corundum-framework-gui = { version = "0.4.0", path = "../corundum-framework-gui"
 # lookup and the advice, so a store build does not link the replacement.
 corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", optional = true, default-features = false }
 corundum-framework-package = { version = "0.4.0", path = "../corundum-framework-package", optional = true }
+corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", optional = true, default-features = false }

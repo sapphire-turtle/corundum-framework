@@ -22,6 +22,7 @@
 //! | `update` | [`update`] | `corundum-framework-update`: finding newer GitHub releases of an app's binary, and replacing it with one |
 //! | `self-update` | `update` | `update` with the download and the replacement; a store build leaves it off, as the store updates the app |
 //! | `package` | [`package`] | `corundum-framework-package`: the app as a Velopack package on the desktops: its start and install hooks, its updates, its command line on `PATH` and the Windows console shim (brings `platform`) |
+//! | `service` | [`service`] | `corundum-framework-service`: the app's background service registered with systemd, launchd or Task Scheduler at user level (brings `platform`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
 //! | `gui-package` | `gui::update` | the panel's row for the app's own Velopack package, `Target::Package` (brings `gui-update` and `package`) |
@@ -42,6 +43,9 @@ pub use corundum_framework_update as update;
 
 #[cfg(feature = "package")]
 pub use corundum_framework_package as package;
+
+#[cfg(feature = "service")]
+pub use corundum_framework_service as service;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.

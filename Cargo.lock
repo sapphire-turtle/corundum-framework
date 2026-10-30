@@ -888,6 +888,7 @@ dependencies = [
  "corundum-framework-gui",
  "corundum-framework-package",
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
 ]
 
@@ -994,6 +995,18 @@ dependencies = [
  "unic-langid",
  "windows",
  "zbus",
+]
+
+[[package]]
+name = "corundum-framework-service"
+version = "0.4.0"
+dependencies = [
+ "clap",
+ "corundum-framework-platform",
+ "libc",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]
