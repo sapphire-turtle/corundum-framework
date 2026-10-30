@@ -307,7 +307,7 @@ are the GUI binary; `PATH` finds the shim.
 | Not in a package | As today |
 | Windows package | Writes nothing: Velopack makes the Start menu shortcut and the "Apps & features" entry. Removes its own `.lnk` left by an earlier install outside a package |
 | macOS package | Writes nothing. Removes a bundle it generated earlier under the app's name (its executable a link, no `sq.version` in it), never the bundle it runs from |
-| AppImage | Writes the entry with `Exec` and the status check on `$APPIMAGE`, not `current_exe()` |
+| AppImage | Writes no entry at start (`launcher::refresh`): an AppImage runs where it lies, and the app menu is the user's or their AppImage manager's (Gear Lever, AppImageLauncher, appimaged). `LauncherRow`'s Add writes one on request, and a later start points it at `$APPIMAGE` again (a manager may move the file). `Exec` and the status check use `$APPIMAGE`, not `current_exe()` |
 
 `LauncherRow` is hidden in a Windows or macOS package, where the entry is the OS's and the
 installer's.

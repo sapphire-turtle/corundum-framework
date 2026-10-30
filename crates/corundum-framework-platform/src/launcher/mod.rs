@@ -124,6 +124,20 @@ pub fn in_package(layout: Option<&PackageLayout>) -> io::Result<Placement> {
 /// `CORUNDUM_NO_LAUNCHER` is set. In a Windows or macOS package it registers nothing and
 /// removes the entry an earlier, unpackaged run left, which would double the installer's.
 pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
+    write(spec, false)
+}
+
+/// What a window does with the app's entry when it opens: [`register`], except in an
+/// AppImage. An AppImage runs where it lies, and putting it in the app menu is the user's
+/// choice or their AppImage manager's (Gear Lever, AppImageLauncher, appimaged); so there a
+/// start writes no entry of its own, and only keeps one the user asked for pointing at the
+/// AppImage, which a manager may have moved.
+pub fn refresh(spec: &LauncherSpec) -> io::Result<Registered> {
+    write(spec, true)
+}
+
+/// [`register`], or with `at_start` [`refresh`].
+fn write(spec: &LauncherSpec, at_start: bool) -> io::Result<Registered> {
     if std::env::var_os("CORUNDUM_NO_LAUNCHER").is_some() {
         return Ok(Registered::Skipped);
     }
@@ -131,8 +145,12 @@ pub fn register(spec: &LauncherSpec) -> io::Result<Registered> {
     let Some(root) = Root::detect() else {
         return Ok(Registered::Skipped);
     };
+    let in_appimage = layout
+        .as_ref()
+        .is_some_and(|layout| layout.kind == PackageKind::AppImage);
     match in_package(layout.as_ref())? {
         Placement::Register(exe) if skipped(&exe, false) => Ok(Registered::Skipped),
+        Placement::Register(exe) if at_start && in_appimage => refresh_at(spec, &root, &exe),
         Placement::Register(exe) => register_at(spec, &root, &exe),
         Placement::StepAside => {
             if let Some(layout) = &layout {
@@ -227,6 +245,15 @@ pub fn set_process_app_id(spec: &LauncherSpec) -> io::Result<()> {
     {
         let _ = spec;
         Ok(())
+    }
+}
+
+/// [`refresh`] in an AppImage, for the given directories and AppImage file: an entry that is
+/// there is pointed at `appimage` again; none is written where there was none.
+pub fn refresh_at(spec: &LauncherSpec, root: &Root, appimage: &Path) -> io::Result<Registered> {
+    match status_at(spec, root, appimage) {
+        Status::Absent | Status::Unsupported => Ok(Registered::Skipped),
+        Status::Registered | Status::Stale => register_at(spec, root, appimage),
     }
 }
 

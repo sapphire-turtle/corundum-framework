@@ -108,7 +108,8 @@ impl WindowOptions {
     }
 
     /// Put the app in the OS's app menu as `spec` as the window opens
-    /// ([`launcher::register`]), and give the window `spec`'s id and icon, so the OS matches
+    /// ([`launcher::refresh`]: in an AppImage only an entry the person asked for is kept up
+    /// to date), and give the window `spec`'s id and icon, so the OS matches
     /// the running window to the entry. With [`remember`](Self::remember), an entry the
     /// person took out ([`LauncherRow`](crate::settings::LauncherRow)) is not written back.
     pub fn launcher(mut self, spec: LauncherSpec) -> WindowOptions {
@@ -185,7 +186,7 @@ pub fn run(
         .with_min_inner_size(min_inner_size)
         .with_title(&title);
     if let Some(spec) = launcher {
-        if wants_launcher && let Err(err) = launcher::register(&spec) {
+        if wants_launcher && let Err(err) = launcher::refresh(&spec) {
             tracing::warn!("could not put {} in the app menu: {err}", spec.id);
         }
         viewport = with_launcher_look(viewport, &spec);
