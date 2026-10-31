@@ -1,5 +1,6 @@
 //! [`ServiceRow`]: an About-page row for one of the app's background services.
 
+use corundum_framework_platform::package;
 use corundum_framework_service::{ServiceSpec, ServiceState};
 
 use crate::service::{Job, ServiceOps};
@@ -8,7 +9,13 @@ use crate::tr;
 /// The About-page row for one of the app's background services: what it is doing, and the
 /// buttons that change it. Not registered, it offers **Keep running in the background**;
 /// running or stopped, it says so and offers **Stop** or **Start**, and **Remove**; broken,
-/// the reason and **Repair**, which takes the registration away and makes it again.
+/// the reason and **Repair**, which takes the registration away and makes it again. When the
+/// state cannot be found, it shows why and offers **Try again**.
+///
+/// A build running from cargo's `target` directory registers nothing, as a service must not
+/// point into it: not registered, the row says it is a development build; broken, it shows
+/// the reason without **Repair**. **Stop**, **Start** and **Remove** stay, so a registration
+/// an installed build made can still be removed.
 ///
 /// Before uninstalling the app on macOS or Linux, remove its background service (Settings ›
 /// About › Remove). Windows' uninstaller removes it.
@@ -22,6 +29,9 @@ pub struct ServiceRow {
     name: &'static str,
     /// How the service is reached: [`ServiceOps::SYSTEM`], or stand-ins in the tests.
     ops: ServiceOps,
+    /// Whether the app is a cargo build, which registers nothing: a service must not point
+    /// into a directory the next `cargo clean` empties.
+    is_dev: bool,
     /// The state as last found, or why it could not be; `None` while it is being found.
     state: Option<Result<ServiceState, String>>,
     /// The change or lookup running now.
@@ -57,7 +67,9 @@ struct Looked {
 impl ServiceRow {
     /// The row for the service `service` builds the spec of.
     pub fn new(service: fn() -> ServiceSpec) -> ServiceRow {
-        ServiceRow::with_ops(service, ServiceOps::SYSTEM)
+        let mut row = ServiceRow::with_ops(service, ServiceOps::SYSTEM);
+        row.is_dev = package::current_exe().is_some_and(|exe| package::is_cargo_build(&exe));
+        row
     }
 
     /// The row for `service`, reaching it through `ops` instead of this machine's service
@@ -67,6 +79,7 @@ impl ServiceRow {
             service,
             name: service().app_name,
             ops,
+            is_dev: false,
             state: None,
             job: None,
             error: None,
@@ -97,11 +110,16 @@ impl ServiceRow {
             }
         }
         let mut clicked = None;
+        let mut again = false;
         ui.horizontal(|ui| {
             ui.label(tr!(ui, "corundum-service-row", name = self.name));
             match self.state.clone() {
                 None => {
                     ui.spinner();
+                }
+                // A cargo build registers nothing: it says why instead of offering to.
+                Some(Ok(ServiceState::NotInstalled)) if self.is_dev => {
+                    self.note(ui, "corundum-service-dev-build");
                 }
                 Some(Ok(ServiceState::NotInstalled)) => {
                     clicked = clicked.or(self.button(ui, "corundum-service-run", Act::Install));
@@ -130,15 +148,25 @@ impl ServiceRow {
                         ui.visuals().warn_fg_color,
                         tr!(ui, "corundum-service-broken", reason = reason.as_str()),
                     );
-                    clicked = clicked.or(self.button(ui, "corundum-service-repair", Act::Repair));
+                    // Repair would register the cargo build; Stop, Start and Remove stay, so
+                    // an installed build's old registration can still be taken away.
+                    if !self.is_dev {
+                        clicked =
+                            clicked.or(self.button(ui, "corundum-service-repair", Act::Repair));
+                    }
                 }
                 Some(Err(err)) => {
                     ui.colored_label(ui.visuals().error_fg_color, err);
+                    again = self.button(ui, "corundum-service-try-again", ()).is_some();
                 }
+                // A state a later version of the service crate tells apart: nothing to offer.
+                Some(Ok(_)) => {}
             }
         });
         if let Some(act) = clicked {
             self.run(ui.ctx(), Some(act));
+        } else if again {
+            self.run(ui.ctx(), None);
         }
         if let Some((act, error)) = &self.error {
             let text = if matches!(act, Act::Install | Act::Repair) {
@@ -165,7 +193,7 @@ impl ServiceRow {
     }
 
     /// Draw the button `id`; `act` when it was clicked.
-    fn button(&mut self, ui: &mut egui::Ui, id: &'static str, act: Act) -> Option<Act> {
+    fn button<T>(&mut self, ui: &mut egui::Ui, id: &'static str, act: T) -> Option<T> {
         let clicked = ui.button(tr!(ui, id)).clicked();
         #[cfg(test)]
         {
@@ -214,7 +242,7 @@ fn perform(ops: &ServiceOps, act: Act, spec: &ServiceSpec) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
 
     use corundum_framework_service::{ServiceSpec, ServiceState};
@@ -262,7 +290,17 @@ mod tests {
 
     /// The buttons and notes shown once `state` has answered.
     fn shown(state: fn(&ServiceSpec) -> Result<ServiceState, String>) -> Vec<&'static str> {
+        shown_as(state, false)
+    }
+
+    /// The buttons and notes shown once `state` has answered, in a development build when
+    /// `is_dev`.
+    fn shown_as(
+        state: fn(&ServiceSpec) -> Result<ServiceState, String>,
+        is_dev: bool,
+    ) -> Vec<&'static str> {
         let mut row = ServiceRow::with_ops(demo, ops(state));
+        row.is_dev = is_dev;
         settle(&mut row, &egui::Context::default(), |row| {
             !row.shown.is_empty()
         });
@@ -309,6 +347,65 @@ mod tests {
             })),
             ["corundum-service-broken", "corundum-service-repair"]
         );
+    }
+
+    #[test]
+    fn a_development_build_offers_no_install() {
+        assert_eq!(
+            shown_as(|_| Ok(ServiceState::NotInstalled), true),
+            ["corundum-service-dev-build"]
+        );
+    }
+
+    #[test]
+    fn a_development_build_offers_no_repair() {
+        assert_eq!(
+            shown_as(
+                |_| Ok(ServiceState::Broken {
+                    reason: "gone".into()
+                }),
+                true
+            ),
+            ["corundum-service-broken"]
+        );
+    }
+
+    #[test]
+    fn a_development_build_can_still_stop_start_and_remove() {
+        // An old registration, made by an installed build, can still be taken away.
+        assert_eq!(
+            shown_as(|_| Ok(ServiceState::Running), true),
+            [
+                "corundum-service-running",
+                "corundum-service-stop",
+                "corundum-service-remove"
+            ]
+        );
+        assert_eq!(
+            shown_as(|_| Ok(ServiceState::Stopped), true),
+            [
+                "corundum-service-stopped",
+                "corundum-service-start",
+                "corundum-service-remove"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failed_lookup_offers_to_try_again_and_asks_again() {
+        static ASKED: AtomicUsize = AtomicUsize::new(0);
+        fn failing(_: &ServiceSpec) -> Result<ServiceState, String> {
+            ASKED.fetch_add(1, Ordering::SeqCst);
+            Err("no manager".into())
+        }
+        let ctx = egui::Context::default();
+        let mut row = ServiceRow::with_ops(demo, ops(failing));
+        settle(&mut row, &ctx, |row| !row.shown.is_empty());
+        assert_eq!(row.shown, ["corundum-service-try-again"]);
+        assert_eq!(ASKED.load(Ordering::SeqCst), 1);
+        row.press("corundum-service-try-again");
+        settle(&mut row, &ctx, |_| ASKED.load(Ordering::SeqCst) >= 2);
+        assert_eq!(ASKED.load(Ordering::SeqCst), 2);
     }
 
     #[test]

@@ -61,6 +61,21 @@ fn system_start(spec: &ServiceSpec) -> Result<(), String> {
         .map_err(|err| err.to_string())
 }
 
+/// Held by a [`Job`]'s thread: on drop — the work's end or its panic — it lets go of the
+/// answer's sender first and then repaints, so the frame it asks for sees the answer, or the
+/// disconnected channel that says there is none.
+struct RepaintOnDrop<T> {
+    ctx: egui::Context,
+    reply: Option<mpsc::Sender<Result<T, String>>>,
+}
+
+impl<T> Drop for RepaintOnDrop<T> {
+    fn drop(&mut self) {
+        drop(self.reply.take());
+        self.ctx.request_repaint();
+    }
+}
+
 /// Work running on a thread of its own, whose answer the UI picks up on a later frame.
 pub(crate) struct Job<T> {
     answer: mpsc::Receiver<Result<T, String>>,
@@ -80,8 +95,16 @@ impl<T: Send + 'static> Job<T> {
         let spawned = std::thread::Builder::new()
             .name(name.to_owned())
             .spawn(move || {
-                let _ = reply.send(Ok(work()));
-                ctx.request_repaint();
+                // Repaints however the work ends, a panic included, so the frame that polls
+                // finds the answer, or that there is none.
+                let guard = RepaintOnDrop {
+                    ctx,
+                    reply: Some(reply),
+                };
+                let answer = work();
+                if let Some(reply) = &guard.reply {
+                    let _ = reply.send(Ok(answer));
+                }
             });
         if let Err(err) = spawned {
             tracing::warn!("cannot start the {name} thread: {err}");
@@ -100,5 +123,30 @@ impl<T: Send + 'static> Job<T> {
                 "the background task stopped without an answer".to_owned(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    #[test]
+    fn a_panicking_job_still_repaints_with_its_answer_ready() {
+        let ctx = egui::Context::default();
+        let repainted = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&repainted);
+        ctx.set_request_repaint_callback(move |_| flag.store(true, Ordering::SeqCst));
+        let job = Job::spawn(&ctx, "panicking job", || -> () { panic!("on purpose") });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !repainted.load(Ordering::SeqCst) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(repainted.load(Ordering::SeqCst), "no repaint was requested");
+        // The repaint comes after the answer: the frame it asks for finds why there is none.
+        assert!(matches!(job.poll(), Some(Err(_))));
     }
 }
