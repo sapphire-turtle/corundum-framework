@@ -8,6 +8,45 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.4.0...v0.5.0) - 2026-10-31
+
+### Added
+
+- the keys features on the facade
+- *(gui)* the service page and the About row for a service
+- *(package)* stop services before an update and start them after
+- *(service)* move sapphire-framework-service into corundum
+- *(gui)* KeysPage and LocalKeys
+- *(gui)* a first-run flow the app composes from pages
+- *(service)* register with SMAppService inside a macOS package
+- *(service)* structured state, stop and start
+- *(keys)* the key subcommand
+- *(keys)* the axum layer
+- *(keys)* KeyVerifier
+- *(keys)* a conflict copy can retire a key but never accept a token
+- *(keys)* KeyStore
+- *(keys)* the key, hash and token types
+
+### Fixed
+
+- *(gui)* the service row in a development build, retry, repaint on panic
+- *(gui)* the first-run header shows the app's name, and page-made actions are tested
+- *(service)* stop and start that hold on macOS, run and end the Windows task
+- *(package)* additive Services, and a state error no longer refuses updates
+- *(service)* an SMAppService registration error that left the agent registered is an install
+- *(keys)* keep a retire when a write fails, unique temporary files, case-blind ids and Bearer
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into feat/api-keys
+- the service features, first_run and the release's breaking changes
+- Merge pull request #78 from sapphire-turtle/feat/api-keys
+- Merge pull request #74 from sapphire-turtle/dependabot/cargo/resvg-0.49.0
+- *(deps)* bump resvg from 0.45.1 to 0.49.0
+- *(service)* drop the SMAppService backend; LaunchAgent files on macOS
+- *(package)* the packaged executable may be named apart from the cargo binary ([#75](https://github.com/sapphire-turtle/corundum-framework/pull/75))
+- *(keys)* a TTL a slow CI runner does not outlast
+
 ### Breaking
 
 - *(corundum-framework-package)* `PackageSpec` has a new required field `services: Services`: write `services: Services::NONE`, or with the new `service` feature `Services::new(&[my_service])`. With `service`, `Updater::apply` and `apply_pending_at_start` stop the app's running services after `before_apply`, and `start()` starts the services an update stopped (`services-to-restart` in the app's data directory) on every start, packaged or not; on Windows the uninstall hook uninstalls each service ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51)).
