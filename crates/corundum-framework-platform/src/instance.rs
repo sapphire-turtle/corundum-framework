@@ -83,9 +83,16 @@ pub fn acquire(app_name: &str) -> Result<Instance, AlreadyRunning> {
 /// the lock again for about two seconds, and is the instance if it frees, so that a relaunch
 /// while the window closes still opens one.
 pub fn acquire_or_activate(app_name: &str) -> Option<Instance> {
+    acquire_or_activate_with(app_name, None)
+}
+
+/// [`acquire_or_activate`], telling the running start `message` with the ask
+/// ([`AlreadyRunning::activate_with`]): which page to show, say. The message is the app's;
+/// corundum does not read it.
+pub fn acquire_or_activate_with(app_name: &str, message: Option<&str>) -> Option<Instance> {
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
-        let _ = app_name;
+        let _ = (app_name, message);
         Some(Instance {})
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -94,7 +101,7 @@ pub fn acquire_or_activate(app_name: &str) -> Option<Instance> {
             return acquire(app_name).ok();
         };
         let socket = socket_name(app_name, dirs.data());
-        acquire_or_activate_with(dirs.data(), socket, CLOSING_WAIT)
+        acquire_or_activate_at(dirs.data(), socket, message, CLOSING_WAIT)
     }
 }
 
@@ -102,15 +109,25 @@ pub fn acquire_or_activate(app_name: &str) -> Option<Instance> {
 /// this one, which must not touch the app's real data directory.
 #[doc(hidden)]
 pub fn acquire_or_activate_in(app_name: &str, data_dir: &std::path::Path) -> Option<Instance> {
+    acquire_or_activate_with_in(app_name, data_dir, None)
+}
+
+/// [`acquire_or_activate_with`] with the lock in `data_dir`, for tests.
+#[doc(hidden)]
+pub fn acquire_or_activate_with_in(
+    app_name: &str,
+    data_dir: &std::path::Path,
+    message: Option<&str>,
+) -> Option<Instance> {
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
-        let _ = (app_name, data_dir);
+        let _ = (app_name, data_dir, message);
         Some(Instance {})
     }
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
         let socket = socket_name(app_name, data_dir);
-        acquire_or_activate_with(data_dir, socket, CLOSING_WAIT)
+        acquire_or_activate_at(data_dir, socket, message, CLOSING_WAIT)
     }
 }
 
@@ -122,6 +139,12 @@ impl Instance {
     /// Call `f` whenever a second start asks this one to come to the front, from a thread of
     /// its own. Asks made before this is called wait for it. Only the first call listens.
     pub fn on_activate(&mut self, f: impl Fn() + Send + 'static) {
+        self.on_activate_with(move |_| f());
+    }
+
+    /// [`on_activate`](Self::on_activate), with the message the second start sent
+    /// ([`AlreadyRunning::activate_with`]), or `None`.
+    pub fn on_activate_with(&mut self, f: impl Fn(Option<&str>) + Send + 'static) {
         #[cfg(any(target_os = "ios", target_os = "android"))]
         let _ = f;
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
@@ -143,7 +166,30 @@ impl AlreadyRunning {
     pub fn activate(&self) -> bool {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         if let Some(socket) = &self.socket {
-            return desktop::send(socket, Message::Activate);
+            return desktop::send(socket, &Message::Activate(None)) == desktop::Reply::Answered;
+        }
+        false
+    }
+
+    /// [`activate`](Self::activate), telling the running start `message`: one line of at
+    /// most [`MAX_ACTIVATION_MESSAGE`] bytes, not empty, which is not sent otherwise
+    /// (`false`). A running start of an older version, which knows only the plain ask,
+    /// closes the connection unanswered; it is then asked plainly, and comes to the front
+    /// without the message. A start that is merely slow to answer is not asked again.
+    pub fn activate_with(&self, message: &str) -> bool {
+        if !valid_message(message) {
+            tracing::warn!("not an activation message (empty, a line break, or too long)");
+            return false;
+        }
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        if let Some(socket) = &self.socket {
+            return match desktop::send(socket, &Message::Activate(Some(message.to_owned()))) {
+                desktop::Reply::Answered => true,
+                desktop::Reply::Refused => {
+                    desktop::send(socket, &Message::Activate(None)) == desktop::Reply::Answered
+                }
+                desktop::Reply::Silent => false,
+            };
         }
         false
     }
@@ -157,27 +203,38 @@ impl fmt::Display for AlreadyRunning {
 
 impl std::error::Error for AlreadyRunning {}
 
-/// What a second start says to the first: one line.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Message {
-    /// Come to the front.
-    Activate,
+/// The longest message [`AlreadyRunning::activate_with`] sends.
+pub const MAX_ACTIVATION_MESSAGE: usize = 1024;
+
+/// Whether `message` can go on the wire: one line, not empty, not too long.
+fn valid_message(message: &str) -> bool {
+    !message.is_empty()
+        && message.len() <= MAX_ACTIVATION_MESSAGE
+        && !message.contains(['\n', '\r'])
 }
 
-/// The first start's answer to [`Message::Activate`], once it has come to the front.
+/// What a second start says to the first: one line, `activate` or `activate <message>`.
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum Message {
+    /// Come to the front, with the app's message, if any.
+    Activate(Option<String>),
+}
+
+/// The first start's answer to an activation, once it has come to the front.
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
 const REPLY: &[u8] = b"ok\n";
 
 /// The most a message is read to: anything longer is not one.
 #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
-const MAX_MESSAGE: u64 = 64;
+const MAX_MESSAGE: u64 = (MAX_ACTIVATION_MESSAGE + 16) as u64;
 
 impl Message {
     /// The bytes sent for this message.
     #[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
-    fn encode(self) -> &'static [u8] {
+    fn encode(&self) -> Vec<u8> {
         match self {
-            Message::Activate => b"activate\n",
+            Message::Activate(None) => b"activate\n".to_vec(),
+            Message::Activate(Some(message)) => format!("activate {message}\n").into_bytes(),
         }
     }
 
@@ -187,9 +244,15 @@ impl Message {
         if bytes.len() as u64 > MAX_MESSAGE {
             return None;
         }
-        match bytes.trim_ascii() {
-            b"activate" => Some(Message::Activate),
-            _ => None,
+        let line = std::str::from_utf8(bytes).ok()?;
+        let line = line.strip_suffix('\n').unwrap_or(line);
+        match line.strip_prefix("activate") {
+            Some("") => Some(Message::Activate(None)),
+            Some(rest) => rest
+                .strip_prefix(' ')
+                .filter(|m| valid_message(m))
+                .map(|m| Message::Activate(Some(m.to_owned()))),
+            None => None,
         }
     }
 }
@@ -265,16 +328,24 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// [`acquire_or_activate`], with [`acquire_with`]'s directory and socket, waiting at most
 /// `wait` for a first start that cannot be asked.
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-fn acquire_or_activate_with(
+fn acquire_or_activate_at(
     data_dir: &Path,
     socket: Option<SocketName>,
+    message: Option<&str>,
     wait: std::time::Duration,
 ) -> Option<Instance> {
     let deadline = std::time::Instant::now() + wait;
     loop {
         match acquire_with(data_dir, socket.clone()) {
             Ok(instance) => return Some(instance),
-            Err(running) if running.activate() => return None,
+            Err(running)
+                if match message {
+                    Some(message) => running.activate_with(message),
+                    None => running.activate(),
+                } =>
+            {
+                return None;
+            }
             Err(_) if std::time::Instant::now() >= deadline => {
                 tracing::warn!(
                     "another start holds {} and cannot be asked to come to the front",
@@ -422,7 +493,7 @@ mod desktop {
     }
 
     impl Held {
-        pub(super) fn on_activate(&mut self, f: impl Fn() + Send + 'static) {
+        pub(super) fn on_activate(&mut self, f: impl Fn(Option<&str>) + Send + 'static) {
             let Some(listener) = self.listener.take() else {
                 return;
             };
@@ -482,7 +553,7 @@ mod desktop {
     /// that sends nothing does not hold up the next (nor, on a named pipe, which may not
     /// take a read timeout, does anything wait for that thread). A failed accept (out of
     /// file descriptors, say) is waited out, not taken as the end.
-    fn accept<F: Fn() + Send + 'static>(
+    fn accept<F: Fn(Option<&str>) + Send + 'static>(
         listener: &Listener,
         stop: Arc<AtomicBool>,
         f: &Arc<Mutex<F>>,
@@ -515,18 +586,18 @@ mod desktop {
     /// Read the message on `stream`, and for an activation call `f` and reply that it was.
     /// Once the instance is told to stop, it neither calls nor replies: the asking start
     /// then takes the lock once it frees.
-    fn answer<F: Fn()>(mut stream: Stream, stop: &AtomicBool, f: &Mutex<F>) {
+    fn answer<F: Fn(Option<&str>)>(mut stream: Stream, stop: &AtomicBool, f: &Mutex<F>) {
         if let Err(err) = stream.set_recv_timeout(Some(IO_TIMEOUT)) {
             tracing::debug!("no read timeout on the instance's connection: {err}");
         }
         let _ = stream.set_send_timeout(Some(IO_TIMEOUT));
-        if Message::decode(&read_line(&mut stream)) != Some(Message::Activate) {
+        let Some(Message::Activate(message)) = Message::decode(&read_line(&mut stream)) else {
             return;
-        }
+        };
         if stop.load(Ordering::SeqCst) {
             return;
         }
-        f.lock().unwrap_or_else(|e| e.into_inner())();
+        f.lock().unwrap_or_else(|e| e.into_inner())(message.as_deref());
         if stop.load(Ordering::SeqCst) {
             return;
         }
@@ -554,9 +625,21 @@ mod desktop {
         line
     }
 
-    /// Send `message` on `socket` and wait for the reply: whether the running start
-    /// answered. A failure is only logged: the first start may be closing.
-    pub(super) fn send(socket: &SocketName, message: Message) -> bool {
+    /// What became of a message.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub(super) enum Reply {
+        /// The running start came to the front and said so.
+        Answered,
+        /// It closed the connection without answering: it did not take the message (an
+        /// older version, or one that is closing).
+        Refused,
+        /// Nothing within the timeout, or no connection: it may answer yet.
+        Silent,
+    }
+
+    /// Send `message` on `socket` and wait for the reply. A failure is only logged: the
+    /// first start may be closing.
+    pub(super) fn send(socket: &SocketName, message: &Message) -> Reply {
         let sent = name(socket)
             .and_then(|name| {
                 ConnectOptions::new()
@@ -567,7 +650,7 @@ mod desktop {
             .and_then(|mut stream| {
                 let _ = stream.set_send_timeout(Some(IO_TIMEOUT));
                 let _ = stream.set_recv_timeout(Some(IO_TIMEOUT));
-                stream.write_all(message.encode())?;
+                stream.write_all(&message.encode())?;
                 stream.flush()?;
                 Ok(stream)
             });
@@ -575,7 +658,7 @@ mod desktop {
             Ok(stream) => stream,
             Err(err) => {
                 tracing::debug!("could not reach the running instance on {socket:?}: {err}");
-                return false;
+                return Reply::Silent;
             }
         };
         // On a thread, waited for no longer than the timeout: a named pipe may not take
@@ -584,18 +667,28 @@ mod desktop {
         let reading = std::thread::Builder::new()
             .name("instance reply".to_owned())
             .spawn(move || {
-                let _ = tx.send(read_line(&mut stream));
+                let line = read_line(&mut stream);
+                // Closed by the other side, as opposed to a read that timed out: only then
+                // was the message refused.
+                let closed = !line.ends_with(b"\n") && matches!(stream.read(&mut [0]), Ok(0));
+                let _ = tx.send((line, closed));
             });
         if reading.is_err() {
-            return false;
+            return Reply::Silent;
         }
-        let answered = rx
-            .recv_timeout(IO_TIMEOUT)
-            .is_ok_and(|reply| reply.trim_ascii() == REPLY.trim_ascii());
-        if !answered {
-            tracing::debug!("the running instance on {socket:?} did not answer");
+        match rx.recv_timeout(IO_TIMEOUT) {
+            Ok((reply, _)) if reply.trim_ascii() == REPLY.trim_ascii() => Reply::Answered,
+            // The connection closed before an answer: refused.
+            Ok((_, true)) => {
+                tracing::debug!("the running instance on {socket:?} refused the message");
+                Reply::Refused
+            }
+            // No answer in time, whichever wait ran out first.
+            _ => {
+                tracing::debug!("the running instance on {socket:?} did not answer");
+                Reply::Silent
+            }
         }
-        answered
     }
 }
 
@@ -612,16 +705,150 @@ mod tests {
 
     #[test]
     fn messages_are_one_line_read_back_as_sent() {
-        assert_eq!(
-            Message::decode(Message::Activate.encode()),
-            Some(Message::Activate)
-        );
-        assert_eq!(Message::decode(b"activate"), Some(Message::Activate));
+        let plain = Message::Activate(None);
+        assert_eq!(Message::decode(&plain.encode()), Some(plain));
+        let page = Message::Activate(Some("workgroup".to_owned()));
+        assert_eq!(Message::decode(&page.encode()), Some(page.clone()));
+        assert_eq!(Message::decode(b"activate"), Some(Message::Activate(None)));
+        assert_eq!(Message::decode(b"activate workgroup\n"), Some(page));
+        assert_eq!(Message::decode(b"activate \n"), None);
         assert_eq!(Message::decode(b""), None);
         assert_eq!(Message::decode(b"activated\n"), None);
-        assert!(Message::Activate.encode().len() as u64 <= MAX_MESSAGE);
+        let longest = Message::Activate(Some("x".repeat(MAX_ACTIVATION_MESSAGE)));
+        assert!(longest.encode().len() as u64 <= MAX_MESSAGE);
+        let too_long = format!("activate {}\n", "x".repeat(MAX_ACTIVATION_MESSAGE + 1));
+        assert_eq!(Message::decode(too_long.as_bytes()), None);
         let long = [b' '; MAX_MESSAGE as usize + 1];
         assert_eq!(Message::decode(&long), None);
+    }
+
+    #[test]
+    fn activate_with_delivers_the_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate_with(move |m| tx.send(m.map(str::to_owned)).unwrap());
+        assert!(acquire_in(dir.path()).unwrap_err().activate_with("devices"));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            Some("devices".to_owned())
+        );
+    }
+
+    #[test]
+    fn activate_delivers_none() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate_with(move |m| tx.send(m.map(str::to_owned)).unwrap());
+        assert!(acquire_in(dir.path()).unwrap_err().activate());
+        assert_eq!(rx.recv_timeout(Duration::from_secs(10)).unwrap(), None);
+    }
+
+    #[test]
+    fn invalid_messages_are_not_sent() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate_with(move |m| tx.send(m.map(str::to_owned)).unwrap());
+        let running = acquire_in(dir.path()).unwrap_err();
+        assert!(!running.activate_with("a\nb"));
+        assert!(!running.activate_with(""));
+        assert!(!running.activate_with(&"x".repeat(MAX_ACTIVATION_MESSAGE + 1)));
+        assert!(rx.recv_timeout(Duration::from_millis(500)).is_err());
+    }
+
+    #[test]
+    fn a_slow_answer_is_not_asked_again_without_the_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate_with(move |m| {
+            // Longer than the asking start waits for the answer.
+            std::thread::sleep(Duration::from_millis(1500));
+            tx.send(m.map(str::to_owned)).unwrap();
+        });
+        let _ = acquire_in(dir.path()).unwrap_err().activate_with("devices");
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            Some("devices".to_owned())
+        );
+        assert!(
+            rx.recv_timeout(Duration::from_secs(3)).is_err(),
+            "asked a second time, without the message"
+        );
+    }
+
+    #[test]
+    fn on_activate_fires_for_a_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate(move || tx.send(()).unwrap());
+        assert!(acquire_in(dir.path()).unwrap_err().activate_with("x"));
+        rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    }
+
+    // An older window, which knows only `activate`: a socket file the std listener serves.
+    #[cfg(unix)]
+    #[test]
+    fn an_old_listener_still_comes_to_the_front() {
+        use std::io::{BufRead as _, BufReader, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let mut stream = stream.unwrap();
+                let mut line = String::new();
+                BufReader::new(&stream).read_line(&mut line).unwrap();
+                if line == "activate\n" {
+                    stream.write_all(b"ok\n").unwrap();
+                }
+                tx.send(line).unwrap();
+            }
+        });
+        let running = AlreadyRunning {
+            socket: Some(SocketName::Path(path)),
+        };
+        assert!(running.activate_with("x"));
+        let seen: Vec<String> = rx.iter().take(2).collect();
+        assert_eq!(seen, ["activate x\n", "activate\n"]);
+    }
+
+    // The older reader read at most 65 bytes and dropped a longer line unanswered.
+    #[cfg(unix)]
+    #[test]
+    fn an_old_listener_drops_a_long_message_and_is_asked_plainly() {
+        use std::io::{Read as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let mut stream = stream.unwrap();
+                let mut line = Vec::new();
+                let mut byte = [0];
+                while line.len() <= 64 && stream.read(&mut byte).unwrap_or(0) == 1 {
+                    line.push(byte[0]);
+                    if byte[0] == b'\n' {
+                        break;
+                    }
+                }
+                if line == b"activate\n" {
+                    stream.write_all(b"ok\n").unwrap();
+                }
+                tx.send(line.len()).unwrap();
+            }
+        });
+        let running = AlreadyRunning {
+            socket: Some(SocketName::Path(path)),
+        };
+        assert!(running.activate_with(&"x".repeat(MAX_ACTIVATION_MESSAGE)));
+        let seen: Vec<usize> = rx.iter().take(2).collect();
+        assert_eq!(seen, [65, 9]);
     }
 
     #[test]
@@ -744,7 +971,7 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         first.on_activate(move || tx.send(()).unwrap());
         let socket = socket_name("corundum-test", dir.path());
-        assert!(acquire_or_activate_with(dir.path(), socket, Duration::from_secs(2)).is_none());
+        assert!(acquire_or_activate_at(dir.path(), socket, None, Duration::from_secs(2)).is_none());
         rx.recv_timeout(Duration::from_secs(10)).unwrap();
     }
 
@@ -758,7 +985,7 @@ mod tests {
             drop(first);
         });
         let socket = socket_name("corundum-test", dir.path());
-        let second = acquire_or_activate_with(dir.path(), socket, Duration::from_secs(5));
+        let second = acquire_or_activate_at(dir.path(), socket, None, Duration::from_secs(5));
         assert!(
             second.is_some(),
             "the relaunch is the instance once the first is gone"
@@ -780,7 +1007,7 @@ mod tests {
             drop(first);
         });
         let socket = socket_name("corundum-test", dir.path());
-        let second = acquire_or_activate_with(dir.path(), socket, Duration::from_secs(5));
+        let second = acquire_or_activate_at(dir.path(), socket, None, Duration::from_secs(5));
         assert!(
             second.is_some(),
             "the relaunch is the instance once the first is gone"
@@ -799,7 +1026,7 @@ mod tests {
         let socket = socket_name("corundum-test", dir.path());
         let started = std::time::Instant::now();
         let wait = Duration::from_millis(300);
-        assert!(acquire_or_activate_with(dir.path(), socket, wait).is_none());
+        assert!(acquire_or_activate_at(dir.path(), socket, None, wait).is_none());
         assert!(started.elapsed() >= wait);
     }
 }
