@@ -76,7 +76,13 @@ pub struct WindowOptions {
     store: Option<crate::store::Store>,
     #[cfg(feature = "single-instance")]
     single_instance: Option<SingleInstance>,
+    #[cfg(feature = "single-instance")]
+    on_activate: Option<OnActivate>,
 }
+
+/// What [`WindowOptions::on_activate`] calls.
+#[cfg(feature = "single-instance")]
+type OnActivate = Box<dyn Fn(Option<String>) + Send>;
 
 /// How [`run`] keeps the app to one window: the lock it takes, or the one the app took.
 #[cfg(feature = "single-instance")]
@@ -112,6 +118,8 @@ impl WindowOptions {
             store: None,
             #[cfg(feature = "single-instance")]
             single_instance: None,
+            #[cfg(feature = "single-instance")]
+            on_activate: None,
         }
     }
 
@@ -191,6 +199,16 @@ impl WindowOptions {
         self
     }
 
+    /// Call `f` when a second start asks this window to come to the front, after it has,
+    /// with the message the start sent ([`instance::AlreadyRunning::activate_with`]), or
+    /// `None`: which page to show, say. Only with [`single_instance`](Self::single_instance)
+    /// or [`instance`](Self::instance).
+    #[cfg(feature = "single-instance")]
+    pub fn on_activate(mut self, f: impl Fn(Option<String>) + Send + 'static) -> WindowOptions {
+        self.on_activate = Some(Box::new(f));
+        self
+    }
+
     /// `create`, after attaching corundum's store to the context when there is one.
     #[cfg_attr(not(feature = "serde"), allow(unused_mut))]
     pub(crate) fn wrap_create<'f>(
@@ -230,9 +248,10 @@ pub fn run(
     #[cfg(feature = "single-instance")]
     let create = {
         let instance = &mut instance;
+        let then = options.on_activate.take();
         move |cc: &eframe::CreationContext<'_>| {
             if let Some(instance) = instance {
-                come_to_front_on_activate(instance, &cc.egui_ctx);
+                come_to_front_on_activate(instance, &cc.egui_ctx, then);
             }
             create(cc)
         }
@@ -294,9 +313,18 @@ impl WindowOptions {
 
 /// Bring the app's main window to the front whenever a second start asks.
 #[cfg(feature = "single-instance")]
-fn come_to_front_on_activate(instance: &mut instance::Instance, ctx: &egui::Context) {
+fn come_to_front_on_activate(
+    instance: &mut instance::Instance,
+    ctx: &egui::Context,
+    then: Option<OnActivate>,
+) {
     let ctx = ctx.clone();
-    instance.on_activate(move || come_to_front(&ctx));
+    instance.on_activate_with(move |message| {
+        come_to_front(&ctx);
+        if let Some(then) = &then {
+            then(message.map(str::to_owned));
+        }
+    });
 }
 
 /// Unminimize and focus the app's main window, from any thread: the commands wait for the
@@ -407,6 +435,15 @@ mod tests {
             options.launcher_spec().map(|s| s.id),
             Some("net.example.Test")
         );
+    }
+
+    #[cfg(feature = "single-instance")]
+    #[test]
+    fn on_activate_is_kept_for_the_instance() {
+        let options = WindowOptions::new("x");
+        assert!(options.on_activate.is_none());
+        let options = options.on_activate(|_| {});
+        assert!(options.on_activate.is_some());
     }
 
     #[cfg(feature = "single-instance")]
