@@ -16,6 +16,11 @@ pub struct KeyStore {
     dir: PathBuf,
     prefix: String,
     keys: Vec<Key>,
+    /// The conflict copies the last read found, and their files.
+    copies: Vec<(KeyId, PathBuf)>,
+    /// Make the next write fail, to test what a failed write leaves.
+    #[cfg(test)]
+    fail_write: bool,
 }
 
 impl KeyStore {
@@ -34,6 +39,9 @@ impl KeyStore {
             dir: dir.to_owned(),
             prefix: String::new(),
             keys: Vec::new(),
+            copies: Vec::new(),
+            #[cfg(test)]
+            fail_write: false,
         };
         store.reload()?;
         Ok(store)
@@ -48,7 +56,7 @@ impl KeyStore {
         // Records by the file they were read from: `<id>.toml` is the key, any other file
         // with the same `id` is a copy a sync left when two hosts changed it at once.
         let mut keys: Vec<Key> = Vec::new();
-        let mut copies: Vec<Key> = Vec::new();
+        let mut copies: Vec<(Key, PathBuf)> = Vec::new();
         for entry in std::fs::read_dir(&self.dir).map_err(io)? {
             let path = entry.map_err(io)?.path();
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -60,7 +68,7 @@ impl KeyStore {
             }
             match read_key(&path) {
                 Ok(key) if name == format!("{}.toml", key.id) => keys.push(key),
-                Ok(copy) => copies.push(copy),
+                Ok(copy) => copies.push((copy, path)),
                 Err(message) => {
                     tracing::warn!("skipping the key file {}: {message}", path.display())
                 }
@@ -71,12 +79,13 @@ impl KeyStore {
         for key in keys.iter_mut().filter(|k| !k.is_retired()) {
             key.retired_at = copies
                 .iter()
-                .filter(|c| c.id == key.id)
-                .filter_map(|c| c.retired_at)
+                .filter(|(c, _)| c.id == key.id)
+                .filter_map(|(c, _)| c.retired_at)
                 .min();
         }
         keys.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));
         self.keys = keys;
+        self.copies = copies.into_iter().map(|(c, path)| (c.id, path)).collect();
         Ok(())
     }
 
@@ -85,12 +94,30 @@ impl KeyStore {
             path: self.file(&key.id),
             message: e.to_string(),
         })?;
-        let tmp = self.dir.join(format!(".{}.toml.tmp", key.id));
+        #[cfg(test)]
+        if self.fail_write {
+            return Err(Error::Io {
+                path: self.file(&key.id),
+                source: std::io::Error::other("a write made to fail"),
+            });
+        }
+        // Unique, so two writers of one key never rename each other's half-written file.
+        let tmp = self
+            .dir
+            .join(format!(".{}.{}.toml.tmp", key.id, KeyId::generate()));
         let io = |path: &Path| {
             let path = path.to_owned();
             move |source| Error::Io { path, source }
         };
-        std::fs::write(&tmp, text).map_err(io(&tmp))?;
+        let written = std::fs::File::create(&tmp).and_then(|mut f| {
+            use std::io::Write as _;
+            f.write_all(text.as_bytes())?;
+            f.sync_all()
+        });
+        if let Err(err) = written {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(io(&tmp)(err));
+        }
         let file = self.file(&key.id);
         std::fs::rename(&tmp, &file).map_err(io(&file))?;
         self.reload()
@@ -105,32 +132,26 @@ impl KeyStore {
         self.reload()?;
         let mut key = self.resolve(selector)?.clone();
         f(&mut key);
-        // The user decided on the key as it stands now, which settles any conflict.
-        self.remove_copies(&key.id)?;
+        // The user decided on the key as it stands now, which settles the conflicts this
+        // read found. The key is written first: a failed write leaves the copies, and a
+        // retire in them, where they were.
+        let seen: Vec<PathBuf> = self
+            .copies
+            .iter()
+            .filter(|(id, _)| *id == key.id)
+            .map(|(_, path)| path.clone())
+            .collect();
         self.write(&key)?;
-        Ok(key)
-    }
-
-    /// Delete the conflict copies of `id`: files other than `<id>.toml` holding it.
-    fn remove_copies(&self, id: &KeyId) -> Result<()> {
-        let io = |source| Error::Io {
-            path: self.dir.clone(),
-            source,
-        };
-        let own = format!("{id}.toml");
-        for entry in std::fs::read_dir(&self.dir).map_err(io)? {
-            let path = entry.map_err(io)?.path();
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            if name == own || name.starts_with('.') || !name.ends_with(".toml") {
-                continue;
-            }
-            if read_key(&path).is_ok_and(|copy| copy.id == *id) {
-                std::fs::remove_file(&path).map_err(|source| Error::Io { path, source })?;
+        for path in seen {
+            match std::fs::remove_file(&path) {
+                Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(Error::Io { path, source: err });
+                }
+                _ => {}
             }
         }
-        Ok(())
+        self.reload()?;
+        Ok(key)
     }
 
     /// Start new tokens with `prefix`, so a leaked token says what it is.
@@ -220,7 +241,9 @@ impl KeyStore {
     /// An id the store already has is refused.
     pub fn import(&mut self, key: Key) -> Result<Key> {
         self.reload()?;
-        if self.keys.iter().any(|k| k.id == key.id) {
+        // Ignoring case: on macOS and Windows `ABC.toml` would overwrite `abc.toml`.
+        let taken = |id: &KeyId| id.as_str().eq_ignore_ascii_case(key.id.as_str());
+        if self.keys.iter().any(|k| taken(&k.id)) {
             return Err(Error::IdTaken(key.id.to_string()));
         }
         self.write(&key)?;
@@ -454,5 +477,38 @@ mod tests {
         assert!(!s.restore(key.id.as_str()).unwrap().is_retired());
         let s = KeyStore::open(dir.path()).unwrap();
         assert!(s.authenticate(token.expose()).is_some());
+    }
+
+    #[test]
+    fn failed_write_keeps_the_retired_copy() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let mut copy = key.clone();
+        copy.retired_at = Some(Utc::now());
+        plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
+        let mut s = KeyStore::open(dir.path()).unwrap();
+        s.fail_write = true;
+        assert!(s.rotate(key.id.as_str()).is_err());
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert!(s.list()[0].is_retired(), "the retire was lost");
+        assert!(s.authenticate(token.expose()).is_none());
+    }
+
+    #[test]
+    fn a_leftover_tmp_does_not_block_a_write() {
+        let (dir, mut s) = store();
+        let (key, _) = s.add("p", None, None).unwrap();
+        // Another writer's temporary file of the same key, still there.
+        std::fs::create_dir(dir.path().join(format!(".{}.toml.tmp", key.id))).unwrap();
+        s.retire("p").unwrap();
+    }
+
+    #[test]
+    fn import_refuses_an_id_differing_in_case() {
+        let (_dir, mut s) = store();
+        let mut key = s.add("p", None, None).unwrap().0;
+        key.id = KeyId::new(&key.id.as_str().to_uppercase()).unwrap();
+        key.name = "q".into();
+        assert!(matches!(s.import(key), Err(Error::IdTaken(_))));
     }
 }

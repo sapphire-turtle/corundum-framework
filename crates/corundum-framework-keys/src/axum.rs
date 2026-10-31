@@ -29,7 +29,10 @@ async fn check(
         .headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
+        // The scheme is case-insensitive (RFC 7235).
+        .and_then(|v| v.split_once(' '))
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+        .map(|(_, token)| token)
         .filter(|t| !t.is_empty())
         .map(str::to_owned);
     let Some(token) = token else {
@@ -129,5 +132,22 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let body = axum::body::to_bytes(res.into_body(), 1024).await.unwrap();
         assert_eq!(&body[..], b"pendant");
+    }
+
+    #[tokio::test]
+    async fn scheme_is_case_insensitive() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, token) = KeyStore::open(dir.path())
+            .unwrap()
+            .add("p", None, None)
+            .unwrap();
+        for scheme in ["bearer", "BEARER"] {
+            let (status, _) = call(
+                app(dir.path()),
+                Some(&format!("{scheme} {}", token.expose())),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{scheme}");
+        }
     }
 }

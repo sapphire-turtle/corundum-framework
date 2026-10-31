@@ -30,7 +30,8 @@ jobs:
         for f in media-picker qr-scan; do
           cargo clippy -p corundum-framework-platform --all-targets --features $f --locked -- -D warnings || exit 1
         done
-        # The keys crate as a server that only verifies has it, and each feature alone.
+        # The keys crate with no features (what a server that only verifies builds), and each
+        # feature alone.
         cargo clippy -p corundum-framework-keys --all-targets --locked -- -D warnings
         for f in axum clap; do
           cargo clippy -p corundum-framework-keys --all-targets --features $f --locked -- -D warnings || exit 1
