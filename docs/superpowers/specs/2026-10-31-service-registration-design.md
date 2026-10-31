@@ -57,8 +57,8 @@ Success means:
 | Crate | Change |
 |---|---|
 | `corundum-framework-service` | New, desktops only. `sapphire-framework-service`'s contents, generalised, plus `state`, `stop`, `start`, `service_exe()` through `platform::package` |
-| `corundum-framework-package` | Feature `service`: `PackageSpec.services`; stop before apply, start after; unregister in the Windows uninstall hook |
-| `corundum-framework-gui` | Feature `service` for `ServiceRow` and `ServicePage`; the new `first_run` module (no feature) |
+| `corundum-framework-package` | `PackageSpec.services: Services` (always there); feature `service`: stop before apply, start after; unregister in the Windows uninstall hook |
+| `corundum-framework-gui` | Feature `service` for `ServiceRow` and `ServicePage`; the new `first_run` module (behind the existing `serde` feature) |
 | `corundum-framework` | Facade features `service` and `gui-service` |
 
 ## corundum-framework-service
@@ -76,6 +76,7 @@ pub struct ServiceSpec {
     pub post_install: Option<PostInstall>,
 }
 
+#[non_exhaustive]
 pub enum ServiceState {
     NotInstalled,
     Stopped,
@@ -112,13 +113,18 @@ pub enum ServiceCommand { Install, Uninstall, Status } // clap::Subcommand, as t
   | Backend | `stop` | `start` |
   |---|---|---|
   | systemd | `systemctl --user stop` | `systemctl --user start` |
-  | launchd | `launchctl kill SIGTERM gui/<uid>/<label>` | `launchctl kickstart gui/<uid>/<label>` |
+  | launchd | `launchctl bootout gui/<uid>/<label>` | `launchctl bootstrap gui/<uid> <plist>`, then `launchctl kickstart -k gui/<uid>/<label>` |
   | Task Scheduler | `schtasks /end` | `schtasks /run` |
 
-  `stop` of something not running is not an error.
+  `stop` cannot fail: stopping something not running is not an error, and every command's
+  error is ignored. On macOS a signal would not do: the agent's `KeepAlive` starts a killed
+  agent again, so `stop` boots it out of launchd; the plist stays, so `state` reads
+  `Stopped`, and the next login (or `start`) loads it again. `start`'s `bootstrap` fails
+  when the agent is loaded already and its error is ignored; the `kickstart`'s is returned.
 - **`service_exe()`** asks `platform::package::current()`:
-  - in a Windows package, the GUI-subsystem binary in `current\`, which opens no console;
-  - in a macOS package, the binary inside the `.app`;
+  - in a Windows package, the GUI-subsystem binary in `current\`, which opens no console,
+    as it is: not canonicalized, which would put a `\\?\` path in the task's XML;
+  - in a macOS package, the binary inside the `.app`, with links resolved;
   - in an AppImage, `$APPIMAGE`;
   - outside a package, the running executable.
 
@@ -136,38 +142,56 @@ pub enum ServiceCommand { Install, Uninstall, Status } // clap::Subcommand, as t
 
 ### macOS: the LaunchAgent file
 - **The LaunchAgent file:** `launchctl bootstrap` installs it, `bootout` removes it, and `state` comes from the plist and `launchctl print`. `state` is `Broken` when the plist's program is missing. A legacy-label agent is retired.
-- **`stop` / `start`** go through `launchctl`.
+- **Install** boots out an agent an earlier install left loaded (`launchctl bootout
+  gui/<uid>/<label>`, its error ignored) before `bootstrap`, which refuses a loaded one.
+- **`stop` / `start`** go through `launchctl`, as in the table above.
 
 ### Windows: Task Scheduler
 - A logon task through `schtasks`, as today, starting the service exe.
-- `stop` is `schtasks /end`, `start` is `schtasks /run`, `state` comes from `schtasks /query`.
+- Install runs `schtasks /create`, then `schtasks /run`, so the service runs now rather
+  than at the next logon. A failed `/run` is an install error reported after the task
+  exists: the task is kept, and starts at the next logon.
+- Uninstall ends the task (`schtasks /end`, its error ignored) before `schtasks /delete`.
+- `stop` is `schtasks /end`, `start` is `schtasks /run`. `state` reads the program from
+  `schtasks /query /tn <app> /xml` and whether it runs from PowerShell's
+  `(Get-ScheduledTask -TaskName <app>).State`, which is not localised.
 
 ## corundum-framework-package (feature `service`)
 
 ```rust
 pub struct PackageSpec {
     // … as in 0.4.0, and:
-    /// The app's background services. Built when needed: a spec holds owned values.
+    /// The app's background services. A required field, with or without the feature.
+    pub services: Services,
+}
+
+impl Services {
+    /// No background services.
+    pub const NONE: Services;
+    /// These services; each function builds one's spec, as a spec holds owned values.
     #[cfg(feature = "service")]
-    pub services: &'static [fn() -> ServiceSpec],
+    pub const fn new(services: &'static [fn() -> ServiceSpec]) -> Services;
 }
 ```
 
 - **Before an update is applied:**
   - `Updater::apply` and `apply_pending_at_start` run the app's `before_apply`.
   - Then they `stop` each service whose `state` is `Running`.
-  - They write the stopped services' names to `<data dir>/<app>/services-to-restart`.
+  - They write the stopped services' names to `<data dir>/<app>/services-to-restart`,
+    before stopping anything.
   - If the apply then fails, they `start` those services again and remove the file.
-  - A failed `stop` is a `Prepare` error: nothing is applied.
+  - `stop` cannot fail, so only a `services-to-restart` that cannot be written refuses the
+    update (a `Prepare` error: nothing is applied). A service whose `state` cannot be read
+    may be running: it is stopped and noted all the same.
 - **At every start:** `start()` reads `services-to-restart`, `start`s each named service, then removes the file. This covers the GUI, the command line and the updater's restart, so a service is never left stopped by an update.
-- **Uninstall hook on Windows:** `uninstall`s each service, within the hook's 30 seconds.
+- **Uninstall hook on Windows:** `uninstall`s each service (ending its task first), within the hook's 30 seconds.
 - **macOS and Linux run nothing at uninstall,** so the docs tell the person to remove the service first (About › the service row › Remove):
   - A LaunchAgent file, or a systemd unit, left behind shows as `Broken`. On Linux it is skipped through `ConditionPathExists`.
   - A reinstall registers again from the app's first-run answer.
 
 ## corundum-framework-gui
 
-### `first_run` (no feature)
+### `first_run` (the gui's `serde` feature)
 
 ```rust
 pub trait FirstRunPage {
@@ -181,16 +205,17 @@ pub trait FirstRunPage {
 }
 pub enum PageAction { Stay, Next, Back }
 
-pub struct FirstRun { /* the pages, the current one, the store key */ }
+pub struct FirstRun { /* the app's name for the header, the pages, the current one */ }
 impl FirstRun {
-    pub fn new(app_key: &'static str, pages: Vec<Box<dyn FirstRunPage>>) -> FirstRun;
-    /// Whether it has been finished before (read from the store).
-    pub fn done(ctx: &egui::Context, app_key: &str) -> bool;
+    pub fn new(app_name: impl Into<String>, pages: Vec<Box<dyn FirstRunPage>>) -> FirstRun;
+    /// Whether it has been finished before (read from the store attached to `ctx`, which
+    /// is already the app's own, so no key is needed).
+    pub fn done(ctx: &egui::Context) -> bool;
     /// Draw the current page over the whole window; `true` once the last page is done,
     /// which is recorded in the store.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> bool;
     /// Forget that it was finished, so it shows at the next start (an About button).
-    pub fn reset(ctx: &egui::Context, app_key: &str);
+    pub fn reset(ctx: &egui::Context);
 }
 ```
 
@@ -216,6 +241,13 @@ impl FirstRun {
 | NotInstalled | **Keep running in the background** |
 | Running / Stopped | the state, **Stop** or **Start**, **Remove** |
 | Broken | the reason, **Repair** (install again) |
+| the state could not be found | the error, **Try again** |
+
+- In a build that runs from a cargo target directory, as `ServicePage` decides: NotInstalled
+  shows the development-build note instead of **Keep running in the background**, and
+  Broken shows the reason without **Repair**, so nothing registers a program in `target/`.
+  **Stop**, **Start** and **Remove** stay, so a registration an installed build made can
+  still be removed.
 
 ## The demo
 
@@ -244,7 +276,7 @@ Labels, unit names and task names stay what an installed user has: `net.sapphire
 - **package:**
   - with a fake backend and `RecordingManager`, a running service is stopped before apply, written to `services-to-restart`, and started at the next start;
   - a failed apply starts it again at once;
-  - a failed `stop` applies nothing.
+  - a `services-to-restart` that cannot be written applies nothing; a state that cannot be read stops and notes the service.
 - **gui:**
   - `FirstRun`: pages in order; Back and Next; finishing is stored and not shown again; `reset` shows it again; a restart halfway begins at page one.
   - `ServicePage`: yes, no, and a failure.

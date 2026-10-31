@@ -8,17 +8,19 @@ this start is its first, the first after an update, or neither, from the version
 last ran with. Not in a package (`cargo run`), it says so and does nothing else.
 
 ```rust,ignore
-use corundum_framework_package::{PackageSpec, Start, start};
+use corundum_framework_package::{PackageSpec, Services, Start, start};
+
+static SPEC: PackageSpec = PackageSpec {
+    app_name: "my-app",
+    on_installed: None,
+    on_uninstalling: None,
+    before_apply: None,
+    cli: None,
+    services: Services::NONE,
+};
 
 fn main() {
-    let spec = PackageSpec {
-        app_name: "sapphire-journal",
-        on_installed: None,
-        on_uninstalling: None,
-        before_apply: None,
-        cli: None,
-    };
-    if let Start::Updated { from, to } = start(&spec) {
+    if let Start::Updated { from, to } = start(&SPEC) {
         println!("updated from {from} to {to}");
     }
 }
@@ -37,6 +39,24 @@ The crate's other parts:
   the user asks. Another program's command of the same name is left alone.
 - `console` is the Windows console shim: a GUI binary has no console, so a small console
   binary on `PATH` starts it with the terminal's arguments and streams.
+
+## Background services
+
+`PackageSpec::services` names the app's background services: `Services::NONE`, or with the
+`service` feature `Services::new(&[my_service])`, each a function building the service's
+`corundum_framework_service::ServiceSpec`. With them:
+
+- `Updater::apply` and `apply_pending_at_start` stop the services that are running after
+  the app's `before_apply`, and note them in `services-to-restart` in the app's data
+  directory first. A service whose state cannot be read is stopped and noted all the same;
+  only a note that cannot be written refuses the update. When the apply fails, they are
+  started again at once.
+- `start` starts the services an update stopped, on every start, packaged or not, and
+  removes the note: whichever of the app's programs starts first after the update does it.
+- On Windows, the uninstall hook uninstalls each service before the files go. On macOS and
+  Linux nothing runs at uninstall: remove the background service first (Settings › About ›
+  Remove), or its unit is left pointing at a program
+  that is gone.
 
 ## Packaging
 

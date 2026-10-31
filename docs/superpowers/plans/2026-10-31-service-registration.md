@@ -25,7 +25,7 @@
 
 - **macOS `start` is `launchctl kickstart -k gui/<uid>/<label>`** (spec: without `-k`). The agents' `KeepAlive { SuccessfulExit = false }` may restart a service killed by `stop` before the update swaps the files; `-k` replaces whatever runs with the new binary.
 - **Windows `state` reads the running state from PowerShell's `(Get-ScheduledTask -TaskName <app>).State`** (unlocalised `Running`/`Ready`/`Disabled`), and the command from `schtasks /query /tn <app> /xml`. `schtasks /query /fo csv` prints a localised status a Japanese Windows does not spell `Running`.
-- **`FirstRun` takes no `app_key`.** The store attached to the egui context is already the app's own (`corundum.toml` in its config directory). `FirstRun::new(pages)`, `FirstRun::done(ctx)`, `FirstRun::reset(ctx)`.
+- **`FirstRun` takes no `app_key`.** The store attached to the egui context is already the app's own (`corundum.toml` in its config directory). `FirstRun::new(app_name, pages)`, `FirstRun::done(ctx)`, `FirstRun::reset(ctx)`.
 - **`first_run` is behind the gui crate's existing `serde` feature**, as it records completion in the store, which needs it. No new feature.
 - **The cargo-build test moves to `platform::package::is_cargo_build(exe: &Path) -> bool`** (the launcher's private `skipped` rule, without the variable), so ServicePage can ask it.
 
