@@ -19,8 +19,10 @@ mod windows;
 /// The command line a package puts on `PATH`.
 #[derive(Clone, Copy, Debug)]
 pub struct CliSpec {
-    /// The name typed in a terminal: `sapphire-journal`. On Windows, the console shim's
-    /// file name without `.exe`.
+    /// The name typed in a terminal: `sapphire-journal`. It need not be the cargo binary's
+    /// name. On macOS and Linux the command links to the running executable, whatever
+    /// `vpk --mainExe` named it; on Windows it is the console shim's file name without
+    /// `.exe`, and the shim sits beside the GUI executable in `current\`.
     pub command: &'static str,
 }
 

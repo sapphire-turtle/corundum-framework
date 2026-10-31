@@ -89,6 +89,12 @@ question page and the row say it is a development build.
 
 ### As a Velopack package
 
+The names differ by design (corundum-framework#75). Cargo builds `corundum-framework-demo`;
+the package's executable is `corundum-demo` on macOS and Linux (the release workflow renames
+it, and the command on `PATH` links to it), while on Windows the GUI keeps
+`corundum-framework-demo.exe` and the console shim `corundum-demo.exe` sits beside it in
+`current\`.
+
 The `velopack` feature builds the demo as a Velopack package (corundum-framework#51,
 `docs/superpowers/specs/2026-10-29-velopack-runtime-design.md`), on
 `corundum-framework-package`: Velopack's start and hooks, updates from the repository's

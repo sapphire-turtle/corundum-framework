@@ -34,11 +34,16 @@ jobs:
           - os: ubuntu-22.04
             channel: linux
             exe: ''
+            # The name the executable has in the package (`--mainExe`): the command's name, as
+            # the cargo binary's differs (cargo#6313), apart from Windows, where the GUI keeps
+            # its cargo name and the console shim has the command's.
+            main: corundum-demo
             icon: icon.png
             extra: --categories Development
           - os: macos-latest
             channel: osx
             exe: ''
+            main: corundum-demo
             icon: icon.icns
             # The launcher writes the same bundle id; it steps aside inside a package (#51), so the
             # one in ~/Applications and this one do not clash.
@@ -46,6 +51,7 @@ jobs:
           - os: windows-latest
             channel: win
             exe: '.exe'
+            main: corundum-framework-demo.exe
             icon: icon.ico
             extra: ''
     runs-on: ${{ matrix.os }}
@@ -83,13 +89,14 @@ jobs:
       - name: Pack
         env:
           EXE: ${{ matrix.exe }}
+          MAIN: ${{ matrix.main }}
           CHANNEL: ${{ matrix.channel }}
           ICON: icons/${{ matrix.icon }}
           EXTRA: ${{ matrix.extra }}
         run: |
           mkdir pack
           # One binary: the daemon is its `daemon` subcommand.
-          cp "target/release/corundum-framework-demo$EXE" pack/
+          cp "target/release/corundum-framework-demo$EXE" "pack/$MAIN"
           # The console shim, under the command's name, for the install hook to put on `Path`.
           if [ "$RUNNER_OS" = Windows ]; then
             cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
@@ -99,7 +106,7 @@ jobs:
             --packId "$PACK_ID" \
             --packVersion "$VERSION" \
             --packDir pack \
-            --mainExe "corundum-framework-demo$EXE" \
+            --mainExe "$MAIN" \
             --packTitle "Corundum Demo" \
             --packAuthors "sapphire-turtle" \
             --icon "$ICON" \

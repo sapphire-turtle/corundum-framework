@@ -38,6 +38,24 @@ The crate's other parts:
 - `console` is the Windows console shim: a GUI binary has no console, so a small console
   binary on `PATH` starts it with the terminal's arguments and streams.
 
+## Packaging
+
+The command on `PATH` (`CliSpec::command`) need not be the cargo binary's name. On macOS and
+Linux it links to the running executable, whatever `vpk --mainExe` named it; on Windows it
+is the shim `<command>.exe` beside the GUI executable in `current\`.
+
+Cargo cannot build two binaries of one name in a workspace (cargo#6313), so an app's desktop
+package is built as `<app>-desktop`, while its headless build keeps `<app>`. Pack it so:
+
+- macOS and Linux: rename the desktop binary to `<app>` in the pack directory, and run
+  `vpk pack --mainExe <app>`.
+- Windows: keep the GUI executable's name, add the console shim as `<app>.exe`, and run
+  `vpk pack --mainExe <app>-desktop.exe`. The shim calls `console::forward("<app>-desktop.exe")`.
+- `--packTitle` equals `LauncherSpec::name`, so the installer's shortcut and the launcher's
+  path coincide.
+- Velopack's `Update.exe` (`UpdateMac` on macOS) stays beside the executable; vpk puts it
+  there, and the package's detection looks for it.
+
 On iOS and Android the crate is empty: the store installs and updates the app there.
 
 ## License
