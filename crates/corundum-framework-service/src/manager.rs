@@ -461,51 +461,26 @@ pub fn state(
     manager: &dyn ServiceManager,
 ) -> Result<ServiceState> {
     adopt_legacy_agent(spec, env, manager)?;
-    let (program, running_command, is_running): (_, _, fn(&str) -> bool) = match env.os {
-        Os::Linux => {
-            let Some(unit) = manager.read_unit(&install_path(spec, env)?)? else {
-                return Ok(ServiceState::NotInstalled);
-            };
-            (
-                crate::systemd::exec_of(&unit),
-                words(&["systemctl", "--user", "is-active", spec.app_name]),
-                crate::systemd::is_running,
-            )
-        }
-        Os::MacOs => {
-            let Some(plist) = manager.read_unit(&install_path(spec, env)?)? else {
-                return Ok(ServiceState::NotInstalled);
-            };
-            (
-                crate::launchd::program_of(&plist),
-                status_command(spec, env),
-                crate::launchd::is_running,
-            )
-        }
-        Os::Windows => {
-            // The scheduler keeps the task, not a file; ask it for the XML it holds.
-            let Ok(xml) = manager.run(&words(&[
-                "schtasks",
-                "/query",
-                "/tn",
-                spec.app_name,
-                "/xml",
-            ])) else {
-                return Ok(ServiceState::NotInstalled);
-            };
-            (
-                crate::windows::command_of(&xml),
-                // `schtasks` prints a localised state; the task object's own is not.
-                words(&[
-                    "powershell",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-Command",
-                    &format!("(Get-ScheduledTask -TaskName '{}').State", spec.app_name),
-                ]),
-                crate::windows::is_running,
-            )
-        }
+    let Some(program) = registration(spec, env, manager)? else {
+        return Ok(ServiceState::NotInstalled);
+    };
+    let (running_command, is_running): (_, fn(&str) -> bool) = match env.os {
+        Os::Linux => (
+            words(&["systemctl", "--user", "is-active", spec.app_name]),
+            crate::systemd::is_running,
+        ),
+        Os::MacOs => (status_command(spec, env), crate::launchd::is_running),
+        // `schtasks` prints a localised state; the task object's own is not.
+        Os::Windows => (
+            words(&[
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &format!("(Get-ScheduledTask -TaskName '{}').State", spec.app_name),
+            ]),
+            crate::windows::is_running,
+        ),
     };
     let Some(program) = program else {
         return Ok(ServiceState::Broken {
@@ -522,6 +497,46 @@ pub fn state(
     Ok(match manager.run(&running_command) {
         Ok(output) if is_running(&output) => ServiceState::Running,
         _ => ServiceState::Stopped,
+    })
+}
+
+/// The program the registered service starts — what [`state`] checks for — or `None` when
+/// nothing is registered or the registration names none. For an app to find another
+/// program by its service (sapphire's apps find `sapphire-bridge`). Reads only; unlike
+/// [`state`] it adopts no legacy agent.
+pub fn registered_program(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Result<Option<PathBuf>> {
+    Ok(registration(spec, env, manager)?.flatten())
+}
+
+/// What the registration says it starts: `None` when nothing is registered, `Some(None)`
+/// when the registration names no program.
+fn registration(
+    spec: &ServiceSpec,
+    env: &Environment,
+    manager: &dyn ServiceManager,
+) -> Result<Option<Option<PathBuf>>> {
+    Ok(match env.os {
+        Os::Linux => manager
+            .read_unit(&install_path(spec, env)?)?
+            .map(|unit| crate::systemd::exec_of(&unit)),
+        Os::MacOs => manager
+            .read_unit(&install_path(spec, env)?)?
+            .map(|plist| crate::launchd::program_of(&plist)),
+        // The scheduler keeps the task, not a file; ask it for the XML it holds.
+        Os::Windows => manager
+            .run(&words(&[
+                "schtasks",
+                "/query",
+                "/tn",
+                spec.app_name,
+                "/xml",
+            ]))
+            .ok()
+            .map(|xml| crate::windows::command_of(&xml)),
     })
 }
 
@@ -817,6 +832,43 @@ mod tests {
             "-Command",
             POWERSHELL_STATE,
         ])
+    }
+
+    #[test]
+    fn registered_program_reads_each_os() {
+        let manager = RecordingManager::new().with_unit(unit_file(&linux()), &linux_unit());
+        assert_eq!(
+            registered_program(&spec(), &linux(), &manager).unwrap(),
+            Some(PathBuf::from(PROGRAM))
+        );
+        let manager = RecordingManager::new().with_unit(unit_file(&macos()), &macos_plist());
+        assert_eq!(
+            registered_program(&spec(), &macos(), &manager).unwrap(),
+            Some(PathBuf::from(PROGRAM))
+        );
+        let manager = RecordingManager::new().answering("/query", &task_xml());
+        assert_eq!(
+            registered_program(&spec(), &windows(), &manager).unwrap(),
+            Some(PathBuf::from(PROGRAM))
+        );
+    }
+
+    #[test]
+    fn registered_program_is_none_when_not_registered() {
+        let manager = RecordingManager::new();
+        assert_eq!(
+            registered_program(&spec(), &linux(), &manager).unwrap(),
+            None
+        );
+        assert_eq!(
+            registered_program(&spec(), &macos(), &manager).unwrap(),
+            None
+        );
+        let manager = RecordingManager::failing_on("/query");
+        assert_eq!(
+            registered_program(&spec(), &windows(), &manager).unwrap(),
+            None
+        );
     }
 
     #[test]
