@@ -25,3 +25,8 @@ pub use hash::KeyHash;
 pub use key::{Key, KeyId, KeyInfo, Token};
 pub use store::KeyStore;
 pub use verify::{CACHE_TTL, KeyVerifier, Verdict};
+
+#[cfg(feature = "axum")]
+mod axum;
+#[cfg(feature = "axum")]
+pub use crate::axum::{Authenticated, require_key};
