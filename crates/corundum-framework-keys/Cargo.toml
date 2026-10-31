@@ -1,7 +1,7 @@
 [package]
 name = "corundum-framework-keys"
 # Versioned with the other corundum-framework crates (release-plz's `corundum` group).
-version = "0.4.0"
+version = "0.5.0"
 edition.workspace = true
 description = "API keys for an app's server: a store of named keys, one file each, their verification, an axum layer and a clap subcommand"
 license = "MIT OR Apache-2.0"

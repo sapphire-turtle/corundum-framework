@@ -2,7 +2,7 @@
 name = "corundum-framework-gui"
 # Versioned on its own, not with sapphire-framework: asteria uses it too, and should not see a
 # new version with every sapphire release.
-version = "0.4.0"
+version = "0.5.0"
 edition.workspace = true
 description = "The look shared by sapphire and asteria apps: egui shell, system fonts, Lucide icons, translations"
 license = "MIT OR Apache-2.0"
@@ -86,7 +86,7 @@ keys = ["dep:corundum-framework-keys"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
-corundum-framework-platform = { version = "0.4.0", path = "../corundum-framework-platform" }
+corundum-framework-platform = { version = "0.5.0", path = "../corundum-framework-platform" }
 # eframe's default features, less `wayland`: since 0.37 it turns on arboard's Wayland
 # clipboard, which arboard pulls in on iOS too and which does not build there. The other
 # targets get the full default from the entry below.
@@ -99,11 +99,11 @@ eframe = { version = "0.37", optional = true, default-features = false, features
     "wgpu",
 ] }
 # The API keys page's store and types (`keys`).
-corundum-framework-keys = { version = "0.4.0", path = "../corundum-framework-keys", optional = true }
+corundum-framework-keys = { version = "0.5.0", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.
-corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", optional = true, default-features = false }
+corundum-framework-update = { version = "0.5.0", path = "../corundum-framework-update", optional = true, default-features = false }
 # The app's own package's updater, for its row in the update panel (`package`).
-corundum-framework-package = { version = "0.4.0", path = "../corundum-framework-package", optional = true }
+corundum-framework-package = { version = "0.5.0", path = "../corundum-framework-package", optional = true }
 egui = "0.37"
 # The SVG loader for the bundled Lucide icons (assets/icons), and for the apps' own.
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
@@ -139,7 +139,7 @@ tempfile = "3"
 rfd = "0.17"
 # The app's background services, for the first-run page and the About rows (`service`). A
 # phone has no service manager to register one with.
-corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", optional = true }
+corundum-framework-service = { version = "0.5.0", path = "../corundum-framework-service", optional = true }
 
 # eframe's full default (with `wayland`) everywhere but iOS; see the entry above.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

@@ -8,6 +8,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.4.0...v0.5.0) - 2026-10-31
+
 ### Breaking
 
 - *(corundum-framework-package)* `PackageSpec` has a new required field `services: Services`: write `services: Services::NONE`, or with the new `service` feature `Services::new(&[my_service])`. With `service`, `Updater::apply` and `apply_pending_at_start` stop the app's running services after `before_apply`, and `start()` starts the services an update stopped (`services-to-restart` in the app's data directory) on every start, packaged or not; on Windows the uninstall hook uninstalls each service ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51)).
@@ -21,6 +23,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(corundum-framework-gui)* `first_run::{FirstRun, FirstRunPage, PageAction}` (needs `serde`); `first_run::ServicePage` and `settings::ServiceRow` (feature `service`) ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
 - *(corundum-framework-package)* `Services` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
 - *(corundum-framework-platform)* `package::is_cargo_build` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-keys)* new crate: API keys for an app's server. `KeyStore`, a directory of named keys, one TOML file each, in a directory the app chooses (a synced one works: a sync's conflict copy never accepts a token, and a retire in any copy holds); `KeyVerifier`, the per-request check with a 30 s success cache; `require_key` (feature `axum`) and `KeyCommand` (feature `clap`) ([#78](https://github.com/sapphire-turtle/corundum-framework/pull/78))
+- *(corundum-framework-gui)* `keys::KeysPage` over a `KeysBackend`, and `LocalKeys`, the backend over a `KeyStore` on this machine (feature `keys`) ([#78](https://github.com/sapphire-turtle/corundum-framework/pull/78))
+- *(corundum-framework)* facade features `keys`, `keys-axum`, `keys-clap` and `gui-keys` ([#78](https://github.com/sapphire-turtle/corundum-framework/pull/78))
 
 ## [0.4.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.3.0...v0.4.0) - 2026-10-30
 

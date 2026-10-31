@@ -1,7 +1,7 @@
 [package]
 name = "corundum-framework-package"
 # Versioned with the other corundum-framework crates (release-plz's `corundum` group).
-version = "0.4.0"
+version = "0.5.0"
 edition.workspace = true
 description = "A desktop app as a Velopack package: its start and install hooks, told apart from an update"
 license = "MIT OR Apache-2.0"
@@ -22,9 +22,9 @@ service = ["dep:corundum-framework-service"]
 # Desktops only: Velopack packages Windows, macOS and Linux apps, and a phone's store installs
 # and updates the app. On iOS and Android the crate builds empty.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
-corundum-framework-platform = { version = "0.4.0", path = "../corundum-framework-platform", default-features = false }
-corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", default-features = false, optional = true }
-corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", default-features = false }
+corundum-framework-platform = { version = "0.5.0", path = "../corundum-framework-platform", default-features = false }
+corundum-framework-service = { version = "0.5.0", path = "../corundum-framework-service", default-features = false, optional = true }
+corundum-framework-update = { version = "0.5.0", path = "../corundum-framework-update", default-features = false }
 semver = "1"
 thiserror.workspace = true
 tracing.workspace = true

@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "corundum-framework-gui",
  "corundum-framework-keys",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-build"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "corundum-framework-platform",
  "winresource",
@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-gui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-keys"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1054,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-package"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "corundum-framework-platform",
  "corundum-framework-service",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-platform"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "block2 0.6.2",
  "dirs",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-service"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-update"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -2690,9 +2690,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.34"
+version = "0.4.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
+checksum = "5d15f86d12da44cd8d4ec3c73984537eb7f4cadcb9776a575a0a8a05ca11005c"
 
 [[package]]
 name = "lru-slab"
