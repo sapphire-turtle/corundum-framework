@@ -25,6 +25,11 @@ impl KeyStore {
             path: dir.to_owned(),
             source,
         })?;
+        KeyStore::read(dir)
+    }
+
+    /// The store in `dir` as it is, without creating the directory: for a reader.
+    pub(crate) fn read(dir: &Path) -> Result<KeyStore> {
         let mut store = KeyStore {
             dir: dir.to_owned(),
             prefix: String::new(),

@@ -18,8 +18,10 @@ mod error;
 mod hash;
 mod key;
 mod store;
+mod verify;
 
 pub use error::{Error, Result};
 pub use hash::KeyHash;
 pub use key::{Key, KeyId, KeyInfo, Token};
 pub use store::KeyStore;
+pub use verify::{CACHE_TTL, KeyVerifier, Verdict};
