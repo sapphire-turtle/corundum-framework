@@ -166,15 +166,16 @@ impl AlreadyRunning {
     pub fn activate(&self) -> bool {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         if let Some(socket) = &self.socket {
-            return desktop::send(socket, &Message::Activate(None));
+            return desktop::send(socket, &Message::Activate(None)) == desktop::Reply::Answered;
         }
         false
     }
 
     /// [`activate`](Self::activate), telling the running start `message`: one line of at
-    /// most [`MAX_ACTIVATION_MESSAGE`] bytes, which is not sent otherwise (`false`). A
-    /// running start of an older version, which knows only the plain ask, does not answer
-    /// it; it is then asked plainly, and comes to the front without the message.
+    /// most [`MAX_ACTIVATION_MESSAGE`] bytes, not empty, which is not sent otherwise
+    /// (`false`). A running start of an older version, which knows only the plain ask,
+    /// closes the connection unanswered; it is then asked plainly, and comes to the front
+    /// without the message. A start that is merely slow to answer is not asked again.
     pub fn activate_with(&self, message: &str) -> bool {
         if !valid_message(message) {
             tracing::warn!("not an activation message (empty, a line break, or too long)");
@@ -182,8 +183,13 @@ impl AlreadyRunning {
         }
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         if let Some(socket) = &self.socket {
-            return desktop::send(socket, &Message::Activate(Some(message.to_owned())))
-                || desktop::send(socket, &Message::Activate(None));
+            return match desktop::send(socket, &Message::Activate(Some(message.to_owned()))) {
+                desktop::Reply::Answered => true,
+                desktop::Reply::Refused => {
+                    desktop::send(socket, &Message::Activate(None)) == desktop::Reply::Answered
+                }
+                desktop::Reply::Silent => false,
+            };
         }
         false
     }
@@ -619,9 +625,21 @@ mod desktop {
         line
     }
 
-    /// Send `message` on `socket` and wait for the reply: whether the running start
-    /// answered. A failure is only logged: the first start may be closing.
-    pub(super) fn send(socket: &SocketName, message: &Message) -> bool {
+    /// What became of a message.
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    pub(super) enum Reply {
+        /// The running start came to the front and said so.
+        Answered,
+        /// It closed the connection without answering: it did not take the message (an
+        /// older version, or one that is closing).
+        Refused,
+        /// Nothing within the timeout, or no connection: it may answer yet.
+        Silent,
+    }
+
+    /// Send `message` on `socket` and wait for the reply. A failure is only logged: the
+    /// first start may be closing.
+    pub(super) fn send(socket: &SocketName, message: &Message) -> Reply {
         let sent = name(socket)
             .and_then(|name| {
                 ConnectOptions::new()
@@ -640,7 +658,7 @@ mod desktop {
             Ok(stream) => stream,
             Err(err) => {
                 tracing::debug!("could not reach the running instance on {socket:?}: {err}");
-                return false;
+                return Reply::Silent;
             }
         };
         // On a thread, waited for no longer than the timeout: a named pipe may not take
@@ -652,15 +670,20 @@ mod desktop {
                 let _ = tx.send(read_line(&mut stream));
             });
         if reading.is_err() {
-            return false;
+            return Reply::Silent;
         }
-        let answered = rx
-            .recv_timeout(IO_TIMEOUT)
-            .is_ok_and(|reply| reply.trim_ascii() == REPLY.trim_ascii());
-        if !answered {
-            tracing::debug!("the running instance on {socket:?} did not answer");
+        match rx.recv_timeout(IO_TIMEOUT) {
+            Ok(reply) if reply.trim_ascii() == REPLY.trim_ascii() => Reply::Answered,
+            // A line that is not the answer, or the connection closed before one: refused.
+            Ok(_) => {
+                tracing::debug!("the running instance on {socket:?} refused the message");
+                Reply::Refused
+            }
+            Err(_) => {
+                tracing::debug!("the running instance on {socket:?} did not answer");
+                Reply::Silent
+            }
         }
-        answered
     }
 }
 
@@ -731,6 +754,27 @@ mod tests {
     }
 
     #[test]
+    fn a_slow_answer_is_not_asked_again_without_the_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut first = acquire_in(dir.path()).unwrap();
+        let (tx, rx) = mpsc::channel();
+        first.on_activate_with(move |m| {
+            // Longer than the asking start waits for the answer.
+            std::thread::sleep(Duration::from_millis(1500));
+            tx.send(m.map(str::to_owned)).unwrap();
+        });
+        let _ = acquire_in(dir.path()).unwrap_err().activate_with("devices");
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            Some("devices".to_owned())
+        );
+        assert!(
+            rx.recv_timeout(Duration::from_secs(3)).is_err(),
+            "asked a second time, without the message"
+        );
+    }
+
+    #[test]
     fn on_activate_fires_for_a_message() {
         let dir = tempfile::tempdir().unwrap();
         let mut first = acquire_in(dir.path()).unwrap();
@@ -766,6 +810,40 @@ mod tests {
         assert!(running.activate_with("x"));
         let seen: Vec<String> = rx.iter().take(2).collect();
         assert_eq!(seen, ["activate x\n", "activate\n"]);
+    }
+
+    // The older reader read at most 65 bytes and dropped a longer line unanswered.
+    #[cfg(unix)]
+    #[test]
+    fn an_old_listener_drops_a_long_message_and_is_asked_plainly() {
+        use std::io::{Read as _, Write as _};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let mut stream = stream.unwrap();
+                let mut line = Vec::new();
+                let mut byte = [0];
+                while line.len() <= 64 && stream.read(&mut byte).unwrap_or(0) == 1 {
+                    line.push(byte[0]);
+                    if byte[0] == b'\n' {
+                        break;
+                    }
+                }
+                if line == b"activate\n" {
+                    stream.write_all(b"ok\n").unwrap();
+                }
+                tx.send(line.len()).unwrap();
+            }
+        });
+        let running = AlreadyRunning {
+            socket: Some(SocketName::Path(path)),
+        };
+        assert!(running.activate_with(&"x".repeat(MAX_ACTIVATION_MESSAGE)));
+        let seen: Vec<usize> = rx.iter().take(2).collect();
+        assert_eq!(seen, [65, 9]);
     }
 
     #[test]

@@ -203,6 +203,13 @@ impl WindowOptions {
     /// with the message the start sent ([`instance::AlreadyRunning::activate_with`]), or
     /// `None`: which page to show, say. Only with [`single_instance`](Self::single_instance)
     /// or [`instance`](Self::instance).
+    ///
+    /// `f` runs on the listener's thread, not the UI's: hand the message to the app (a
+    /// channel it reads each frame) and return. A start that asks more than once, as one
+    /// does while this window is still opening, calls it more than once.
+    /// [`single_instance`](Self::single_instance) sends no message: a start that has one
+    /// takes the lock itself with [`instance::acquire_or_activate_with`] and passes it to
+    /// [`instance`](Self::instance).
     #[cfg(feature = "single-instance")]
     pub fn on_activate(mut self, f: impl Fn(Option<String>) + Send + 'static) -> WindowOptions {
         self.on_activate = Some(Box::new(f));
