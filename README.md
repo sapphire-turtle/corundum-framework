@@ -16,6 +16,7 @@ desktops and on phones.
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | Without egui: the app's directories (mobile included), the system's languages, the JNI / Objective-C bridging | unreleased |
 | [`corundum-framework-update`](crates/corundum-framework-update) | Newer GitHub releases of an app's binary: finding them, and replacing the binary with one | unreleased |
 | [`corundum-framework-package`](crates/corundum-framework-package) | The app as a Velopack package on the desktops: its start and install hooks (`start`), its updates (`Updater`), its command line on `PATH` (`cli_path`) and the Windows console shim (`console`) | unreleased |
+| [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -81,12 +82,23 @@ desktops and on phones.
   entry is not written again on the next start. A Windows app also sets
   `#![cfg_attr(windows, windows_subsystem = "windows")]` in its `main.rs`, or the console
   opens with it.
+- **First run**: `first_run::FirstRun` (with the `serde` feature) shows the app's first-run
+  pages (`FirstRunPage`, each answering a `PageAction`) over the window on the first start,
+  remembers in `corundum.toml` that they were done, and runs them again from Settings.
+  `FirstRun::new(app_name, pages)` makes it, `done(ctx)` says whether it ran, `reset(ctx)`
+  shows it again.
+- **Background services** (`service` feature, desktops only): `first_run::ServicePage`, the
+  first-run question whether to keep the app's services running in the background, and
+  `settings::ServiceRow`, an About-page row per service that says what it is doing and
+  stops, starts, removes or repairs it. A cargo build in `target/` registers nothing: both
+  say it is a development build instead.
 
 | Feature | What it enables | Default |
 |---|---|---|
 | `eframe` | The desktop window (`window::run`) and its wgpu setup (`gpu`) | yes |
 | `android` | The Android window (`window::run_android`), with logcat and the platform calls | no |
-| `serde` | `Serialize` / `Deserialize` on the theme and language settings | no |
+| `serde` | `Serialize` / `Deserialize` on the theme and language settings, `store` and `first_run` | no |
+| `service` | `first_run::ServicePage` and `settings::ServiceRow`, over corundum-framework-service (brings `serde`; desktops only) | no |
 | `update` | `update::UpdatesPanel`, the Settings → About rows that look for a newer release and say where it is (brings corundum-framework-update) | no |
 | `self-update` | The panel also downloads the release and replaces the running binary (brings `update`). A store build leaves it off, as the store updates the app | no |
 | `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
@@ -164,9 +176,11 @@ through to the gui crate.
 | `update` | `update`: corundum-framework-update | no |
 | `self-update` | `update` with the download and the replacement; a store build leaves it off | no |
 | `package` | `package`: corundum-framework-package (brings `platform`) | no |
+| `service` | `service`: corundum-framework-service (brings `platform`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
 | `gui-package` | The gui crate's `package`: the panel's row for the app's own package (brings `gui-update` and `package`) | no |
+| `gui-service` | The gui crate's `service`: `gui::first_run::ServicePage` and `gui::settings::ServiceRow` (brings `gui`, `service` and `serde`) | no |
 | `eframe` | `gui::window::run`, the desktop window (brings `gui`) | no |
 | `android` | `gui::window::run_android`, the Android window (brings `gui`) | no |
 | `serde` | The gui crate's `serde` | no |

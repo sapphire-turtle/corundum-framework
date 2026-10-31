@@ -131,3 +131,29 @@ corundum-media-videos = 動画
 
 # QR コード（`qr::QrCode`）：文字列が長すぎて QR コードにできないとき。
 corundum-qr-too-long = 長すぎて QR コードにできません。
+
+# 初回起動の流れ（`first_run::FirstRun`）: 見出しのステップ表示と、下部のボタン。
+corundum-first-run-step = ステップ { $step } / { $count }
+corundum-first-run-back = 戻る
+corundum-first-run-next = 次へ
+corundum-first-run-finish = 完了
+
+# アプリのサービスをバックグラウンドで常駐させるか尋ねる初回起動のページ
+# （`first_run::ServicePage`）: 回答、開発ビルドの注記、登録の失敗。
+corundum-service-yes = はい、常駐させる
+corundum-service-no = 今はしない
+corundum-service-dev-build = 開発ビルドのため登録しません。
+corundum-service-failed = 登録できませんでした: { $error }
+corundum-service-try-again = 再試行
+corundum-service-continue-without = 登録せずに続ける
+
+# 「情報」ページのバックグラウンドサービスの行（`settings::ServiceRow`）: ラベル、状態、ボタン。
+corundum-service-row = バックグラウンド: { $name }
+corundum-service-run = バックグラウンドで実行
+corundum-service-running = 実行中
+corundum-service-stopped = 停止中
+corundum-service-stop = 停止
+corundum-service-start = 開始
+corundum-service-remove = 削除
+corundum-service-broken = 動作していません: { $reason }
+corundum-service-repair = 修復

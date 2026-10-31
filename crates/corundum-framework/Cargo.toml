@@ -34,6 +34,15 @@ self-update = ["update", "corundum-framework-update/self-update"]
 # The app as a Velopack package on the desktops: its start and install hooks. Empty on iOS
 # and Android.
 package = ["dep:corundum-framework-package", "platform"]
+# The app's background service registered with the OS's user-level service manager (systemd,
+# launchd, Task Scheduler) on the desktops. Empty on iOS and Android. With `package` too,
+# `package::PackageSpec::services`: an update stops the running services and the next start
+# starts them again.
+service = [
+    "dep:corundum-framework-service",
+    "platform",
+    "corundum-framework-package?/service",
+]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -51,6 +60,10 @@ gui-update = ["gui", "update", "corundum-framework-gui/update"]
 gui-self-update = ["gui-update", "self-update", "corundum-framework-gui/self-update"]
 # ... with a row for the app's own Velopack package (`gui::update::Target::Package`).
 gui-package = ["gui-update", "package", "corundum-framework-gui/package"]
+# `gui::first_run::ServicePage`, the first-run question whether to keep the app's services
+# running in the background, and `gui::settings::ServiceRow`, an About-page row per service.
+# The desktops only, as `service` is.
+gui-service = ["gui", "service", "serde", "corundum-framework-gui/service"]
 # `gui::platform::MediaPicker`: photos and videos from the phone's album, the file dialog on
 # a desktop. On Android the app's activity must forward its result
 # (`platform::media::available` has the code); iOS needs no Info.plist key.
@@ -90,3 +103,4 @@ corundum-framework-gui = { version = "0.4.0", path = "../corundum-framework-gui"
 # lookup and the advice, so a store build does not link the replacement.
 corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", optional = true, default-features = false }
 corundum-framework-package = { version = "0.4.0", path = "../corundum-framework-package", optional = true }
+corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", optional = true, default-features = false }

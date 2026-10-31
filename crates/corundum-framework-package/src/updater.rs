@@ -14,6 +14,7 @@ use velopack::UpdateInfo;
 
 use crate::backend::{Applied, Backend, Velopack};
 use crate::error::Error;
+use crate::services::{self, ServiceDriver};
 use crate::start::{self, PackageSpec};
 
 /// Where a package's updates are published.
@@ -51,6 +52,8 @@ type Listener = Arc<dyn Fn() + Send + Sync>;
 struct Shared {
     spec: &'static PackageSpec,
     backend: Arc<dyn Backend>,
+    /// The app's services, stopped before an apply and started again when it fails.
+    services: Arc<dyn ServiceDriver>,
     current: Version,
     state: Mutex<State>,
     listeners: Mutex<Vec<Listener>>,
@@ -111,13 +114,19 @@ impl Updater {
         Ok(Updater::with_backend(
             spec,
             Arc::new(Velopack::new(&source)?),
+            services::driver(spec),
         ))
     }
 
-    pub(crate) fn with_backend(spec: &'static PackageSpec, backend: Arc<dyn Backend>) -> Updater {
+    pub(crate) fn with_backend(
+        spec: &'static PackageSpec,
+        backend: Arc<dyn Backend>,
+        services: Arc<dyn ServiceDriver>,
+    ) -> Updater {
         Updater {
             shared: Arc::new(Shared {
                 spec,
+                services,
                 current: backend.current(),
                 backend,
                 state: Mutex::new(State {
@@ -143,8 +152,9 @@ impl Updater {
             on_uninstalling: None,
             before_apply: None,
             cli: None,
+            services: crate::Services::NONE,
         };
-        let updater = Updater::with_backend(&SPEC, Arc::new(Inert));
+        let updater = Updater::with_backend(&SPEC, Arc::new(Inert), Arc::new(()));
         let downloaded = match &state {
             PackageState::Ready { version } => Some(UpdateInfo {
                 TargetFullRelease: velopack::VelopackAsset {
@@ -209,9 +219,7 @@ impl Updater {
             .clone()
             .ok_or_else(|| Error::Velopack("nothing downloaded".into()))?;
         self.shared.prepare()?;
-        self.shared
-            .backend
-            .apply(Applied::Downloaded(info), &after)?;
+        self.shared.apply(Applied::Downloaded(info), &after)?;
         applying.keep();
         Ok(())
     }
@@ -243,9 +251,7 @@ impl Updater {
             Some(pending) if pending > self.shared.current => {
                 let applying = self.shared.begin_apply()?;
                 self.shared.prepare()?;
-                self.shared
-                    .backend
-                    .apply(Applied::Pending, &After::RestartApp)?;
+                self.shared.apply(Applied::Pending, &After::RestartApp)?;
                 applying.keep();
                 Ok(true)
             }
@@ -298,14 +304,25 @@ impl Shared {
         Ok(ApplyGuard(Some(&self.applying)))
     }
 
-    /// Runs the app's `before_apply`; its error is the state and stops the update.
+    /// Runs the app's `before_apply`, then stops its running services; an error from
+    /// either is the state and stops the update.
     fn prepare(&self) -> Result<(), Error> {
-        let Some(before_apply) = self.spec.before_apply else {
-            return Ok(());
-        };
-        before_apply().map_err(|e| {
-            self.set(PackageState::Failed(e.clone()));
-            Error::Prepare(e)
+        let before_apply = self.spec.before_apply.unwrap_or(|| Ok(()));
+        before_apply()
+            .and_then(|()| self.services.stop_running())
+            .map_err(|e| {
+                self.set(PackageState::Failed(e.clone()));
+                Error::Prepare(e)
+            })
+    }
+
+    /// Hands the update to the backend; when that fails, the services [`prepare`]
+    /// stopped start again, as no restart will.
+    ///
+    /// [`prepare`]: Self::prepare
+    fn apply(&self, applied: Applied, after: &After) -> Result<(), Error> {
+        self.backend.apply(applied, after).inspect_err(|_| {
+            self.services.restart_stopped();
         })
     }
 
@@ -449,6 +466,7 @@ mod tests {
     use super::*;
     use crate::backend::{Applied, Backend};
     use crate::error::Error;
+    use crate::services::ServiceDriver;
     use crate::start::PackageSpec;
 
     thread_local! {
@@ -487,6 +505,7 @@ mod tests {
             on_uninstalling: None,
             before_apply,
             cli: None,
+            services: crate::Services::NONE,
         }))
     }
 
@@ -507,6 +526,8 @@ mod tests {
         checks: Mutex<VecDeque<Result<Option<UpdateInfo>, Error>>>,
         checked: AtomicUsize,
         pending: Option<Version>,
+        /// Whether `apply` fails, after recording itself.
+        fails_apply: std::sync::atomic::AtomicBool,
     }
 
     impl Fake {
@@ -520,6 +541,7 @@ mod tests {
                 checks: Mutex::new(checks.into()),
                 checked: AtomicUsize::new(0),
                 pending: pending.map(v),
+                fails_apply: std::sync::atomic::AtomicBool::new(false),
             })
         }
     }
@@ -551,12 +573,43 @@ mod tests {
                 Applied::Pending => "pending".to_owned(),
             };
             log(format!("apply {what} {after:?}"));
+            if self.fails_apply.load(Ordering::SeqCst) {
+                return Err(Error::Velopack("apply failed".into()));
+            }
             Ok(())
         }
     }
 
+    /// Services that record their stop and restart in the apply log, and fail the stop
+    /// when asked to.
+    struct RecordedServices {
+        fails_stop: bool,
+    }
+
+    impl ServiceDriver for RecordedServices {
+        fn stop_running(&self) -> Result<(), String> {
+            log("stop services");
+            if self.fails_stop {
+                return Err("demo could not be stopped".to_owned());
+            }
+            Ok(())
+        }
+
+        fn restart_stopped(&self) {
+            log("restart services");
+        }
+    }
+
     fn updater(spec: &'static PackageSpec, fake: Arc<Fake>) -> Updater {
-        Updater::with_backend(spec, fake)
+        Updater::with_backend(spec, fake, Arc::new(()))
+    }
+
+    fn updater_with_services(
+        spec: &'static PackageSpec,
+        fake: Arc<Fake>,
+        fails_stop: bool,
+    ) -> Updater {
+        Updater::with_backend(spec, fake, Arc::new(RecordedServices { fails_stop }))
     }
 
     /// Polls the state until `done` holds, for 5 seconds at most.
@@ -647,6 +700,69 @@ mod tests {
         wait_for(&updater, settled);
         updater.apply(After::RestartApp).unwrap();
         assert_eq!(apply_log(), ["before_apply", "apply 1.1.0 RestartApp"]);
+    }
+
+    #[test]
+    fn apply_stops_services_after_before_apply() {
+        let updater = updater_with_services(
+            spec(Some(stopping)),
+            Fake::new("1.0.0", vec![Ok(Some(info("1.1.0")))], None),
+            false,
+        );
+        updater.check_now();
+        wait_for(&updater, settled);
+        updater.apply(After::RestartApp).unwrap();
+        assert_eq!(
+            apply_log(),
+            ["before_apply", "stop services", "apply 1.1.0 RestartApp"]
+        );
+    }
+
+    #[test]
+    fn a_failed_apply_starts_the_stopped_services_again() {
+        let fake = Fake::new("1.0.0", vec![Ok(Some(info("1.1.0")))], Some("1.1.0"));
+        fake.fails_apply.store(true, Ordering::SeqCst);
+        let updater = updater_with_services(spec(Some(stopping)), fake, false);
+        updater.check_now();
+        wait_for(&updater, settled);
+        let err = updater.apply(After::RestartApp).unwrap_err();
+        assert!(matches!(err, Error::Velopack(_)), "{err:?}");
+        let err = updater.apply_pending(false).unwrap_err();
+        assert!(matches!(err, Error::Velopack(_)), "{err:?}");
+        let once = [
+            "before_apply",
+            "stop services",
+            "apply 1.1.0 RestartApp",
+            "restart services",
+        ];
+        let pending = [
+            "before_apply",
+            "stop services",
+            "apply pending RestartApp",
+            "restart services",
+        ];
+        assert_eq!(apply_log(), [once, pending].concat());
+    }
+
+    #[test]
+    fn a_failed_stop_applies_nothing() {
+        let updater = updater_with_services(
+            spec(Some(stopping)),
+            Fake::new("1.0.0", vec![Ok(Some(info("1.1.0")))], None),
+            true,
+        );
+        updater.check_now();
+        wait_for(&updater, settled);
+        let err = updater.apply(After::Exit).unwrap_err();
+        assert!(
+            matches!(err, Error::Prepare(ref m) if m == "demo could not be stopped"),
+            "{err:?}"
+        );
+        assert_eq!(apply_log(), ["before_apply", "stop services"]);
+        assert_eq!(
+            updater.status().state,
+            PackageState::Failed("demo could not be stopped".to_owned())
+        );
     }
 
     #[test]

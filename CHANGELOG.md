@@ -8,6 +8,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Breaking
+
+- *(corundum-framework-package)* `PackageSpec` has a new required field `services: Services`: write `services: Services::NONE`, or with the new `service` feature `Services::new(&[my_service])`. With `service`, `Updater::apply` and `apply_pending_at_start` stop the app's running services after `before_apply`, and `start()` starts the services an update stopped (`services-to-restart` in the app's data directory) on every start, packaged or not; on Windows the uninstall hook uninstalls each service ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51)).
+- *(corundum-framework-gui)* `store::Stored` has new public fields `first_run` and `services_asked`; a struct literal names them or ends with `..Default::default()` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51)).
+- *(packaging)* On macOS and Linux the package's main executable may be named after the command (`vpk pack --mainExe <app>`); on Windows the GUI executable keeps its cargo name beside the `<app>.exe` shim. Renaming the main executable between versions may leave an existing macOS/Linux command link pointing at the old name until it is installed again from About ([#75](https://github.com/sapphire-turtle/corundum-framework/issues/75)).
+
+### Added
+
+- *(corundum-framework-service)* new crate, moved from sapphire-framework-service: `legacy_labels`, a structured `state`, `stop`, `start`, systemd `ConditionPathExists=`, `ServiceCommand` behind `cli` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework)* facade features `service` and `gui-service` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-gui)* `first_run::{FirstRun, FirstRunPage, PageAction}` (needs `serde`); `first_run::ServicePage` and `settings::ServiceRow` (feature `service`) ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-package)* `Services` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+- *(corundum-framework-platform)* `package::is_cargo_build` ([#51](https://github.com/sapphire-turtle/corundum-framework/pull/51))
+
 ## [0.4.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.3.0...v0.4.0) - 2026-10-30
 
 ### Breaking

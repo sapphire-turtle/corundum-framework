@@ -22,14 +22,16 @@
 //! | `update` | [`update`] | `corundum-framework-update`: finding newer GitHub releases of an app's binary, and replacing it with one |
 //! | `self-update` | `update` | `update` with the download and the replacement; a store build leaves it off, as the store updates the app |
 //! | `package` | [`package`] | `corundum-framework-package`: the app as a Velopack package on the desktops: its start and install hooks, its updates, its command line on `PATH` and the Windows console shim (brings `platform`) |
+//! | `service` | [`service`] | `corundum-framework-service`: the app's background service registered with systemd, launchd or Task Scheduler at user level (brings `platform`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
 //! | `gui-package` | `gui::update` | the panel's row for the app's own Velopack package, `Target::Package` (brings `gui-update` and `package`) |
+//! | `gui-service` | `gui::first_run::ServicePage`, `gui::settings::ServiceRow` | the gui crate's `service`: the first-run question whether to keep the app's services running, and an About-page row per service (brings `gui`, `service` and `serde`; desktops only) |
 //! | `eframe` | `gui::window::run`, [`eframe`] | `corundum-framework-gui` with its `eframe` feature: a desktop window started the same way for every app |
 //! | `android` | `gui::window::run_android`, [`eframe`] | `corundum-framework-gui` with its `android` feature: the window on an Android phone (brings `eframe`) |
 //! | `media-session` | `platform::media_session`, `gui::media_session` | the OS's media keys and its "now playing", for a music player; `gui::media_session::start` makes one for an eframe window (brings `platform`). An iOS app adds `UIBackgroundModes` `audio` to its Info.plist |
 //! | `single-instance` | `platform::instance`, `gui::window::WindowOptions::single_instance` | a desktop app run once: a second start brings the first's window to the front and exits (brings `platform`) |
-//! | `serde` | `gui::look`, `gui::store` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `store`: the look in effect and the rail's order, kept on the device in a TOML file and put back before the first frame |
+//! | `serde` | `gui::look`, `gui::store`, `gui::first_run` | `Serialize` / `Deserialize` on the gui's theme and language settings, and `store`: the look in effect and the rail's order, kept on the device in a TOML file and put back before the first frame; `first_run`, the first-run pages, which remember there that they were done |
 
 #[cfg(feature = "platform")]
 pub use corundum_framework_platform as platform;
@@ -42,6 +44,9 @@ pub use corundum_framework_update as update;
 
 #[cfg(feature = "package")]
 pub use corundum_framework_package as package;
+
+#[cfg(feature = "service")]
+pub use corundum_framework_service as service;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.
