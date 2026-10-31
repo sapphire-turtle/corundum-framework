@@ -8,6 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- *(corundum-framework-platform)* `instance::AlreadyRunning::activate_with`, `Instance::on_activate_with` and `instance::acquire_or_activate_with`: a second start tells the running one a short message with the activation, such as which page to show. A running start of an older version is asked again plainly and comes to the front without it ([sapphire-framework#363](https://github.com/sapphire-turtle/sapphire-framework/issues/363))
+- *(corundum-framework-gui)* `WindowOptions::on_activate`, which hands that message to the app (feature `single-instance`) ([sapphire-framework#363](https://github.com/sapphire-turtle/sapphire-framework/issues/363))
+- *(corundum-framework-service)* `registered_program`: the program a registered service starts, for an app to find another program by its service ([sapphire-framework#363](https://github.com/sapphire-turtle/sapphire-framework/issues/363))
+
 ## [0.5.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.4.0...v0.5.0) - 2026-10-31
 
 ### Breaking
