@@ -37,6 +37,10 @@ version_group = "corundum"
 name = "corundum-framework-package"
 version_group = "corundum"
 
+[[package]]
+name = "corundum-framework-keys"
+version_group = "corundum"
+
 # The tag, the GitHub release (its notes are the version's CHANGELOG section), and the one
 # changelog at the root, with the other crates' commits in it.
 [[package]]
@@ -49,6 +53,7 @@ changelog_include = [
   "corundum-framework-gui",
   "corundum-framework-update",
   "corundum-framework-package",
+  "corundum-framework-keys",
   "corundum-framework-build",
 ]
 git_tag_enable = true

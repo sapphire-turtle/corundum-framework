@@ -1,0 +1,40 @@
+[package]
+name = "corundum-framework-keys"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.4.0"
+edition.workspace = true
+description = "API keys for an app's server: a store of named keys, one file each, their verification, an axum layer and a clap subcommand"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["api-key", "token", "authentication", "axum"]
+categories = ["authentication"]
+
+# `axum` is the layer that checks a router's requests; `clap` the subcommand that manages
+# the store. A server that only verifies needs neither.
+[features]
+default = []
+axum = ["dep:axum", "dep:tokio"]
+clap = ["dep:clap"]
+
+[dependencies]
+axum = { version = "0.8", optional = true, default-features = false }
+base64 = "0.23"
+blake3 = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+clap = { workspace = true, optional = true }
+getrandom = "0.4"
+serde.workspace = true
+sha2 = "0.11"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"], optional = true }
+toml = "1"
+tracing.workspace = true
+uuid = { version = "1", features = ["v7"] }
+
+[dev-dependencies]
+axum = { version = "0.8", default-features = false, features = ["tokio"] }
+serde_json.workspace = true
+tempfile = "3"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tower = { version = "0.5", features = ["util"] }
