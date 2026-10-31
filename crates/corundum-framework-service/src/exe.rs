@@ -17,17 +17,21 @@ use corundum_framework_platform::package::{self, PackageKind, PackageLayout};
 /// inside one, the running executable everywhere else.
 pub fn service_exe() -> std::io::Result<PathBuf> {
     let running = std::env::current_exe()?;
-    Ok(resolve(running, package::current().as_ref()))
+    Ok(resolve(running, package::current().as_ref(), cfg!(windows)))
 }
 
-/// [`service_exe`]'s rule, on values.
+/// [`service_exe`]'s rule, on values; `on_windows` is whether this runs on Windows.
 ///
-/// A Windows package is started from its `current` directory and a macOS one from inside
-/// its `.app`; a link to either (macOS's `/usr/local/bin` command) would be a path the
-/// package's updates leave dangling, so the executable is taken with its links resolved.
-fn resolve(running: PathBuf, layout: Option<&PackageLayout>) -> PathBuf {
+/// A macOS package is started from inside its `.app`; a link to it (macOS's
+/// `/usr/local/bin` command) would be a path the package's updates leave dangling, so the
+/// executable is taken with its links resolved. Not on Windows — the rule
+/// `corundum_framework_platform::package` follows too: the canonical form there is a `\\?\`
+/// path, which would end up in the task's XML, and a Windows package is started from its
+/// `current` directory, never through a link.
+fn resolve(running: PathBuf, layout: Option<&PackageLayout>, on_windows: bool) -> PathBuf {
     match layout {
         Some(layout) if layout.kind == PackageKind::AppImage => layout.root.clone(),
+        Some(_) if on_windows => running,
         Some(_) => std::fs::canonicalize(&running).unwrap_or(running),
         None => running,
     }
@@ -35,6 +39,8 @@ fn resolve(running: PathBuf, layout: Option<&PackageLayout>) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
 
     fn p(s: &str) -> PathBuf {
@@ -52,7 +58,7 @@ mod tests {
     #[test]
     fn outside_a_package_it_is_the_running_executable() {
         assert_eq!(
-            resolve(p("/usr/bin/sapphire-journal"), None),
+            resolve(p("/usr/bin/sapphire-journal"), None, false),
             p("/usr/bin/sapphire-journal")
         );
     }
@@ -65,7 +71,7 @@ mod tests {
             "/tmp/.mount_demoAb12/usr/bin",
         );
         assert_eq!(
-            resolve(p("/tmp/.mount_demoAb12/usr/bin/demo"), Some(&layout)),
+            resolve(p("/tmp/.mount_demoAb12/usr/bin/demo"), Some(&layout), false),
             p("/home/me/Apps/demo.AppImage")
         );
     }
@@ -79,8 +85,32 @@ mod tests {
             "/nowhere/Demo/current",
         );
         assert_eq!(
-            resolve(p("/nowhere/Demo/current/demo.exe"), Some(&layout)),
+            resolve(p("/nowhere/Demo/current/demo.exe"), Some(&layout), true),
             p("/nowhere/Demo/current/demo.exe")
+        );
+    }
+
+    // A path that exists and is not canonical: canonicalizing drops the `..`.
+    fn roundabout() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("src/../Cargo.toml")
+    }
+
+    #[test]
+    fn on_windows_a_package_path_is_not_canonicalized() {
+        // The canonical form there is a `\\?\` path, which a task's XML must not carry.
+        let layout = layout(PackageKind::Windows, "/somewhere", "/somewhere/current");
+        assert_eq!(resolve(roundabout(), Some(&layout), true), roundabout());
+    }
+
+    #[test]
+    fn elsewhere_a_package_path_has_its_links_resolved() {
+        let layout = layout(PackageKind::MacBundle, "/somewhere", "/somewhere/MacOS");
+        assert_eq!(
+            resolve(roundabout(), Some(&layout), false),
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("Cargo.toml")
+                .canonicalize()
+                .unwrap()
         );
     }
 }

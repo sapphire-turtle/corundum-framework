@@ -11,7 +11,7 @@ use crate::scope::{InstallContext, ServiceSpec};
 /// The label a LaunchAgent is registered under.
 ///
 /// A LaunchAgent label is a global namespace on the machine: a generic label such as
-/// `sapphire-agent` would collide with anything else that claims the same one, so the label
+/// `my-server` would collide with anything else that claims the same one, so the label
 /// carries the publisher's domain, `sapphire-turtle.net`, the namespace corundum's apps use
 /// too: `net.sapphire-turtle.<app>`.
 pub fn label(app_name: &str) -> String {
@@ -78,8 +78,9 @@ fn comment_safe(text: &str) -> String {
 /// execs directly, with no shell in between — so each argument becomes its own `<string>`
 /// and a space inside an argument needs no quoting at all. `RunAtLoad` starts the agent
 /// when the session loads it and `KeepAlive`/`SuccessfulExit=false` restarts it on failure,
-/// the counterparts of a user unit's activation and `Restart=on-failure`; the description
-/// lands in an XML comment, the place a human looks and the one place the XML
+/// the counterparts of a user unit's activation and `Restart=on-failure` (which is why a
+/// stop boots the agent out rather than signalling it: a killed agent is started again);
+/// the description lands in an XML comment, the place a human looks and the one place the XML
 /// grammar (unlike the plist) has room for it.
 pub fn render_launch_agent(spec: &ServiceSpec, ctx: &InstallContext) -> String {
     let mut agent = String::new();

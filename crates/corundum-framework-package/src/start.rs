@@ -166,7 +166,8 @@ fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a
         }
     })
     .on_before_uninstall_fast_callback(move |_| {
-        // First, so the services' programs are no longer running when the files go.
+        // First, so the services' programs are no longer running when the files go: each
+        // service's uninstall ends its task (`schtasks /end`) before deleting it.
         #[cfg(feature = "service")]
         crate::services::uninstall_all(
             &services,

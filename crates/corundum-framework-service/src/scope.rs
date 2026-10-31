@@ -11,10 +11,10 @@ use crate::error::Result;
 
 /// What an application wants installed.
 ///
-/// Written by the application (`AppServer::service_spec` builds one); the rest of the crate
+/// Written by the application; the rest of the crate
 /// turns it into files and manager calls.
 pub struct ServiceSpec {
-    /// The application's name, as the manager and the paths name it: `sapphire-bridge`.
+    /// The application's name, as the manager and the paths name it: `my-server`.
     pub app_name: &'static str,
     /// One line for the unit's `Description=` (or the platform's equivalent).
     pub description: String,

@@ -10,7 +10,9 @@
 //! [`crate::windows`]), writes it through the manager and runs the activation commands. When
 //! activation fails, the half-written unit is removed before the error returns: a unit file
 //! that was written but never enabled is invisible to `status` and springs to life at the
-//! next reboot. [`uninstall`] is idempotent — stopping, disabling or removing something that
+//! next reboot. A macOS install first boots out an agent an earlier install left loaded —
+//! `bootstrap` refuses a loaded one — and a Windows install runs the task it created rather
+//! than waiting for the next logon. [`uninstall`] is idempotent — stopping, disabling or removing something that
 //! is not there is not an error — and [`status`] reports whatever the manager said.
 //!
 //! Every install is user level: Linux goes through `systemctl --user` with the unit from
@@ -304,8 +306,8 @@ impl ServiceCommand {
     ///
     /// `env` is the machine this runs on — read by an application's CLI with
     /// [`Environment::detect`] — and `manager` is the real one there, while every test hands
-    /// in a [`RecordingManager`] instead. What the user is told is printed here, so
-    /// both the app servers' and the bridge's CLIs say the same thing about the same act.
+    /// in a [`RecordingManager`] instead. What the user is told is printed here, so every
+    /// app's CLI says the same thing about the same act.
     ///
     /// [`Environment::detect`]: crate::scope::Environment::detect
     pub fn run(
@@ -376,6 +378,10 @@ pub fn install(
     };
     let body = render_install(spec, &context, env.os);
     manager.write_unit(&context.unit_path, &body)?;
+    for command in preparation_commands(spec, env) {
+        // An agent that is not loaded has nothing to boot out, which is the usual case.
+        let _ = manager.run(&command);
+    }
     for command in install_commands(spec, &context, env) {
         if let Err(error) = manager.run(&command) {
             if let Err(cleanup) = manager.remove_unit(&context.unit_path) {
@@ -392,6 +398,14 @@ pub fn install(
         // The XML was a hand-over: `/create` copies the task into the scheduler, and the
         // copy left under the temporary directory has done its job.
         let _ = manager.remove_unit(&context.unit_path);
+        // `/create` registers the task for the next logon; this runs it now. A failure here
+        // leaves a registered task that will start at the next logon, so it is kept and the
+        // failure is reported as what it is.
+        if let Err(error) = manager.run(&words(&["schtasks", "/run", "/tn", spec.app_name])) {
+            return Err(Error::Manager(format!(
+                "{error}; the task is installed and will start at the next logon"
+            )));
+        }
     }
     // The hook runs last, on an installed, running service, with what the install resolved.
     if let Some(hook) = spec.post_install.as_ref()
@@ -513,13 +527,23 @@ pub fn state(
 
 /// Stop the service. A service that is not running is already stopped, so that is not an
 /// error.
+///
+/// On macOS the agent is booted out of launchd rather than sent a signal: its `KeepAlive`
+/// would start a killed agent again. The plist stays, so the service reads as
+/// [`Stopped`](ServiceState::Stopped) and is loaded again by [`start`] or at the next login.
 pub fn stop(spec: &ServiceSpec, env: &Environment, manager: &dyn ServiceManager) -> Result<()> {
     let _ = manager.run(&stop_command(spec, env));
     Ok(())
 }
 
 /// Start the service. Unlike [`stop`], a failure is an error: the user asked for it to run.
+///
+/// On macOS the agent is loaded first (a failure there means it is loaded already, which is
+/// fine) and then kickstarted; the kickstart's failure is the one returned.
 pub fn start(spec: &ServiceSpec, env: &Environment, manager: &dyn ServiceManager) -> Result<()> {
+    if env.os == Os::MacOs {
+        let _ = manager.run(&bootstrap_command(&install_path(spec, env)?, env));
+    }
     manager.run(&start_command(spec, env)).map(|_| ())
 }
 
@@ -527,13 +551,8 @@ pub fn start(spec: &ServiceSpec, env: &Environment, manager: &dyn ServiceManager
 fn stop_command(spec: &ServiceSpec, env: &Environment) -> Vec<String> {
     match env.os {
         Os::Linux => words(&["systemctl", "--user", "stop", spec.app_name]),
-        // `kill` rather than `bootout`: the agent stays registered and loaded.
-        Os::MacOs => words(&[
-            "launchctl",
-            "kill",
-            "SIGTERM",
-            &format!("gui/{}/{}", env.euid, label(spec.app_name)),
-        ]),
+        // `bootout` rather than `kill`: `KeepAlive` would start a killed agent again.
+        Os::MacOs => bootout_command(spec, env),
         Os::Windows => words(&["schtasks", "/end", "/tn", spec.app_name]),
     }
 }
@@ -551,6 +570,15 @@ fn start_command(spec: &ServiceSpec, env: &Environment) -> Vec<String> {
         ]),
         Os::Windows => words(&["schtasks", "/run", "/tn", spec.app_name]),
     }
+}
+
+/// The command that takes the service's agent off launchd, leaving its plist in place.
+fn bootout_command(spec: &ServiceSpec, env: &Environment) -> Vec<String> {
+    words(&[
+        "launchctl",
+        "bootout",
+        &format!("gui/{}/{}", env.euid, label(spec.app_name)),
+    ])
 }
 
 /// Give an agent installed under a legacy label the current one, if none is installed there.
@@ -626,6 +654,15 @@ fn render_install(spec: &ServiceSpec, context: &InstallContext, os: Os) -> Strin
     }
 }
 
+/// The commands run before activation whose failure means nothing: on macOS, booting out an
+/// agent loaded by an earlier install, without which `bootstrap` would fail.
+fn preparation_commands(spec: &ServiceSpec, env: &Environment) -> Vec<Vec<String>> {
+    match env.os {
+        Os::MacOs => vec![bootout_command(spec, env)],
+        Os::Linux | Os::Windows => Vec::new(),
+    }
+}
+
 /// The commands that activate what was just installed.
 fn install_commands(
     spec: &ServiceSpec,
@@ -673,7 +710,11 @@ fn uninstall_commands(spec: &ServiceSpec, env: &Environment) -> Vec<Vec<String>>
             &format!("gui/{}", env.euid),
             &label(spec.app_name),
         ])],
-        Os::Windows => vec![words(&["schtasks", "/delete", "/tn", spec.app_name, "/f"])],
+        // `/delete` leaves a running task's process alive; end it first.
+        Os::Windows => vec![
+            words(&["schtasks", "/end", "/tn", spec.app_name]),
+            words(&["schtasks", "/delete", "/tn", spec.app_name, "/f"]),
+        ],
     }
 }
 
@@ -902,38 +943,67 @@ mod tests {
     }
 
     #[test]
-    fn stop_and_start_run_each_backend_s_command() {
+    fn stop_and_start_run_each_backend_s_commands() {
         let label = "gui/1000/net.sapphire-turtle.sapphire-agent";
-        for (env, stop_command, start_command) in [
+        let plist = current_plist().display().to_string();
+        for (env, stop_commands, start_commands) in [
             (
                 linux(),
-                command(&["systemctl", "--user", "stop", "sapphire-agent"]),
-                command(&["systemctl", "--user", "start", "sapphire-agent"]),
+                vec![command(&["systemctl", "--user", "stop", "sapphire-agent"])],
+                vec![command(&["systemctl", "--user", "start", "sapphire-agent"])],
             ),
             (
                 macos(),
-                command(&["launchctl", "kill", "SIGTERM", label]),
-                command(&["launchctl", "kickstart", "-k", label]),
+                vec![command(&["launchctl", "bootout", label])],
+                vec![
+                    command(&["launchctl", "bootstrap", "gui/1000", &plist]),
+                    command(&["launchctl", "kickstart", "-k", label]),
+                ],
             ),
             (
                 windows(),
-                command(&["schtasks", "/end", "/tn", "sapphire-agent"]),
-                command(&["schtasks", "/run", "/tn", "sapphire-agent"]),
+                vec![command(&["schtasks", "/end", "/tn", "sapphire-agent"])],
+                vec![command(&["schtasks", "/run", "/tn", "sapphire-agent"])],
             ),
         ] {
             let manager = RecordingManager::new();
             stop(&spec(), &env, &manager).unwrap();
+            assert_eq!(manager.calls().commands, stop_commands);
+            let manager = RecordingManager::new();
             start(&spec(), &env, &manager).unwrap();
-            assert_eq!(manager.calls().commands, vec![stop_command, start_command]);
+            assert_eq!(manager.calls().commands, start_commands);
         }
     }
 
     #[test]
     fn stopping_a_stopped_service_is_not_an_error() {
-        for (env, needle) in [(linux(), "stop"), (macos(), "kill"), (windows(), "/end")] {
+        for (env, needle) in [(linux(), "stop"), (macos(), "bootout"), (windows(), "/end")] {
             let manager = RecordingManager::failing_on(needle);
             stop(&spec(), &env, &manager).unwrap();
         }
+    }
+
+    #[test]
+    fn a_macos_start_of_a_loaded_agent_still_kickstarts_it() {
+        // `bootstrap` fails when the agent is loaded already; the kickstart is what counts.
+        let manager = RecordingManager::failing_on("bootstrap");
+        start(&spec(), &macos(), &manager).unwrap();
+        assert!(
+            manager
+                .calls()
+                .commands
+                .iter()
+                .flatten()
+                .any(|w| w == "kickstart"),
+            "{:?}",
+            manager.calls().commands
+        );
+    }
+
+    #[test]
+    fn a_failing_macos_kickstart_is_an_error() {
+        let manager = RecordingManager::failing_on("kickstart");
+        assert!(start(&spec(), &macos(), &manager).is_err());
     }
 
     #[test]
@@ -1185,6 +1255,90 @@ mod tests {
         spec.legacy_labels.clear();
         install(&spec, &macos(), &manager).unwrap();
         assert!(manager.calls().read.is_empty());
+    }
+
+    #[test]
+    fn a_macos_install_boots_out_a_loaded_agent_before_bootstrapping() {
+        let mut spec = spec();
+        spec.legacy_labels.clear();
+        let manager = RecordingManager::new();
+        install(&spec, &macos(), &manager).unwrap();
+        assert_eq!(
+            manager.calls().commands,
+            vec![
+                command(&[
+                    "launchctl",
+                    "bootout",
+                    "gui/1000/net.sapphire-turtle.sapphire-agent"
+                ]),
+                command(&[
+                    "launchctl",
+                    "bootstrap",
+                    "gui/1000",
+                    &current_plist().display().to_string()
+                ]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_failing_bootout_does_not_fail_a_macos_install() {
+        // Nothing loaded to boot out is the usual case of a first install.
+        let manager = RecordingManager::failing_on("bootout");
+        install(&spec(), &macos(), &manager).unwrap();
+        assert!(
+            manager
+                .calls()
+                .removed
+                .iter()
+                .all(|path| path != &current_plist())
+        );
+    }
+
+    #[test]
+    fn a_windows_install_creates_then_runs_the_task() {
+        let manager = RecordingManager::default();
+        install(&spec(), &windows(), &manager).unwrap();
+        let commands = manager.calls().commands;
+        assert_eq!(commands.len(), 2, "{commands:?}");
+        assert_eq!(commands[0][..2], ["schtasks", "/create"]);
+        assert_eq!(
+            commands[1],
+            command(&["schtasks", "/run", "/tn", "sapphire-agent"])
+        );
+    }
+
+    #[test]
+    fn a_failing_windows_run_is_an_error_that_keeps_the_task() {
+        let manager = RecordingManager::failing_on("/run");
+        let message = install(&spec(), &windows(), &manager)
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains("/run"), "{message}");
+        assert!(message.contains("installed"), "{message}");
+        assert!(
+            !manager
+                .calls()
+                .commands
+                .iter()
+                .flatten()
+                .any(|w| w == "/delete"),
+            "{:?}",
+            manager.calls().commands
+        );
+    }
+
+    #[test]
+    fn a_windows_uninstall_ends_the_task_before_deleting_it() {
+        let manager = RecordingManager::failing_on("/end");
+        uninstall(&spec(), &windows(), &manager).unwrap();
+        assert_eq!(
+            manager.calls().commands,
+            vec![
+                command(&["schtasks", "/end", "/tn", "sapphire-agent"]),
+                command(&["schtasks", "/delete", "/tn", "sapphire-agent", "/f"]),
+            ]
+        );
     }
 
     #[test]
