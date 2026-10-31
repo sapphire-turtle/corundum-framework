@@ -117,7 +117,7 @@ unic-langid = "0.9"
 
 # Desktop icons: an SVG rendered to PNG, icns and ico. No text feature: icons carry no text.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
-resvg = { version = "0.45", optional = true, default-features = false }
+resvg = { version = "0.49", optional = true, default-features = false }
 # `single-instance`: the local socket (a Unix socket, a named pipe on Windows) a second start
 # asks the first to come to the front on.
 interprocess = { version = "2.4", optional = true }
