@@ -76,6 +76,9 @@ media-session = ["corundum-framework-platform/media-session"]
 # first's window to the front and exiting (corundum-framework-platform's `instance`). Off by
 # default: it adds a local socket, and an app made to open several windows leaves it off.
 single-instance = ["corundum-framework-platform/single-instance"]
+# `keys`: the API keys page (`keys::KeysPage`), over corundum-framework-keys's store on this
+# machine (`LocalKeys`) or the app's own backend.
+keys = ["dep:corundum-framework-keys"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -91,6 +94,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
     "system_fonts",
     "wgpu",
 ] }
+# The API keys page's store and types (`keys`).
+corundum-framework-keys = { version = "0.4.0", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.
 corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", optional = true, default-features = false }
 # The app's own package's updater, for its row in the update panel (`package`).

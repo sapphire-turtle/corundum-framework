@@ -42,6 +42,8 @@ pub mod fonts;
 pub mod gpu;
 pub mod i18n;
 pub mod icons;
+#[cfg(feature = "keys")]
+pub mod keys;
 pub mod logcat;
 #[cfg(feature = "serde")]
 pub mod look;

@@ -142,3 +142,22 @@ corundum-media-videos = Videos
 
 # A QR code (`qr::QrCode`) whose text is too long for one.
 corundum-qr-too-long = Too long to show as a QR code.
+
+# The API keys page (`keys::KeysPage`): a client's key, its token shown once when made.
+corundum-keys-title = API keys
+corundum-keys-add = Add
+corundum-keys-name = Name
+corundum-keys-description = Description
+corundum-keys-retire = Retire
+corundum-keys-restore = Restore
+corundum-keys-rotate = Rotate
+corundum-keys-retired = Retired
+corundum-keys-confirm-retire = Retire { $name }? Clients using it stop working.
+corundum-keys-confirm-rotate = Issue a new token for { $name }? The old one stops working.
+corundum-keys-confirm = OK
+corundum-keys-cancel = Cancel
+corundum-keys-token-once = Copy this token now. It is shown only once.
+corundum-keys-copy = Copy
+corundum-keys-close = Close
+corundum-keys-none = No keys yet.
+corundum-keys-show-retired = Show retired

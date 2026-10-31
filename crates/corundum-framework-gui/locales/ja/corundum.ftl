@@ -131,3 +131,22 @@ corundum-media-videos = 動画
 
 # QR コード（`qr::QrCode`）：文字列が長すぎて QR コードにできないとき。
 corundum-qr-too-long = 長すぎて QR コードにできません。
+
+# API キーのページ（`keys::KeysPage`）：クライアントごとのキー。トークンは作ったときに一度だけ表示する。
+corundum-keys-title = API キー
+corundum-keys-add = 追加
+corundum-keys-name = 名前
+corundum-keys-description = 説明
+corundum-keys-retire = 退避
+corundum-keys-restore = 復帰
+corundum-keys-rotate = 再発行
+corundum-keys-retired = 退避済み
+corundum-keys-confirm-retire = { $name } を退避しますか？これを使うクライアントは使えなくなります。
+corundum-keys-confirm-rotate = { $name } のトークンを再発行しますか？古いトークンは使えなくなります。
+corundum-keys-confirm = OK
+corundum-keys-cancel = キャンセル
+corundum-keys-token-once = このトークンを今コピーしてください。表示は一度だけです。
+corundum-keys-copy = コピー
+corundum-keys-close = 閉じる
+corundum-keys-none = まだキーはありません。
+corundum-keys-show-retired = 退避済みも表示

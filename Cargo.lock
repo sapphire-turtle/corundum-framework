@@ -995,6 +995,7 @@ version = "0.4.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
+ "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-platform",
  "corundum-framework-update",
