@@ -23,6 +23,10 @@
 //! | `self-update` | `update` | `update` with the download and the replacement; a store build leaves it off, as the store updates the app |
 //! | `package` | [`package`] | `corundum-framework-package`: the app as a Velopack package on the desktops: its start and install hooks, its updates, its command line on `PATH` and the Windows console shim (brings `platform`) |
 //! | `service` | [`service`] | `corundum-framework-service`: the app's background service registered with systemd, launchd or Task Scheduler at user level (brings `platform`) |
+//! | `keys` | [`keys`] | `corundum-framework-keys`: API keys for an app's server — a store of named keys, one file each, in a directory the app chooses, and their verification |
+//! | `keys-axum` | `keys::require_key` | the layer that checks a router's requests (brings `keys`) |
+//! | `keys-clap` | `keys::KeyCommand` | the subcommand that manages a store (brings `keys`) |
+//! | `gui-keys` | `gui::keys` | the API keys page in Settings, over a store on this machine or the app's own backend (brings `gui` and `keys`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
 //! | `gui-package` | `gui::update` | the panel's row for the app's own Velopack package, `Target::Package` (brings `gui-update` and `package`) |
@@ -47,6 +51,9 @@ pub use corundum_framework_package as package;
 
 #[cfg(feature = "service")]
 pub use corundum_framework_service as service;
+
+#[cfg(feature = "keys")]
+pub use corundum_framework_keys as keys;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.

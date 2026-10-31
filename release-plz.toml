@@ -14,8 +14,8 @@ release_always = false
 pr_branch_prefix = "release-plz/"
 pr_labels = ["release"]
 
-# They move together: the facade re-exports the platform, gui, update, package and service
-# crates,
+# They move together: the facade re-exports the platform, gui, update, package, service and
+# keys crates,
 # the gui crate is built on the platform one, and the build crate is an app's
 # build-dependency.
 [[package]]
@@ -42,6 +42,10 @@ version_group = "corundum"
 name = "corundum-framework-service"
 version_group = "corundum"
 
+[[package]]
+name = "corundum-framework-keys"
+version_group = "corundum"
+
 # The tag, the GitHub release (its notes are the version's CHANGELOG section), and the one
 # changelog at the root, with the other crates' commits in it.
 [[package]]
@@ -55,6 +59,7 @@ changelog_include = [
   "corundum-framework-update",
   "corundum-framework-package",
   "corundum-framework-service",
+  "corundum-framework-keys",
   "corundum-framework-build",
 ]
 git_tag_enable = true

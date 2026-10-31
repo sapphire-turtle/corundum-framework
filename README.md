@@ -17,6 +17,7 @@ desktops and on phones.
 | [`corundum-framework-update`](crates/corundum-framework-update) | Newer GitHub releases of an app's binary: finding them, and replacing the binary with one | unreleased |
 | [`corundum-framework-package`](crates/corundum-framework-package) | The app as a Velopack package on the desktops: its start and install hooks (`start`), its updates (`Updater`), its command line on `PATH` (`cli_path`) and the Windows console shim (`console`) | unreleased |
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
+| [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -104,6 +105,7 @@ desktops and on phones.
 | `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
+| `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend` (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
 
@@ -177,6 +179,10 @@ through to the gui crate.
 | `self-update` | `update` with the download and the replacement; a store build leaves it off | no |
 | `package` | `package`: corundum-framework-package (brings `platform`) | no |
 | `service` | `service`: corundum-framework-service (brings `platform`) | no |
+| `keys` | `keys`: corundum-framework-keys | no |
+| `keys-axum` | `keys::require_key`, the layer that checks a router's requests (brings `keys`) | no |
+| `keys-clap` | `keys::KeyCommand`, the subcommand that manages a store (brings `keys`) | no |
+| `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
 | `gui-package` | The gui crate's `package`: the panel's row for the app's own package (brings `gui-update` and `package`) | no |

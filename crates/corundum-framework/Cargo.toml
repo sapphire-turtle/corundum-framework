@@ -43,6 +43,11 @@ service = [
     "platform",
     "corundum-framework-package?/service",
 ]
+# API keys for an app's server: the store, its verifier, and with `keys-axum` / `keys-clap`
+# the layer that checks a router's requests and the subcommand that manages the store.
+keys = ["dep:corundum-framework-keys"]
+keys-axum = ["keys", "corundum-framework-keys/axum"]
+keys-clap = ["keys", "corundum-framework-keys/clap"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -74,6 +79,8 @@ media-picker = ["gui", "corundum-framework-gui/media-picker"]
 qr-scan = ["gui", "corundum-framework-gui/qr-scan"]
 # `gui::qr`: a QR code drawn from text.
 qr-code = ["gui", "corundum-framework-gui/qr-code"]
+# `gui::keys`: the API keys page in Settings (brings `gui` and `keys`).
+gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,
@@ -104,3 +111,4 @@ corundum-framework-gui = { version = "0.4.0", path = "../corundum-framework-gui"
 corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", optional = true, default-features = false }
 corundum-framework-package = { version = "0.4.0", path = "../corundum-framework-package", optional = true }
 corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", optional = true, default-features = false }
+corundum-framework-keys = { version = "0.4.0", path = "../corundum-framework-keys", optional = true }
