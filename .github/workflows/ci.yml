@@ -30,7 +30,12 @@ jobs:
         for f in media-picker qr-scan; do
           cargo clippy -p corundum-framework-platform --all-targets --features $f --locked -- -D warnings || exit 1
         done
-        for f in media-picker qr-scan qr-code; do
+        # The keys crate as a server that only verifies has it, and each feature alone.
+        cargo clippy -p corundum-framework-keys --all-targets --locked -- -D warnings
+        for f in axum clap; do
+          cargo clippy -p corundum-framework-keys --all-targets --features $f --locked -- -D warnings || exit 1
+        done
+        for f in media-picker qr-scan qr-code keys; do
           cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
         done
         # Without `qr-scan` an iOS app links no camera API (AVFoundation), which App Store
