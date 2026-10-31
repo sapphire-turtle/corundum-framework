@@ -40,7 +40,10 @@ impl KeyStore {
             path: self.dir.clone(),
             source,
         };
-        let mut keys = Vec::new();
+        // Records by the file they were read from: `<id>.toml` is the key, any other file
+        // with the same `id` is a copy a sync left when two hosts changed it at once.
+        let mut keys: Vec<Key> = Vec::new();
+        let mut copies: Vec<Key> = Vec::new();
         for entry in std::fs::read_dir(&self.dir).map_err(io)? {
             let path = entry.map_err(io)?.path();
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -51,11 +54,21 @@ impl KeyStore {
                 continue;
             }
             match read_key(&path) {
-                Ok(key) => keys.push(key),
+                Ok(key) if name == format!("{}.toml", key.id) => keys.push(key),
+                Ok(copy) => copies.push(copy),
                 Err(message) => {
                     tracing::warn!("skipping the key file {}: {message}", path.display())
                 }
             }
+        }
+        // A copy never lets a token in, but a retire in any copy holds: a retire made on one
+        // host is never lost to a concurrent edit on another.
+        for key in keys.iter_mut().filter(|k| !k.is_retired()) {
+            key.retired_at = copies
+                .iter()
+                .filter(|c| c.id == key.id)
+                .filter_map(|c| c.retired_at)
+                .min();
         }
         keys.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));
         self.keys = keys;
@@ -87,8 +100,32 @@ impl KeyStore {
         self.reload()?;
         let mut key = self.resolve(selector)?.clone();
         f(&mut key);
+        // The user decided on the key as it stands now, which settles any conflict.
+        self.remove_copies(&key.id)?;
         self.write(&key)?;
         Ok(key)
+    }
+
+    /// Delete the conflict copies of `id`: files other than `<id>.toml` holding it.
+    fn remove_copies(&self, id: &KeyId) -> Result<()> {
+        let io = |source| Error::Io {
+            path: self.dir.clone(),
+            source,
+        };
+        let own = format!("{id}.toml");
+        for entry in std::fs::read_dir(&self.dir).map_err(io)? {
+            let path = entry.map_err(io)?.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name == own || name.starts_with('.') || !name.ends_with(".toml") {
+                continue;
+            }
+            if read_key(&path).is_ok_and(|copy| copy.id == *id) {
+                std::fs::remove_file(&path).map_err(|source| Error::Io { path, source })?;
+            }
+        }
+        Ok(())
     }
 
     /// Start new tokens with `prefix`, so a leaked token says what it is.
@@ -339,5 +376,78 @@ mod tests {
     fn unknown_selector_is_not_found() {
         let (_dir, mut s) = store();
         assert!(matches!(s.retire("nope"), Err(Error::NotFound(_))));
+    }
+
+    /// Write `key` to `file` in `dir`, as a sync would.
+    fn plant(dir: &Path, file: &str, key: &Key) {
+        std::fs::write(dir.join(file), toml::to_string(key).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn copy_alone_never_accepts() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let file = dir.path().join(format!("{}.toml", key.id));
+        std::fs::rename(
+            &file,
+            dir.path().join(format!("{}.conflict-r-1.toml", key.id)),
+        )
+        .unwrap();
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert!(s.list().is_empty());
+        assert!(s.authenticate(token.expose()).is_none());
+    }
+
+    #[test]
+    fn retired_copy_retires_the_key() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let mut copy = key.clone();
+        copy.retired_at = Some(Utc::now());
+        plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert!(s.authenticate(token.expose()).is_none());
+        assert_eq!(s.list().len(), 1);
+        assert!(s.list()[0].is_retired());
+    }
+
+    #[test]
+    fn unretired_copy_does_not_change_the_key() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let other = Token::generate("");
+        let mut copy = key.clone();
+        copy.hash = KeyHash::of_blake3(other.expose());
+        plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert_eq!(s.list().len(), 1);
+        assert!(s.authenticate(token.expose()).is_some());
+        assert!(s.authenticate(other.expose()).is_none());
+    }
+
+    #[test]
+    fn copy_under_a_different_name_groups_by_id() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let mut copy = key.clone();
+        copy.retired_at = Some(Utc::now());
+        plant(dir.path(), "B.conflict-r-1.toml", &copy);
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert_eq!(s.list().len(), 1);
+        assert_eq!(s.list()[0].id, key.id);
+        assert!(s.authenticate(token.expose()).is_none());
+    }
+
+    #[test]
+    fn restore_clears_a_retired_copy() {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, None).unwrap();
+        let mut copy = key.clone();
+        copy.retired_at = Some(Utc::now());
+        plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
+        let mut s = KeyStore::open(dir.path()).unwrap();
+        assert!(!s.restore(key.id.as_str()).unwrap().is_retired());
+        let s = KeyStore::open(dir.path()).unwrap();
+        assert!(s.authenticate(token.expose()).is_some());
     }
 }
