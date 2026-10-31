@@ -17,7 +17,9 @@
 mod error;
 mod hash;
 mod key;
+mod store;
 
 pub use error::{Error, Result};
 pub use hash::KeyHash;
 pub use key::{Key, KeyId, KeyInfo, Token};
+pub use store::KeyStore;
