@@ -667,19 +667,24 @@ mod desktop {
         let reading = std::thread::Builder::new()
             .name("instance reply".to_owned())
             .spawn(move || {
-                let _ = tx.send(read_line(&mut stream));
+                let line = read_line(&mut stream);
+                // Closed by the other side, as opposed to a read that timed out: only then
+                // was the message refused.
+                let closed = !line.ends_with(b"\n") && matches!(stream.read(&mut [0]), Ok(0));
+                let _ = tx.send((line, closed));
             });
         if reading.is_err() {
             return Reply::Silent;
         }
         match rx.recv_timeout(IO_TIMEOUT) {
-            Ok(reply) if reply.trim_ascii() == REPLY.trim_ascii() => Reply::Answered,
-            // A line that is not the answer, or the connection closed before one: refused.
-            Ok(_) => {
+            Ok((reply, _)) if reply.trim_ascii() == REPLY.trim_ascii() => Reply::Answered,
+            // The connection closed before an answer: refused.
+            Ok((_, true)) => {
                 tracing::debug!("the running instance on {socket:?} refused the message");
                 Reply::Refused
             }
-            Err(_) => {
+            // No answer in time, whichever wait ran out first.
+            _ => {
                 tracing::debug!("the running instance on {socket:?} did not answer");
                 Reply::Silent
             }
