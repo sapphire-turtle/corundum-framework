@@ -76,7 +76,24 @@ To see the demo in the app menu, install it (`cargo install --path demo`) and ru
 A build in a cargo target directory, as `cargo run` makes, adds no entry. Settings, About
 removes the entry and adds it back.
 
+### The daemon and the first run
+
+On a desktop the demo is one binary: `corundum-demo daemon` runs its daemon, a stand-in for
+an app's server that writes a heartbeat to the data directory every few seconds. The
+daemon is registered as a background service (`ServiceSpec { app_name: "corundum-demo",
+args: ["daemon"], .. }`, `src/service.rs`): a systemd user unit, a LaunchAgent or a Task
+Scheduler task. The first start shows the first-run setup over the window, a welcome page
+and the question whether to keep the daemon running; Settings › About has the daemon's row
+and runs the setup again. A build in a cargo target directory registers nothing: the
+question page and the row say it is a development build.
+
 ### As a Velopack package
+
+The names differ by design (corundum-framework#75). Cargo builds `corundum-framework-demo`;
+the package's executable is `corundum-demo` on macOS and Linux (the release workflow renames
+it, and the command on `PATH` links to it), while on Windows the GUI keeps
+`corundum-framework-demo.exe` and the console shim `corundum-demo.exe` sits beside it in
+`current\`.
 
 The `velopack` feature builds the demo as a Velopack package (corundum-framework#51,
 `docs/superpowers/specs/2026-10-29-velopack-runtime-design.md`), on
@@ -86,8 +103,9 @@ bar's badge), and the command line `corundum-demo` (on `Path` by the installer o
 through the console shim `corundum-framework-demo-console`; installed from the About page
 on macOS and Linux). A second start of the package exits before it applies a
 downloaded update: `main` takes the single-instance lock first and hands it to the window.
-A Settings › Velopack page starts `corundum-framework-demo-daemon`,
-which an update stops first, and shows the log the package's steps write. Pushing a tag
+The daemon is the package's service: an update stops it if it runs, and the next start
+starts it again. A Settings › Velopack page shows the log the package's steps write. Pushing
+a tag
 `demo-v<x.y.z>` packages it on each desktop (`demo-release.yml`) and puts the installers on
 that pre-release.
 

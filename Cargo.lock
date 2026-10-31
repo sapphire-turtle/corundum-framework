@@ -965,6 +965,7 @@ dependencies = [
  "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
 ]
 
@@ -982,7 +983,6 @@ version = "0.0.0"
 dependencies = [
  "corundum-framework",
  "corundum-framework-build",
- "libc",
  "objc2 0.6.5",
  "objc2-avf-audio",
  "objc2-foundation 0.3.2",
@@ -999,6 +999,7 @@ dependencies = [
  "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
  "eframe",
  "egui",
@@ -1056,6 +1057,7 @@ name = "corundum-framework-package"
 version = "0.4.0"
 dependencies = [
  "corundum-framework-platform",
+ "corundum-framework-service",
  "corundum-framework-update",
  "semver",
  "tempfile",
@@ -1094,6 +1096,18 @@ dependencies = [
  "unic-langid",
  "windows",
  "zbus",
+]
+
+[[package]]
+name = "corundum-framework-service"
+version = "0.4.0"
+dependencies = [
+ "clap",
+ "corundum-framework-platform",
+ "libc",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tracing",
 ]
 
 [[package]]

@@ -21,6 +21,9 @@ use std::process::Command;
 
 /// Runs the GUI binary `gui_exe` that sits beside this executable with this process's
 /// arguments, and exits with its exit code.
+///
+/// `gui_exe` is the GUI executable's file name as packaged: on Windows the cargo name kept,
+/// `<app>-desktop.exe`, since only macOS and Linux rename it to `<app>`.
 #[cfg(windows)]
 pub fn forward(gui_exe: &str) -> ! {
     let exe = match std::env::current_exe() {

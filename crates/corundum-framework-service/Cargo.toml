@@ -1,0 +1,32 @@
+[package]
+name = "corundum-framework-service"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.4.0"
+edition.workspace = true
+description = "Register an app's background service with the OS service manager: systemd, launchd, Task Scheduler"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["service", "systemd", "launchd", "daemon"]
+categories = ["os"]
+
+# `cli`: `ServiceCommand`, the `service install | uninstall | status` subcommand, for an app
+# whose command line is clap's.
+[features]
+cli = ["dep:clap"]
+
+# Desktops only: a phone has no user-level service manager. On iOS and Android the crate
+# builds empty.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+clap = { workspace = true, optional = true }
+corundum-framework-platform = { version = "0.4.0", path = "../corundum-framework-platform", default-features = false }
+thiserror.workspace = true
+tracing.workspace = true
+
+# `effective_uid()` reads `libc::geteuid` under `cfg(unix)` — `geteuid` is POSIX, defined on
+# every unix, not just Linux; the gate here matches that `cfg(unix)` use.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dev-dependencies]
+tempfile = "3"

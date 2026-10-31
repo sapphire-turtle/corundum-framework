@@ -357,19 +357,10 @@ pub fn status_at(spec: &LauncherSpec, root: &Root, exe: &Path) -> Status {
 }
 
 /// Whether `exe` is not to be registered: a build under cargo's `target` directory
-/// (`target/debug`, `target/release`, with a target triple between them when
-/// cross-compiled), or `env_set` for the variable `CORUNDUM_NO_LAUNCHER`.
+/// ([`is_cargo_build`](crate::package::is_cargo_build)), or `env_set` for the variable
+/// `CORUNDUM_NO_LAUNCHER`.
 pub(crate) fn skipped(exe: &Path, env_set: bool) -> bool {
-    if env_set {
-        return true;
-    }
-    let parts: Vec<_> = exe.components().map(|c| c.as_os_str()).collect();
-    let profile = |s: &std::ffi::OsStr| s == "debug" || s == "release";
-    parts.iter().enumerate().any(|(i, c)| {
-        *c == "target"
-            && (parts.get(i + 1).is_some_and(|p| profile(p))
-                || parts.get(i + 2).is_some_and(|p| profile(p)))
-    })
+    env_set || crate::package::is_cargo_build(exe)
 }
 
 /// Writes `bytes` to `path`, with its parent directories, unless the file already holds

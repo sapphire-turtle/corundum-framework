@@ -53,6 +53,10 @@ self-update = [
 # `package`: the panel's row for the app's own Velopack package (`update::Target::Package`,
 # `Target::this_app`). The desktops only: on iOS and Android it adds nothing.
 package = ["update", "dep:corundum-framework-package"]
+# `first_run::ServicePage` and `settings::ServiceRow`: the first-run question whether to keep
+# the app's services running in the background, and an About-page row per service, over
+# corundum-framework-service. The desktops only: on iOS and Android it adds nothing.
+service = ["serde", "dep:corundum-framework-service"]
 # The system's screens an app opens and waits for, off by default: each asks the app for
 # declarations of its own (corundum-framework-platform's features say which) and, on iOS,
 # links a framework App Store review looks at.
@@ -133,6 +137,9 @@ tempfile = "3"
 # desktops have them; a phone's are still to come.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 rfd = "0.17"
+# The app's background services, for the first-run page and the About rows (`service`). A
+# phone has no service manager to register one with.
+corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", optional = true }
 
 # eframe's full default (with `wayland`) everywhere but iOS; see the entry above.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

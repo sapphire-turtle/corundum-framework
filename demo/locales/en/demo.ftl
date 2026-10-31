@@ -150,6 +150,13 @@ demo-settings-look-memory = Kept while the demo runs: this platform gives it no 
 demo-settings-about = About
 demo-settings-version = Version { $version }
 demo-settings-velopack = Velopack
+demo-settings-first-run-again = Run first-run setup again
+
+# The first-run flow: a welcome, then whether to keep the daemon running in the background.
+demo-first-run-welcome = Welcome
+demo-first-run-welcome-text = This demo shows every piece corundum-framework shares with its apps. First, a question about its background daemon; then the demo itself.
+demo-first-run-service-question = Keep the demo's daemon running in the background?
+demo-first-run-service-reason = The daemon stands in for an app's server: it starts when you log in and keeps running while the window is closed. You can change this later in Settings › About.
 
 # The Detail screen: albums, and the picked one's tracks in the side pane.
 demo-detail-intro = Pick an album to see its tracks in the side pane. Wide, the pane is a right column beside every screen, which the button at the right end of the status bar hides; with it hidden, or on a phone, picking an album opens it.

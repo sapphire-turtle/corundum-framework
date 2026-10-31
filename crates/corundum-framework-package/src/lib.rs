@@ -17,6 +17,8 @@ pub mod console;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod error;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
+mod services;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod start;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod updater;
@@ -27,6 +29,8 @@ pub use cli_path::CliSpec;
 pub use error::Error;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use semver::Version;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub use services::Services;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use start::{PackageSpec, Start, start};
 #[cfg(not(any(target_os = "ios", target_os = "android")))]

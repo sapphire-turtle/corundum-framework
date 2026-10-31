@@ -14,7 +14,8 @@ release_always = false
 pr_branch_prefix = "release-plz/"
 pr_labels = ["release"]
 
-# They move together: the facade re-exports the platform, gui, update and package crates,
+# They move together: the facade re-exports the platform, gui, update, package, service and
+# keys crates,
 # the gui crate is built on the platform one, and the build crate is an app's
 # build-dependency.
 [[package]]
@@ -38,6 +39,10 @@ name = "corundum-framework-package"
 version_group = "corundum"
 
 [[package]]
+name = "corundum-framework-service"
+version_group = "corundum"
+
+[[package]]
 name = "corundum-framework-keys"
 version_group = "corundum"
 
@@ -53,6 +58,7 @@ changelog_include = [
   "corundum-framework-gui",
   "corundum-framework-update",
   "corundum-framework-package",
+  "corundum-framework-service",
   "corundum-framework-keys",
   "corundum-framework-build",
 ]

@@ -62,6 +62,12 @@ pub struct Stored {
     /// taken it out ([`LauncherRow`](crate::settings::LauncherRow)), so that the window does
     /// not write it back. `None`, as in a file written before this was kept, is `true`.
     pub launcher: Option<bool>,
+    /// Whether the [first-run flow](crate::first_run::FirstRun) has been finished: `None`
+    /// until it is, and again after [`FirstRun::reset`](crate::first_run::FirstRun::reset).
+    pub first_run: Option<bool>,
+    /// Whether the person has been asked about the app's background services: set once the
+    /// question has been answered either way, so it is not asked again.
+    pub services_asked: Option<bool>,
 }
 
 /// Whether the window registers the app's entry in the OS's app menu as it opens: unless
@@ -264,6 +270,7 @@ mod tests {
             rail: Some(rail()),
             side: None,
             launcher: Some(false),
+            ..Default::default()
         };
         store.save(&state).unwrap();
         assert_eq!(store.load(), Some(state));
@@ -296,6 +303,7 @@ mod tests {
                     rail: None,
                     side: None,
                     launcher: None,
+                    ..Default::default()
                 };
                 store.save(&state).unwrap();
                 assert_eq!(store.load(), Some(state));
@@ -357,6 +365,8 @@ mod tests {
             rail: Some(rail()),
             side: None,
             launcher: None,
+            first_run: None,
+            services_asked: None,
         };
         store(&dir).save(&state).unwrap();
         let ctx = egui::Context::default();

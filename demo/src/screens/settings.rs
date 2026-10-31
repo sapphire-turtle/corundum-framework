@@ -40,7 +40,7 @@ pub(crate) fn settings() -> Settings {
         .with_group(SettingsGroup::new(about_pages()))
 }
 
-/// About, and with the `velopack` feature the page of the daemon an update stops beside it.
+/// About, and with the `velopack` feature the page of the package's log beside it.
 fn about_pages() -> Vec<Box<dyn SettingsSection>> {
     #[allow(unused_mut)]
     let mut pages: Vec<Box<dyn SettingsSection>> = vec![Box::new(About::new())];
@@ -143,15 +143,19 @@ fn file_line(ui: &mut egui::Ui) {
     };
 }
 
-/// The app's name and version, its entry in the app menu, and the update row for the demo
-/// itself; with the `velopack` feature, its command line too.
+/// The app's name and version, its entry in the app menu, and on a desktop, the update row
+/// for the demo itself, the daemon's row, and the button that runs the first-run setup
+/// again; with the `velopack` feature, its command line too.
 ///
 /// The update row is not on Android or iOS, where the app is never updated this way (and the
-/// panel's HTTP client needs a C toolchain the phones' builds do not have).
+/// panel's HTTP client needs a C toolchain the phones' builds do not have), nor is the
+/// daemon, which is the desktops' (`gui-service`).
 struct About {
     launcher: corundum_framework::gui::settings::LauncherRow,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     updates: UpdatesPanel,
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    service: corundum_framework::gui::settings::ServiceRow,
     #[cfg(feature = "velopack")]
     cli: corundum_framework::gui::settings::CliRow,
 }
@@ -188,6 +192,7 @@ impl About {
         About {
             launcher: corundum_framework::gui::settings::LauncherRow::new(crate::LAUNCHER),
             updates: UpdatesPanel::new(vec![target], "corundum-framework-demo"),
+            service: corundum_framework::gui::settings::ServiceRow::new(crate::service::service),
             #[cfg(feature = "velopack")]
             cli: corundum_framework::gui::settings::CliRow::new(
                 crate::velopack::PACKAGE
@@ -215,6 +220,16 @@ impl SettingsSection for About {
         {
             ui.add_space(8.0);
             self.updates.ui(ui);
+            ui.add_space(8.0);
+            self.service.ui(ui);
+            ui.add_space(8.0);
+            if ui
+                .button(tr!(ui, "demo-settings-first-run-again"))
+                .clicked()
+            {
+                // The window shows the flow from the next frame (`Demo::first_run_ui`).
+                corundum_framework::gui::first_run::FirstRun::reset(ui.ctx());
+            }
         }
         #[cfg(feature = "velopack")]
         self.cli.ui(ui);

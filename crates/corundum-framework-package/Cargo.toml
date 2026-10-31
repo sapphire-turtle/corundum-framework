@@ -12,13 +12,18 @@ categories = ["os"]
 
 # `test-support`: `Updater::for_tests`, an updater in a given state that never applies, for a
 # GUI's tests.
+# `service`: `PackageSpec::services`, the app's background services, stopped before an
+# update is applied and started again at the next start, and on Windows uninstalled with
+# the app.
 [features]
 test-support = []
+service = ["dep:corundum-framework-service"]
 
 # Desktops only: Velopack packages Windows, macOS and Linux apps, and a phone's store installs
 # and updates the app. On iOS and Android the crate builds empty.
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 corundum-framework-platform = { version = "0.4.0", path = "../corundum-framework-platform", default-features = false }
+corundum-framework-service = { version = "0.4.0", path = "../corundum-framework-service", default-features = false, optional = true }
 corundum-framework-update = { version = "0.4.0", path = "../corundum-framework-update", default-features = false }
 semver = "1"
 thiserror.workspace = true
