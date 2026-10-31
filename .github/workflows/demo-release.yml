@@ -6,8 +6,9 @@ name: Demo release (Velopack)
 #
 # Started by pushing a tag `demo-v<x.y.z>`; push a second, higher one to try an update. A
 # tag rather than a manual run, so that the workflow runs from a branch before it is on main.
-# The packages are not signed yet: macOS asks to allow the app in System Settings › Privacy
-# & Security, and Windows SmartScreen warns before the installer runs.
+# The macOS package is signed with a Developer ID and notarized when the repository has the
+# MACOS_CERTIFICATE and APPLE_API_KEY secrets (see "Set up signing (macOS)"). The others are
+# not signed yet: Windows SmartScreen warns before the installer runs.
 on:
   push:
     tags: ['demo-v*']
@@ -86,6 +87,62 @@ jobs:
       - name: Render the icon
         run: cargo run --release --locked -p corundum-framework-demo --example icons -- icons
 
+      # A keychain of its own with the Developer ID Application and Installer certificates and
+      # the notary profile, for vpk to sign and notarize the app and its .pkg. Without the
+      # secrets (a fork, say) the package is made unsigned, as before.
+      - name: Set up signing (macOS)
+        if: runner.os == 'macOS'
+        env:
+          # The .p12 of both certificates, base64.
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          # An App Store Connect team key: the .p8's text, its key ID and its issuer ID.
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          if [ -z "$CERTIFICATE" ]; then
+            echo "::warning::No MACOS_CERTIFICATE secret: the macOS package is not signed"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -base64 24)
+          security create-keychain -p "$password" "$keychain"
+          # Notarizing takes minutes; the keychain must not lock meanwhile.
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
+          # vpk passes --keychain to codesign and notarytool but not to productbuild, which
+          # signs the .pkg and finds its identity only in the search list.
+          # Unquoted on purpose: the list is one keychain per line.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/api-key.p8"
+          xcrun notarytool store-credentials notary --keychain "$keychain" \
+            --key "$RUNNER_TEMP/api-key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
+          rm "$RUNNER_TEMP/api-key.p8"
+
+          # The identities by their kind, so the workflow names no team.
+          identity() {
+            security find-identity -v "$keychain" | sed -n "s/.*\"\($1: .*\)\"$/\1/p" | head -n 1
+          }
+          app=$(identity "Developer ID Application")
+          install=$(identity "Developer ID Installer")
+          if [ -z "$app" ] || [ -z "$install" ]; then
+            echo "MACOS_CERTIFICATE lacks a Developer ID Application or Installer identity"
+            security find-identity -v "$keychain"
+            exit 1
+          fi
+          {
+            echo "SIGN_KEYCHAIN=$keychain"
+            echo "SIGN_APP_IDENTITY=$app"
+            echo "SIGN_INSTALL_IDENTITY=$install"
+          } >> "$GITHUB_ENV"
+
       - name: Pack
         env:
           EXE: ${{ matrix.exe }}
@@ -101,6 +158,16 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
           fi
+          # Set by "Set up signing (macOS)"; an array, as the identities have spaces.
+          sign=()
+          if [ -n "${SIGN_APP_IDENTITY:-}" ]; then
+            sign=(
+              --signAppIdentity "$SIGN_APP_IDENTITY"
+              --signInstallIdentity "$SIGN_INSTALL_IDENTITY"
+              --notaryProfile notary
+              --keychain "$SIGN_KEYCHAIN"
+            )
+          fi
           # Unquoted on purpose: EXTRA is a list of arguments.
           vpk pack \
             --packId "$PACK_ID" \
@@ -113,8 +180,13 @@ jobs:
             --channel "$CHANNEL" \
             --delta None \
             --outputDir releases \
-            $EXTRA
+            $EXTRA \
+            ${sign[@]+"${sign[@]}"}
           ls -la releases
+
+      - name: Remove the signing keychain (macOS)
+        if: always() && env.SIGN_KEYCHAIN != ''
+        run: security delete-keychain "$SIGN_KEYCHAIN"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -153,4 +225,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --prerelease \
             --title "corundum demo ${GITHUB_REF_NAME#demo-v} (Velopack spike)" \
-            --notes "The demo packaged with Velopack, for corundum-framework#51. Not signed. Not for use."
+            --notes "The demo packaged with Velopack, for corundum-framework#51. Not signed on Linux or Windows. Not for use."
