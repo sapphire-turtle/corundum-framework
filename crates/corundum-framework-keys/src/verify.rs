@@ -98,13 +98,13 @@ mod tests {
     #[test]
     fn retire_is_seen_after_ttl() {
         let dir = tempfile::tempdir().unwrap();
-        let v = KeyVerifier::new(dir.path()).cache_ttl(Duration::from_millis(50));
+        let v = KeyVerifier::new(dir.path()).cache_ttl(Duration::from_secs(1));
         let mut store = KeyStore::open(dir.path()).unwrap();
         let (_, token) = store.add("p", None, None).unwrap();
         assert!(matches!(v.verify(token.expose()), Verdict::Accepted(_)));
         store.retire("p").unwrap();
         assert!(matches!(v.verify(token.expose()), Verdict::Accepted(_)));
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(1200));
         assert_eq!(v.verify(token.expose()), Verdict::Refused);
     }
 
