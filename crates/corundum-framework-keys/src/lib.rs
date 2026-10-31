@@ -30,3 +30,8 @@ pub use verify::{CACHE_TTL, KeyVerifier, Verdict};
 mod axum;
 #[cfg(feature = "axum")]
 pub use crate::axum::{Authenticated, require_key};
+
+#[cfg(feature = "clap")]
+mod cli;
+#[cfg(feature = "clap")]
+pub use cli::KeyCommand;
