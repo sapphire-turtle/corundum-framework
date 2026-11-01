@@ -8,6 +8,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.5.0...v0.6.0) - 2026-11-01
+
+### Added
+
+- [**breaking**] the org.sapphire-turtle namespace for the MPRIS track ids and the demo
+- *(instance)* a message with the activation
+- *(service)* [**breaking**] LaunchAgents under org.sapphire-turtle, adopting net.sapphire-turtle ones
+- *(service)* registered_program
+
+### Fixed
+
+- *(instance)* only a closed connection refuses; a timed-out read is no answer
+- *(instance)* ask plainly only when the message is refused, not when the answer is slow
+
 ### Breaking
 
 - *(corundum-framework-service)* A macOS LaunchAgent is registered as `org.sapphire-turtle.<app>`, the domain having moved to `sapphire-turtle.org`. An agent an earlier version registered as `net.sapphire-turtle.<app>` is retired and adopted under the new label by `install`, `uninstall`, `state` and `status`, as an app's `legacy_labels` are, without the app passing it ([#81](https://github.com/sapphire-turtle/corundum-framework/issues/81))
