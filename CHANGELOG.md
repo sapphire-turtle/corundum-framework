@@ -10,27 +10,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.7.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.6.0...v0.7.0) - 2026-11-01
 
-### Added
-
-- *(platform)* console::attach_parent, the parent's console for a GUI binary ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
-- *(gui)* [**breaking**] end the first-run flow early, and skip pages
-- *(gui)* [**breaking**] the keys page chooses each key's profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-- *(keys)* [**breaking**] require_key resolves the key's profile, 403 if it cannot ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-- *(keys)* keys add chooses from the app's profiles ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-- *(keys)* [**breaking**] every key names a profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-
-### Fixed
-
-- *(demo)* attach to the terminal only for its commands, not the window ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
-- *(gui)* the keys page asks for profiles again after a failure ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-
-### Other
-
-- Merge pull request #92 from sapphire-turtle/feat/89-attach-console
-- a service executable on Windows is a GUI binary; the demo attaches its console ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
-- keys name a profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
-- cargo fmt ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
-
 ### Breaking
 
 - *(corundum-framework-gui)* `first_run::PageAction` has a new variant `Finish`; a `match` on it needs an arm for it ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
@@ -44,6 +23,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - *(corundum-framework-gui)* `PageAction::Finish`, which ends the first-run flow at once from a page, and `FirstRunPage::skip`, which leaves a page out of the flow: it is not drawn, not counted among the steps, and **Next** and **Back** pass over it. It is asked each frame, so an earlier page's answer can skip the later ones without them showing for a frame ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
 - *(corundum-framework-keys)* `ProfileId`, `Profile` and `check_profile`: a key acts as one of the profiles the app offers (a role, a room profile, a user), and the app decides what each may do ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
 - *(corundum-framework-gui)* The API keys page has a required profile choice when adding a key, and shows each key's profile, or `<id> (unknown)` for one the app no longer offers ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
+- *(corundum-framework-platform)* `console::attach_parent` (feature `console`): a Windows GUI-subsystem binary that is also a command line prints in the terminal it was started from, without the package's console shim. Called on the command-line starts only, not the one that opens the window. The docs of `service_exe` and `install` now say that a console-subsystem executable registered as a service opens a console window at every logon ([#89](https://github.com/sapphire-turtle/corundum-framework/issues/89))
 
 ## [0.6.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.5.0...v0.6.0) - 2026-11-01
 
