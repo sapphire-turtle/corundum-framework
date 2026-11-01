@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "corundum-framework-gui",
  "corundum-framework-keys",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-build"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "corundum-framework-platform",
  "winresource",
@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-gui"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-keys"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1054,7 +1054,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-package"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "corundum-framework-platform",
  "corundum-framework-service",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-platform"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "block2 0.6.2",
  "dirs",
@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-service"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-update"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",

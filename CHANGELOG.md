@@ -8,6 +8,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.6.0...v0.7.0) - 2026-11-01
+
+### Added
+
+- *(platform)* console::attach_parent, the parent's console for a GUI binary ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
+- *(gui)* [**breaking**] end the first-run flow early, and skip pages
+- *(gui)* [**breaking**] the keys page chooses each key's profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+- *(keys)* [**breaking**] require_key resolves the key's profile, 403 if it cannot ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+- *(keys)* keys add chooses from the app's profiles ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+- *(keys)* [**breaking**] every key names a profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+
+### Fixed
+
+- *(demo)* attach to the terminal only for its commands, not the window ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
+- *(gui)* the keys page asks for profiles again after a failure ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+
+### Other
+
+- Merge pull request #92 from sapphire-turtle/feat/89-attach-console
+- a service executable on Windows is a GUI binary; the demo attaches its console ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
+- keys name a profile ([#85](https://github.com/sapphire-turtle/corundum-framework/pull/85))
+- cargo fmt ([#89](https://github.com/sapphire-turtle/corundum-framework/pull/89))
+
 ### Breaking
 
 - *(corundum-framework-gui)* `first_run::PageAction` has a new variant `Finish`; a `match` on it needs an arm for it ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
