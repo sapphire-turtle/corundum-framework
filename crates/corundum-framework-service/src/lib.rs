@@ -50,8 +50,8 @@ pub use launchd::{agent_path, label, labelled_agent_path, relabel, render_launch
 pub use manager::ServiceCommand;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use manager::{
-    Calls, RecordingManager, ServiceManager, SystemManager, install, start, state, status, stop,
-    uninstall,
+    Calls, RecordingManager, ServiceManager, SystemManager, install, registered_program, start,
+    state, status, stop, uninstall,
 };
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub use scope::{Environment, InstallContext, Os, PostInstall, ServiceSpec};
