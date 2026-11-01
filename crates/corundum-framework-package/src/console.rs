@@ -14,6 +14,12 @@
 //!
 //! A shim has no logging set up, so a job that cannot be made is reported on standard
 //! error.
+//!
+//! A binary without the shim (installed with `cargo install`, or run before there is a
+//! package) calls `corundum_framework_platform::console::attach_parent` first in `main`
+//! instead: its output then reaches the terminal it was started from, but the shell does
+//! not wait for it, so its exit code and typed input are lost. The shim stays the full
+//! command line.
 
 use std::ffi::OsString;
 use std::path::Path;

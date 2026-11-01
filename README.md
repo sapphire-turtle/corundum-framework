@@ -82,7 +82,11 @@ desktops and on phones.
   for an About page, removes it and adds it back; with a store the removal is kept, and the
   entry is not written again on the next start. A Windows app also sets
   `#![cfg_attr(windows, windows_subsystem = "windows")]` in its `main.rs`, or the console
-  opens with it.
+  opens with it, and at every logon too if it registers itself as a background service.
+  A binary that is also a command line calls `platform::console::attach_parent()` (the
+  `console` feature) first in `main`, so its output reaches the terminal without the
+  package's console shim; the shell does not wait for it, so the shim stays the full command
+  line, with its exit code and typed input.
 - **First run**: `first_run::FirstRun` (with the `serde` feature) shows the app's first-run
   pages (`FirstRunPage`, each answering a `PageAction`) over the window on the first start,
   remembers in `corundum.toml` that they were done, and runs them again from Settings.

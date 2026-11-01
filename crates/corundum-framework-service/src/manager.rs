@@ -358,8 +358,10 @@ impl ServiceCommand {
 /// running executable — the app that called this, or the AppImage it runs from
 /// ([`service_exe`](crate::service_exe)) — plus the spec's own arguments, because a service
 /// manager starts one file and nothing else. A desktop app that carries its server as a
-/// subcommand registers itself this way: started from its console shim on Windows, the
-/// running executable is the GUI-subsystem binary, which opens no console window.
+/// subcommand registers itself this way. On Windows that executable is a GUI-subsystem
+/// binary: the logon task opens a console window for a console-subsystem one, and closing
+/// that window stops the service. Its command line goes through the package's console shim,
+/// or `corundum_framework_platform::console::attach_parent` without one.
 ///
 /// The hook runs last, with the [`InstallContext`] the install resolved, so what it sees is
 /// what was installed. When the hook fails, the install reports the hook's own error and
