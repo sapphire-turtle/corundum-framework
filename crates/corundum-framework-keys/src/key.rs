@@ -5,8 +5,8 @@ use std::fmt;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::KeyHash;
 use crate::error::{Error, Result};
+use crate::{KeyHash, ProfileId};
 
 /// A key's id: ASCII letters, digits, `-` and `_`, so it can name the key's file.
 ///
@@ -95,9 +95,8 @@ pub struct Key {
     /// A note for the user.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    /// Who the key acts for, when the app has users.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subject: Option<String>,
+    /// The profile the key acts as; the app decides what it may do.
+    pub profile: ProfileId,
     /// The hash of its token.
     pub hash: KeyHash,
     /// When it was added.
@@ -122,7 +121,7 @@ impl Key {
             id: self.id.clone(),
             name: self.name.clone(),
             description: self.description.clone(),
-            subject: self.subject.clone(),
+            profile: self.profile.clone(),
             created_at: self.created_at,
             rotated_at: self.rotated_at,
             retired_at: self.retired_at,
@@ -140,9 +139,8 @@ pub struct KeyInfo {
     /// See [`Key::description`].
     #[serde(default)]
     pub description: Option<String>,
-    /// See [`Key::subject`].
-    #[serde(default)]
-    pub subject: Option<String>,
+    /// See [`Key::profile`].
+    pub profile: ProfileId,
     /// See [`Key::created_at`].
     pub created_at: DateTime<Utc>,
     /// See [`Key::rotated_at`].

@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use crate::error::Result;
-use crate::{Key, KeyStore, Token};
+use crate::{Key, KeyStore, ProfileId, Token};
 
 /// Manage API keys. Mount it under any name; it works on the files, so it needs no
 /// running server.
@@ -22,9 +22,9 @@ pub enum KeyCommand {
         /// A note for yourself.
         #[arg(long)]
         description: Option<String>,
-        /// Who the key acts for, when the app has users.
+        /// The profile the key acts as; one the app offers.
         #[arg(long)]
-        subject: Option<String>,
+        profile: String,
     },
     /// Retire a key: its token stops working.
     Retire {
@@ -66,9 +66,9 @@ impl KeyCommand {
             KeyCommand::Add {
                 name,
                 description,
-                subject,
+                profile,
             } => {
-                let (key, token) = store.add(&name, description, subject)?;
+                let (key, token) = store.add(&name, description, ProfileId::new(&profile)?)?;
                 show_token(out, err, &key, &token)?;
             }
             KeyCommand::Retire { selector } => {
@@ -138,7 +138,7 @@ mod tests {
         KeyCommand::Add {
             name: name.into(),
             description: None,
-            subject: None,
+            profile: "p".into(),
         }
     }
 
@@ -158,8 +158,10 @@ mod tests {
     fn list_hides_retired_unless_all() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = KeyStore::open(dir.path()).unwrap();
-        s.add("live", None, None).unwrap();
-        s.add("gone", None, None).unwrap();
+        s.add("live", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
+        s.add("gone", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         s.retire("gone").unwrap();
         let (_, out, _) = run(&mut s, KeyCommand::List { all: false });
         assert!(out.contains("live") && !out.contains("gone"), "{out}");
@@ -171,7 +173,9 @@ mod tests {
     fn rotate_prints_the_new_token() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = KeyStore::open(dir.path()).unwrap();
-        let (_, old) = s.add("p", None, None).unwrap();
+        let (_, old) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let (r, out, _) = run(
             &mut s,
             KeyCommand::Rotate {

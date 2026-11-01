@@ -114,7 +114,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         KeyStore::open(dir.path())
             .unwrap()
-            .add("p", None, None)
+            .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let (status, _) = call(app(dir.path()), Some("Bearer nope")).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -125,7 +125,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (_, token) = KeyStore::open(dir.path())
             .unwrap()
-            .add("pendant", None, None)
+            .add("pendant", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let (status, res) =
             call(app(dir.path()), Some(&format!("Bearer {}", token.expose()))).await;
@@ -139,7 +139,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (_, token) = KeyStore::open(dir.path())
             .unwrap()
-            .add("p", None, None)
+            .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         for scheme in ["bearer", "BEARER"] {
             let (status, _) = call(

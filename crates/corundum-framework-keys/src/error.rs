@@ -36,6 +36,29 @@ pub enum Error {
     /// Not a key id: ASCII letters, digits, `-` and `_` only.
     #[error("{0:?} is not a key id")]
     InvalidId(String),
+    /// A profile id cannot be empty.
+    #[error("a profile id cannot be empty")]
+    InvalidProfile(String),
+    /// Not one of the profiles the app offers.
+    #[error("{id:?} is not a profile; choose one of: {}", known_list(known))]
+    UnknownProfile {
+        /// The id given.
+        id: String,
+        /// The ids the app offers.
+        known: Vec<crate::ProfileId>,
+    },
+}
+
+fn known_list(known: &[crate::ProfileId]) -> String {
+    if known.is_empty() {
+        "(none)".to_owned()
+    } else {
+        known
+            .iter()
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 /// The store's result.

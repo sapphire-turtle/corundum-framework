@@ -86,7 +86,7 @@ mod tests {
         let v = KeyVerifier::new(dir.path());
         let (_, token) = KeyStore::open(dir.path())
             .unwrap()
-            .add("p", None, None)
+            .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         match v.verify(token.expose()) {
             Verdict::Accepted(info) => assert_eq!(info.name, "p"),
@@ -100,7 +100,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let v = KeyVerifier::new(dir.path()).cache_ttl(Duration::from_secs(1));
         let mut store = KeyStore::open(dir.path()).unwrap();
-        let (_, token) = store.add("p", None, None).unwrap();
+        let (_, token) = store
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         assert!(matches!(v.verify(token.expose()), Verdict::Accepted(_)));
         store.retire("p").unwrap();
         assert!(matches!(v.verify(token.expose()), Verdict::Accepted(_)));
@@ -113,7 +115,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let gone = dir.path().join("keys");
         let v = KeyVerifier::new(&gone);
-        let (_, token) = KeyStore::open(&gone).unwrap().add("p", None, None).unwrap();
+        let (_, token) = KeyStore::open(&gone)
+            .unwrap()
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         std::fs::remove_dir_all(&gone).unwrap();
         // `open` would create it again; the verifier must not, and must refuse.
         assert_eq!(v.verify(token.expose()), Verdict::Refused);
