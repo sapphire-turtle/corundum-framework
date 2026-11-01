@@ -102,6 +102,10 @@ single-instance = [
     "corundum-framework-gui?/single-instance",
 ]
 
+# `platform::console`: a Windows GUI-subsystem binary that is also a command line prints in
+# the terminal it was started from, without the package's console shim.
+console = ["platform", "corundum-framework-platform/console"]
+
 [dependencies]
 corundum-framework-platform = { version = "0.6.0", path = "../corundum-framework-platform", optional = true }
 # Without eframe unless asked for: eframe's default window does not build on Android.

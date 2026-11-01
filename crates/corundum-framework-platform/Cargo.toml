@@ -52,6 +52,10 @@ launcher = [
 # over to the first. Off by default: a server or a CLI runs as many times as it is started,
 # and it adds interprocess's local sockets.
 single-instance = ["dep:interprocess"]
+# `console`: `console::attach_parent`, which lets a Windows GUI-subsystem binary print in the
+# terminal it was started from. Off by default: only a binary that is both a window and a
+# command line wants it. Elsewhere it does nothing.
+console = ["windows/Win32_Security", "windows/Win32_System_Console"]
 media-session = [
     "windows/Win32_Foundation",
     "dep:raw-window-handle",

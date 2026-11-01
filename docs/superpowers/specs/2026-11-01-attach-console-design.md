@@ -76,7 +76,7 @@ up yet. A handle that cannot be opened stays missing, and the stream stays silen
 today.
 
 `corundum-framework-platform`'s `Cargo.toml` gains the feature
-`console = ["windows/Win32_System_Console"]` (`Win32_Foundation` and
+`console = ["windows/Win32_Security", "windows/Win32_System_Console"]` (`CreateFileW` needs `Win32_Security`) (`Win32_Foundation` and
 `Win32_Storage_FileSystem`, for `CreateFileW`, are always there), and `src/lib.rs` declares
 `#[cfg(feature = "console")] pub mod console;`. The umbrella crate forwards it as
 `single-instance` is: `console = ["platform", "corundum-framework-platform/console"]`, with
