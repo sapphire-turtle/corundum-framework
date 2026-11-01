@@ -176,3 +176,7 @@ corundum-keys-copy = コピー
 corundum-keys-close = 閉じる
 corundum-keys-none = まだキーはありません。
 corundum-keys-show-retired = 退避済みも表示
+corundum-keys-profile = プロファイル
+corundum-keys-profile-choose = プロファイルを選択
+corundum-keys-profile-none = 選べるプロファイルがありません。
+corundum-keys-profile-unknown = { $id }（不明）

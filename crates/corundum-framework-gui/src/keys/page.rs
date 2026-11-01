@@ -1,6 +1,6 @@
 //! [`KeysPage`]: the keys, and the buttons that change them.
 
-use super::{KeyInfo, KeysAnswer, KeysBackend, KeysRequest, Token};
+use super::{KeyInfo, KeysAnswer, KeysBackend, KeysRequest, Profile, ProfileId, Token};
 use crate::tr;
 
 /// A change waiting for the user to confirm it.
@@ -9,12 +9,14 @@ enum Confirm {
     Rotate(KeyInfo),
 }
 
-/// The API keys page: the keys (retired ones behind a toggle), a form to add one, and per
-/// key Retire, Restore and Rotate. Retire and Rotate ask first. A new token is shown in a
+/// The API keys page: the keys (retired ones behind a toggle) with their profiles, a form to
+/// add one with its profile, and per key Retire, Restore and Rotate. Retire and Rotate ask first. A new token is shown in a
 /// dialog, once, and forgotten when the dialog closes.
 pub struct KeysPage {
     backend: Box<dyn KeysBackend>,
     keys: Vec<KeyInfo>,
+    /// The profiles a key may name, as last asked.
+    profiles: Vec<Profile>,
     /// Whether the list was asked for.
     asked: bool,
     error: Option<String>,
@@ -22,7 +24,17 @@ pub struct KeysPage {
     confirm: Option<Confirm>,
     name: String,
     description: String,
+    /// The profile chosen in the add form.
+    profile: Option<ProfileId>,
     show_retired: bool,
+}
+
+/// The label of the profile `id`, if `profiles` has it.
+fn profile_label<'a>(profiles: &'a [Profile], id: &ProfileId) -> Option<&'a str> {
+    profiles
+        .iter()
+        .find(|p| &p.id == id)
+        .map(|p| p.label.as_str())
 }
 
 impl KeysPage {
@@ -31,12 +43,14 @@ impl KeysPage {
         KeysPage {
             backend,
             keys: Vec::new(),
+            profiles: Vec::new(),
             asked: false,
             error: None,
             token: None,
             confirm: None,
             name: String::new(),
             description: String::new(),
+            profile: None,
             show_retired: false,
         }
     }
@@ -57,6 +71,17 @@ impl KeysPage {
         &self.keys
     }
 
+    /// Whether the add form is complete: a name and a profile.
+    pub(crate) fn can_add(&self) -> bool {
+        !self.name.trim().is_empty() && self.profile.is_some()
+    }
+
+    /// Ask for the keys and the profiles.
+    fn refresh(&mut self) {
+        self.backend.send(KeysRequest::List);
+        self.backend.send(KeysRequest::Profiles);
+    }
+
     /// Send the change the user confirmed.
     fn confirmed(&mut self) {
         match self.confirm.take() {
@@ -74,10 +99,18 @@ impl KeysPage {
                     self.keys = keys;
                     self.error = None;
                 }
-                KeysAnswer::Changed(_) => self.backend.send(KeysRequest::List),
+                KeysAnswer::Profiles(profiles) => {
+                    if let Some(chosen) = &self.profile
+                        && !profiles.iter().any(|p| &p.id == chosen)
+                    {
+                        self.profile = None;
+                    }
+                    self.profiles = profiles;
+                }
+                KeysAnswer::Changed(_) => self.refresh(),
                 KeysAnswer::WithToken(key, token) => {
                     self.token = Some((key, token));
-                    self.backend.send(KeysRequest::List);
+                    self.refresh();
                 }
                 KeysAnswer::Failed(message) => self.error = Some(message),
             }
@@ -89,7 +122,7 @@ impl KeysPage {
         self.receive();
         if !self.asked {
             self.asked = true;
-            self.backend.send(KeysRequest::List);
+            self.refresh();
         }
 
         ui.heading(tr!(ui, "corundum-keys-title"));
@@ -114,19 +147,43 @@ impl KeysPage {
                 ui.label(tr!(ui, "corundum-keys-description"));
                 ui.text_edit_singleline(&mut self.description);
                 ui.end_row();
+                ui.label(tr!(ui, "corundum-keys-profile"));
+                if self.profiles.is_empty() {
+                    ui.weak(tr!(ui, "corundum-keys-profile-none"));
+                } else {
+                    let selected = self
+                        .profile
+                        .as_ref()
+                        .and_then(|id| profile_label(&self.profiles, id))
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| tr!(ui, "corundum-keys-profile-choose"));
+                    egui::ComboBox::from_id_salt("corundum_keys_profile")
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            for p in &self.profiles {
+                                ui.selectable_value(
+                                    &mut self.profile,
+                                    Some(p.id.clone()),
+                                    &p.label,
+                                );
+                            }
+                        });
+                }
+                ui.end_row();
             });
-        let name = self.name.trim();
         if ui
             .add_enabled(
-                !name.is_empty(),
+                self.can_add(),
                 egui::Button::new(tr!(ui, "corundum-keys-add")),
             )
             .clicked()
+            && let Some(profile) = self.profile.take()
         {
             let description = self.description.trim();
             self.backend.send(KeysRequest::Add {
-                name: name.to_owned(),
+                name: self.name.trim().to_owned(),
                 description: (!description.is_empty()).then(|| description.to_owned()),
+                profile,
             });
             self.name.clear();
             self.description.clear();
@@ -151,6 +208,14 @@ impl KeysPage {
         for key in shown {
             ui.horizontal(|ui| {
                 ui.strong(&key.name);
+                match profile_label(&self.profiles, &key.profile) {
+                    Some(label) => ui.label(label),
+                    None => ui.label(tr!(
+                        ui,
+                        "corundum-keys-profile-unknown",
+                        id = key.profile.as_str()
+                    )),
+                };
                 if let Some(d) = &key.description {
                     ui.weak(d);
                 }
@@ -266,16 +331,26 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (k, t) = KeyStore::open(dir.path())
             .unwrap()
-            .add(name, None, None)
+            .add(name, None, ProfileId::new("admin").unwrap())
             .unwrap();
         (k.info(), t)
+    }
+
+    fn profile(id: &str, label: &str) -> Profile {
+        Profile {
+            id: ProfileId::new(id).unwrap(),
+            label: label.into(),
+        }
     }
 
     #[test]
     fn first_frame_asks_for_the_list() {
         let (mut p, shared) = page();
         render([400.0, 600.0], |ui| p.ui(ui));
-        assert_eq!(shared.borrow().sent, vec![KeysRequest::List]);
+        assert_eq!(
+            shared.borrow().sent,
+            vec![KeysRequest::List, KeysRequest::Profiles]
+        );
     }
 
     #[test]
@@ -295,7 +370,12 @@ mod tests {
         assert_eq!(p.shown_token(), None);
         assert_eq!(
             shared.borrow().sent,
-            vec![KeysRequest::List, KeysRequest::List],
+            vec![
+                KeysRequest::List,
+                KeysRequest::Profiles,
+                KeysRequest::List,
+                KeysRequest::Profiles
+            ],
             "the list is asked again after a change"
         );
     }
@@ -337,5 +417,50 @@ mod tests {
                 .contains(&KeysRequest::Retire(a.id.clone()))
         );
         assert!(p.confirm.is_none());
+    }
+
+    #[test]
+    fn add_needs_a_name_and_a_profile() {
+        let (mut p, shared) = page();
+        p.name = "p".into();
+        assert!(!p.can_add());
+        shared
+            .borrow_mut()
+            .queued
+            .push(KeysAnswer::Profiles(vec![profile("admin", "Admin")]));
+        render([400.0, 600.0], |ui| p.ui(ui));
+        p.profile = Some(ProfileId::new("admin").unwrap());
+        assert!(p.can_add());
+        p.name = "  ".into();
+        assert!(!p.can_add());
+    }
+
+    #[test]
+    fn vanished_profile_is_deselected() {
+        let (mut p, shared) = page();
+        p.name = "p".into();
+        shared
+            .borrow_mut()
+            .queued
+            .push(KeysAnswer::Profiles(vec![profile("admin", "Admin")]));
+        render([400.0, 600.0], |ui| p.ui(ui));
+        p.profile = Some(ProfileId::new("admin").unwrap());
+        shared
+            .borrow_mut()
+            .queued
+            .push(KeysAnswer::Profiles(vec![profile("editor", "Editor")]));
+        render([400.0, 600.0], |ui| p.ui(ui));
+        assert_eq!(p.profile, None);
+        assert!(!p.can_add());
+    }
+
+    #[test]
+    fn profile_label_or_none() {
+        let list = [profile("admin", "Admin")];
+        assert_eq!(
+            profile_label(&list, &ProfileId::new("admin").unwrap()),
+            Some("Admin")
+        );
+        assert_eq!(profile_label(&list, &ProfileId::new("gone").unwrap()), None);
     }
 }

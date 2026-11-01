@@ -188,3 +188,7 @@ corundum-keys-copy = Copy
 corundum-keys-close = Close
 corundum-keys-none = No keys yet.
 corundum-keys-show-retired = Show retired
+corundum-keys-profile = Profile
+corundum-keys-profile-choose = Choose a profile
+corundum-keys-profile-none = There are no profiles to choose from.
+corundum-keys-profile-unknown = { $id } (unknown)
