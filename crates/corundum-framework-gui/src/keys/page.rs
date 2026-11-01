@@ -112,7 +112,12 @@ impl KeysPage {
                     self.token = Some((key, token));
                     self.refresh();
                 }
-                KeysAnswer::Failed(message) => self.error = Some(message),
+                KeysAnswer::Failed(message) => {
+                    self.error = Some(message);
+                    // An add may have failed because a profile went away: offer the ones
+                    // there are now.
+                    self.backend.send(KeysRequest::Profiles);
+                }
             }
         }
     }
@@ -462,5 +467,22 @@ mod tests {
             Some("Admin")
         );
         assert_eq!(profile_label(&list, &ProfileId::new("gone").unwrap()), None);
+    }
+
+    #[test]
+    fn failed_answer_asks_for_profiles_again() {
+        let (mut p, shared) = page();
+        render([400.0, 600.0], |ui| p.ui(ui));
+        shared.borrow_mut().sent.clear();
+        shared
+            .borrow_mut()
+            .queued
+            .push(KeysAnswer::Failed("not a profile".into()));
+        render([400.0, 600.0], |ui| p.ui(ui));
+        assert!(
+            shared.borrow().sent.contains(&KeysRequest::Profiles),
+            "{:?}",
+            shared.borrow().sent
+        );
     }
 }
