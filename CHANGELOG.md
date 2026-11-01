@@ -8,6 +8,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Breaking
+
+- *(corundum-framework-gui)* `first_run::PageAction` has a new variant `Finish`; a `match` on it needs an arm for it ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
+
+### Added
+
+- *(corundum-framework-gui)* `PageAction::Finish`, which ends the first-run flow at once from a page, and `FirstRunPage::skip`, which leaves a page out of the flow: it is not drawn, not counted among the steps, and **Next** and **Back** pass over it. It is asked each frame, so an earlier page's answer can skip the later ones without them showing for a frame ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
+
 ## [0.6.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.5.0...v0.6.0) - 2026-11-01
 
 ### Breaking
