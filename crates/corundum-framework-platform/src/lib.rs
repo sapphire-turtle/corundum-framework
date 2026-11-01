@@ -25,10 +25,16 @@
 //!
 //! With the `single-instance` feature, `instance` keeps a desktop app to one running copy:
 //! a second start brings the first's window to the front and exits.
+//!
+//! With the `console` feature, `console` lets a Windows GUI-subsystem binary, one that is
+//! also a command line, print in the terminal it was started from without the package's
+//! console shim.
 
 #[cfg(target_os = "android")]
 pub mod android;
 pub mod clipboard;
+#[cfg(feature = "console")]
+pub mod console;
 pub mod dirs;
 #[cfg(all(feature = "icon", not(any(target_os = "ios", target_os = "android"))))]
 pub mod icon;

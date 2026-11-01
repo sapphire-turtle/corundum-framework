@@ -15,6 +15,12 @@ use corundum_framework_platform::package::{self, PackageKind, PackageLayout};
 
 /// The executable a service manager should start to run this one again: the AppImage
 /// inside one, the running executable everywhere else.
+///
+/// On Windows the logon task starts it in the user's session, so a console-subsystem
+/// executable opens a console window at every logon, and closing the window stops the
+/// service. An app that registers itself is built for the GUI subsystem
+/// (`windows_subsystem = "windows"`) and prints through the package's console shim, or
+/// through `corundum_framework_platform::console::attach_parent` without one.
 pub fn service_exe() -> std::io::Result<PathBuf> {
     let running = std::env::current_exe()?;
     Ok(resolve(running, package::current().as_ref(), cfg!(windows)))

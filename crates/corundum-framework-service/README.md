@@ -11,7 +11,10 @@ or runs a command, so tests use `RecordingManager`. With the `cli` feature, `Ser
 is the `service install | uninstall | status` subcommand for a clap command line.
 
 The executable the manager starts is the running one, or inside a Velopack package the file
-that lasts: the AppImage itself on Linux.
+that lasts: the AppImage itself on Linux. On Windows it is a GUI-subsystem binary: started by
+the logon task, a console-subsystem one opens a console window at every logon, and closing
+that window stops the service. Its command line goes through the package's console shim, or
+`corundum_framework_platform::console::attach_parent` (`console` feature) without one.
 
 Before uninstalling the app on macOS or Linux, remove its background service (Settings ›
 About › Remove). Windows' uninstaller removes it.

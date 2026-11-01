@@ -7,6 +7,14 @@ fn main() -> corundum_framework::eframe::Result<()> {
     use corundum_demo::CommandLine;
 
     let command = corundum_demo::command_line(std::env::args_os().skip(1));
+    // Without the package's shim (a `cargo install`ed demo), `--help`, `--version` and the
+    // daemon's log reach the terminal through its console; the daemon's task, with no parent
+    // console, opens none. Not the window: attached, it would take the terminal's Ctrl+C and
+    // close with it.
+    if command.in_terminal() {
+        corundum_framework::platform::console::attach_parent();
+    }
+    let answered = command.answer();
     // The daemon is the service manager's process, not the window's: it takes no
     // single-instance lock, and it skips the package's start, which starts again the
     // services an update stopped. The daemon is one of them, and starting it from itself
@@ -26,7 +34,7 @@ fn main() -> corundum_framework::eframe::Result<()> {
         let start = corundum_framework::package::start(&corundum_demo::velopack::PACKAGE);
         corundum_demo::velopack::log_start(&start);
     }
-    if command == CommandLine::Done {
+    if answered {
         return Ok(());
     }
     // A downloaded update is applied at start, which a second start must not do under the

@@ -71,6 +71,9 @@ package is built as `<app>-desktop`, while its headless build keeps `<app>`. Pac
   `vpk pack --mainExe <app>`.
 - Windows: keep the GUI executable's name, add the console shim as `<app>.exe`, and run
   `vpk pack --mainExe <app>-desktop.exe`. The shim calls `console::forward("<app>-desktop.exe")`.
+  Without the shim (`cargo install`, or before packaging) the GUI executable prints in the
+  terminal through `corundum_framework_platform::console::attach_parent`, which the shell
+  does not wait for: no exit code, no typed input.
 - `--packTitle` equals `LauncherSpec::name`, so the installer's shortcut and the launcher's
   path coincide.
 - Velopack's `Update.exe` (`UpdateMac` on macOS) stays beside the executable; vpk puts it

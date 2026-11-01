@@ -196,12 +196,24 @@ fn the_daemon_subcommand_is_recognised() {
     let line = |args: &[&str]| command_line(args.iter().map(OsString::from));
     assert_eq!(line(&["daemon"]), CommandLine::Daemon);
     assert_eq!(line(&[]), CommandLine::Window);
-    assert_eq!(line(&["--version"]), CommandLine::Done);
+    assert_eq!(line(&["--version"]), CommandLine::Version);
+    assert_eq!(line(&["-h"]), CommandLine::Help);
     // Only an exact first argument: the window keeps the files it was opened with, a file
     // called `daemon` among them.
     assert_eq!(line(&["notes.txt", "daemon"]), CommandLine::Window);
     assert_eq!(line(&["daemons"]), CommandLine::Window);
     assert_eq!(line(&["./daemon"]), CommandLine::Window);
+}
+
+// Only a start answered in the terminal attaches to it: a window opened from a shell must not
+// take the shell's Ctrl+C and close (#89).
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[test]
+fn only_the_terminal_s_commands_are_in_the_terminal() {
+    assert!(CommandLine::Help.in_terminal());
+    assert!(CommandLine::Version.in_terminal());
+    assert!(CommandLine::Daemon.in_terminal());
+    assert!(!CommandLine::Window.in_terminal());
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

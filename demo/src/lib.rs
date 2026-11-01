@@ -332,37 +332,59 @@ fn window_options() -> corundum_framework::gui::window::WindowOptions {
 pub enum CommandLine {
     /// Open the window, with the arguments as they are.
     Window,
-    /// Answered in the terminal (`--help`, `--version`): exit.
-    Done,
+    /// `--help`: print the usage and exit.
+    Help,
+    /// `--version`: print the version and exit.
+    Version,
     /// Run the daemon, the demo's background service ([`service::service`]).
     Daemon,
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+impl CommandLine {
+    /// Whether this start belongs to the terminal it came from: everything but the window.
+    /// Only such a start attaches to the terminal's console on Windows
+    /// (`platform::console::attach_parent`); a window would take the terminal's Ctrl+C and
+    /// close with it.
+    pub fn in_terminal(self) -> bool {
+        self != CommandLine::Window
+    }
+
+    /// Print what `--help` and `--version` answer; `true` when this start is done with that.
+    pub fn answer(self) -> bool {
+        match self {
+            CommandLine::Help => {
+                println!(
+                    "corundum-framework demo {}\n\n\
+                     Usage: corundum-demo [--help | --version | daemon]\n\n\
+                     Without an argument, opens the demo's window. `daemon` runs the demo's\n\
+                     background service, as the service manager starts it.",
+                    env!("CARGO_PKG_VERSION")
+                );
+                true
+            }
+            CommandLine::Version => {
+                println!("corundum-framework demo {}", env!("CARGO_PKG_VERSION"));
+                true
+            }
+            CommandLine::Window | CommandLine::Daemon => false,
+        }
+    }
 }
 
 /// The command line the package puts on `PATH` (`corundum-demo`), from the arguments after
 /// the executable's name: `daemon` runs the daemon, `--help` and `--version` answer in the
 /// terminal. Any other start opens the window, arguments and all, as the app menu's entry
 /// passes the files it was given: only an exact first argument is taken for an option or the
-/// subcommand.
+/// subcommand. Nothing is printed here: [`CommandLine::answer`] does that.
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn command_line(args: impl IntoIterator<Item = std::ffi::OsString>) -> CommandLine {
     // `OsString`: a file name the entry passes need not be UTF-8.
     let first = args.into_iter().next();
     match first.as_ref().and_then(|arg| arg.to_str()) {
         Some("daemon") => CommandLine::Daemon,
-        Some("--help" | "-h") => {
-            println!(
-                "corundum-framework demo {}\n\n\
-                 Usage: corundum-demo [--help | --version | daemon]\n\n\
-                 Without an argument, opens the demo's window. `daemon` runs the demo's\n\
-                 background service, as the service manager starts it.",
-                env!("CARGO_PKG_VERSION")
-            );
-            CommandLine::Done
-        }
-        Some("--version" | "-V") => {
-            println!("corundum-framework demo {}", env!("CARGO_PKG_VERSION"));
-            CommandLine::Done
-        }
+        Some("--help" | "-h") => CommandLine::Help,
+        Some("--version" | "-V") => CommandLine::Version,
         _ => CommandLine::Window,
     }
 }
