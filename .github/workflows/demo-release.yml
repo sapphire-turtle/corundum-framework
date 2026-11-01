@@ -48,7 +48,7 @@ jobs:
             icon: icon.icns
             # The launcher writes the same bundle id; it steps aside inside a package (#51), so the
             # one in ~/Applications and this one do not clash.
-            extra: --bundleId net.sapphire-turtle.corundum-demo
+            extra: --bundleId org.sapphire-turtle.corundum-demo
           - os: windows-latest
             channel: win
             exe: '.exe'

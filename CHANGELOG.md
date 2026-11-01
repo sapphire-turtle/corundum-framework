@@ -8,6 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Breaking
+
+- *(corundum-framework-service)* A macOS LaunchAgent is registered as `org.sapphire-turtle.<app>`, the domain having moved to `sapphire-turtle.org`. An agent an earlier version registered as `net.sapphire-turtle.<app>` is retired and adopted under the new label by `install`, `uninstall`, `state` and `status`, as an app's `legacy_labels` are, without the app passing it ([#81](https://github.com/sapphire-turtle/corundum-framework/issues/81))
+- *(corundum-framework-platform)* The MPRIS track ids are `/org/sapphire_turtle/corundum/track/<n>` ([#81](https://github.com/sapphire-turtle/corundum-framework/issues/81))
+- *(demo)* The demo's identifiers use `org.sapphire-turtle` (`org.sapphire_turtle` where a hyphen is not allowed): its launcher entry, its macOS and iOS bundle id, its Windows app id and its Android application id, so an installed demo is another app to the system ([#81](https://github.com/sapphire-turtle/corundum-framework/issues/81))
+
 ### Added
 
 - *(corundum-framework-platform)* `instance::AlreadyRunning::activate_with`, `Instance::on_activate_with` and `instance::acquire_or_activate_with`: a second start tells the running one a short message with the activation, such as which page to show. A running start of an older version is asked again plainly and comes to the front without it ([sapphire-framework#363](https://github.com/sapphire-turtle/sapphire-framework/issues/363))

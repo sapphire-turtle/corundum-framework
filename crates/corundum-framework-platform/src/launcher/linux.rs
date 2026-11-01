@@ -174,7 +174,7 @@ mod tests {
         description: "Every piece corundum shares",
         category: "Development",
         icon_svg: b"<svg/>",
-        bundle_prefix: "net.sapphire-turtle",
+        bundle_prefix: "org.sapphire-turtle",
     };
 
     #[test]
