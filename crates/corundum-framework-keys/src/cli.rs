@@ -3,7 +3,7 @@
 use std::io::Write;
 
 use crate::error::Result;
-use crate::{Key, KeyStore, ProfileId, Token};
+use crate::{Key, KeyStore, Profile, ProfileId, Token, check_profile};
 
 /// Manage API keys. Mount it under any name; it works on the files, so it needs no
 /// running server.
@@ -45,22 +45,30 @@ pub enum KeyCommand {
 
 impl KeyCommand {
     /// Carry out the command on `store`, printing to stdout and stderr; the exit code.
-    pub fn run(self, store: &mut KeyStore) -> Result<i32> {
-        self.run_to(store, &mut std::io::stdout(), &mut std::io::stderr())
+    /// `profiles` are the ones the app offers: `add` takes one of them, `list` shows their
+    /// labels.
+    pub fn run(self, store: &mut KeyStore, profiles: &[Profile]) -> Result<i32> {
+        self.run_to(
+            store,
+            profiles,
+            &mut std::io::stdout(),
+            &mut std::io::stderr(),
+        )
     }
 
     /// As [`run`](Self::run), printing to `out` and `err`. The token alone goes to `out`,
-    /// so `token=$(app api-key add pendant)` works.
+    /// so `token=$(app api-key add pendant --profile admin)` works.
     pub fn run_to(
         self,
         store: &mut KeyStore,
+        profiles: &[Profile],
         out: &mut dyn Write,
         err: &mut dyn Write,
     ) -> Result<i32> {
         match self {
             KeyCommand::List { all } => {
                 for key in store.list().iter().filter(|k| all || !k.is_retired()) {
-                    print(out, &line(key))?;
+                    print(out, &line(key, profiles))?;
                 }
             }
             KeyCommand::Add {
@@ -68,7 +76,9 @@ impl KeyCommand {
                 description,
                 profile,
             } => {
-                let (key, token) = store.add(&name, description, ProfileId::new(&profile)?)?;
+                let profile = ProfileId::new(&profile)?;
+                check_profile(profiles, &profile)?;
+                let (key, token) = store.add(&name, description, profile)?;
                 show_token(out, err, &key, &token)?;
             }
             KeyCommand::Retire { selector } => {
@@ -88,12 +98,18 @@ impl KeyCommand {
     }
 }
 
-/// `id  name  created  [retired]`.
-fn line(key: &Key) -> String {
+/// `id  name  profile  created  [retired]`; the profile by its label, or
+/// `<id> (unknown)`.
+fn line(key: &Key, profiles: &[Profile]) -> String {
+    let profile = match profiles.iter().find(|p| p.id == key.profile) {
+        Some(p) => p.label.clone(),
+        None => format!("{} (unknown)", key.profile),
+    };
     let mut line = format!(
-        "{}  {}  {}",
+        "{}  {}  {}  {}",
         key.id,
         key.name,
+        profile,
         key.created_at.format("%Y-%m-%d %H:%M")
     );
     if key.is_retired() {
@@ -124,9 +140,19 @@ fn print(to: &mut dyn Write, text: &str) -> Result<()> {
 mod tests {
     use super::*;
 
+    fn profiles() -> Vec<Profile> {
+        ["admin", "editor"]
+            .iter()
+            .map(|id| Profile {
+                id: ProfileId::new(id).unwrap(),
+                label: id[..1].to_uppercase() + &id[1..],
+            })
+            .collect()
+    }
+
     fn run(store: &mut KeyStore, c: KeyCommand) -> (Result<i32>, String, String) {
         let (mut out, mut err) = (Vec::new(), Vec::new());
-        let r = c.run_to(store, &mut out, &mut err);
+        let r = c.run_to(store, &profiles(), &mut out, &mut err);
         (
             r,
             String::from_utf8(out).unwrap(),
@@ -138,8 +164,56 @@ mod tests {
         KeyCommand::Add {
             name: name.into(),
             description: None,
-            profile: "p".into(),
+            profile: "admin".into(),
         }
+    }
+
+    fn add_as(name: &str, profile: &str) -> KeyCommand {
+        KeyCommand::Add {
+            name: name.into(),
+            description: None,
+            profile: profile.into(),
+        }
+    }
+
+    #[test]
+    fn add_with_unknown_profile_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = KeyStore::open(dir.path()).unwrap();
+        let (r, out, _) = run(&mut s, add_as("p", "nope"));
+        let err = r.unwrap_err();
+        assert!(
+            matches!(err, crate::Error::UnknownProfile { .. }),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("admin, editor"), "{err}");
+        assert!(out.is_empty());
+        assert!(KeyStore::open(dir.path()).unwrap().list().is_empty());
+    }
+
+    #[test]
+    fn add_with_empty_profile_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = KeyStore::open(dir.path()).unwrap();
+        let (r, _, _) = run(&mut s, add_as("p", ""));
+        assert!(matches!(r, Err(crate::Error::InvalidProfile(_))));
+    }
+
+    #[test]
+    fn list_shows_profile_label_or_unknown() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = KeyStore::open(dir.path()).unwrap();
+        s.add("a", None, ProfileId::new("admin").unwrap()).unwrap();
+        s.add("b", None, ProfileId::new("gone").unwrap()).unwrap();
+        let (_, out, _) = run(&mut s, KeyCommand::List { all: false });
+        let line_of = |name: &str| {
+            out.lines()
+                .find(|l| l.contains(&format!("  {name}  ")))
+                .unwrap_or_else(|| panic!("no line for {name}: {out}"))
+                .to_owned()
+        };
+        assert!(line_of("a").contains("Admin"), "{out}");
+        assert!(line_of("b").contains("gone (unknown)"), "{out}");
     }
 
     #[test]
