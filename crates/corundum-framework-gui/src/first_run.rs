@@ -34,6 +34,14 @@ pub trait FirstRunPage {
     fn can_continue(&self) -> bool {
         true
     }
+
+    /// Whether to leave the page out: a skipped page is neither drawn nor counted among
+    /// the steps, and **Next** and **Back** pass over it. It is asked each frame, so a page
+    /// can be skipped by what the person answered on an earlier one (an answer the pages
+    /// share, through an `Rc<Cell<_>>` say).
+    fn skip(&self) -> bool {
+        false
+    }
 }
 
 /// What a page or the footer asks the flow to do.
@@ -45,6 +53,10 @@ pub enum PageAction {
     Next,
     /// Go back to the previous page; on the first page, stay.
     Back,
+    /// Finish the flow here, leaving the pages after this one unshown. Unlike
+    /// [`Next`](Self::Next), it is not held by [`FirstRunPage::can_continue`]: a page asks for
+    /// it when an answer makes the rest of the flow needless.
+    Finish,
 }
 
 /// The first-run flow over a list of pages.
@@ -84,12 +96,20 @@ impl FirstRun {
 
     /// Draw the current page with its header and footer over the whole of `ui`. Returns
     /// `true` once the flow is finished (and, from then on, without drawing anything).
+    /// A current page that has come to be [skipped](FirstRunPage::skip) is passed over
+    /// as **Next** would; with no page left to show, the flow is finished.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> bool {
         if Self::done(ui.ctx()) || self.pages.is_empty() {
             return true;
         }
-        let count = self.pages.len();
+        match self.shown_from(self.current) {
+            Some(index) => self.current = index,
+            None => return self.finish(ui.ctx()),
+        }
         let current = self.current;
+        let (step, count) = self.step();
+        let on_last = self.on_last();
+        let can_go_back = self.can_go_back();
         let mut action = PageAction::Stay;
 
         egui::Panel::top("corundum_first_run_header").show(ui, |ui| {
@@ -100,7 +120,7 @@ impl FirstRun {
             ui.label(tr!(
                 ui,
                 "corundum-first-run-step",
-                step = current + 1,
+                step = step,
                 count = count
             ));
             ui.add_space(8.0);
@@ -109,11 +129,11 @@ impl FirstRun {
         egui::Panel::bottom("corundum_first_run_footer").show(ui, |ui| {
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if current > 0 && ui.button(tr!(ui, "corundum-first-run-back")).clicked() {
+                if can_go_back && ui.button(tr!(ui, "corundum-first-run-back")).clicked() {
                     action = PageAction::Back;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let id = if current + 1 == count {
+                    let id = if on_last {
                         "corundum-first-run-finish"
                     } else {
                         "corundum-first-run-next"
@@ -148,19 +168,60 @@ impl FirstRun {
     }
 
     /// Carry out `action`; whether that finished the flow. A **Next** the page cannot
-    /// continue from is dropped, as the disabled button would not have sent it.
+    /// continue from is dropped, as the disabled button would not have sent it. Skipped
+    /// pages are asked after the page's own `ui`, so an answer given this frame counts.
     fn apply(&mut self, ctx: &egui::Context, action: PageAction) -> bool {
         match action {
             PageAction::Stay => {}
-            PageAction::Back => self.current = self.current.saturating_sub(1),
-            PageAction::Next if !self.pages[self.current].can_continue() => {}
-            PageAction::Next if self.current + 1 < self.pages.len() => self.current += 1,
-            PageAction::Next => {
-                store::update(ctx, |stored| stored.first_run = Some(true));
-                return true;
+            PageAction::Back => {
+                if let Some(index) = self.shown_before(self.current) {
+                    self.current = index;
+                }
             }
+            PageAction::Next if !self.pages[self.current].can_continue() => {}
+            PageAction::Next => match self.shown_from(self.current + 1) {
+                Some(index) => self.current = index,
+                None => return self.finish(ctx),
+            },
+            PageAction::Finish => return self.finish(ctx),
         }
         false
+    }
+
+    /// Mark the flow finished on this device; always `true`, for [`ui`](Self::ui) to return.
+    fn finish(&mut self, ctx: &egui::Context) -> bool {
+        store::update(ctx, |stored| stored.first_run = Some(true));
+        true
+    }
+
+    /// The first page at or after `index` that is not skipped.
+    fn shown_from(&self, index: usize) -> Option<usize> {
+        (index..self.pages.len()).find(|&i| !self.pages[i].skip())
+    }
+
+    /// The last page before `index` that is not skipped.
+    fn shown_before(&self, index: usize) -> Option<usize> {
+        (0..index).rev().find(|&i| !self.pages[i].skip())
+    }
+
+    /// The current page's place among the pages not skipped, from 1, and their number.
+    fn step(&self) -> (usize, usize) {
+        let shown =
+            |range: std::ops::Range<usize>| range.filter(|&i| !self.pages[i].skip()).count();
+        (
+            shown(0..self.current) + 1,
+            shown(0..self.pages.len()).max(1),
+        )
+    }
+
+    /// Whether no page after the current one is shown, so **Next** finishes.
+    fn on_last(&self) -> bool {
+        self.shown_from(self.current + 1).is_none()
+    }
+
+    /// Whether a page before the current one is shown, for **Back** to go to.
+    fn can_go_back(&self) -> bool {
+        self.shown_before(self.current).is_some()
     }
 
     /// Press a footer button on the next frame, as a click would.
@@ -172,7 +233,7 @@ impl FirstRun {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
     use std::rc::Rc;
 
     use super::*;
@@ -185,18 +246,27 @@ mod tests {
         drawn: Rc<Cell<usize>>,
         /// What the page asks for on its next frame, once.
         asks: Rc<Cell<Option<PageAction>>>,
+        /// The numbers of the pages to skip.
+        skipped: Rc<RefCell<Vec<usize>>>,
+        /// The numbers of the pages whose title or content was asked for, in order.
+        seen: Rc<RefCell<Vec<usize>>>,
     }
 
     impl FirstRunPage for Page {
         fn title(&self, _: &egui::Context) -> String {
+            self.seen.borrow_mut().push(self.number);
             format!("page {}", self.number)
         }
         fn ui(&mut self, _: &mut egui::Ui) -> PageAction {
+            self.seen.borrow_mut().push(self.number);
             self.drawn.set(self.number);
             self.asks.take().unwrap_or(PageAction::Stay)
         }
         fn can_continue(&self) -> bool {
             self.open.get()
+        }
+        fn skip(&self) -> bool {
+            self.skipped.borrow().contains(&self.number)
         }
     }
 
@@ -206,6 +276,8 @@ mod tests {
         open: Rc<Cell<bool>>,
         drawn: Rc<Cell<usize>>,
         asks: Rc<Cell<Option<PageAction>>>,
+        skipped: Rc<RefCell<Vec<usize>>>,
+        seen: Rc<RefCell<Vec<usize>>>,
     }
 
     impl Flow {
@@ -213,6 +285,8 @@ mod tests {
             let open = Rc::new(Cell::new(true));
             let drawn = Rc::new(Cell::new(0));
             let asks = Rc::new(Cell::new(None));
+            let skipped = Rc::new(RefCell::new(Vec::new()));
+            let seen = Rc::new(RefCell::new(Vec::new()));
             let pages = (1..=count)
                 .map(|number| {
                     Box::new(Page {
@@ -220,6 +294,8 @@ mod tests {
                         open: open.clone(),
                         drawn: drawn.clone(),
                         asks: asks.clone(),
+                        skipped: skipped.clone(),
+                        seen: seen.clone(),
                     }) as Box<dyn FirstRunPage>
                 })
                 .collect();
@@ -229,7 +305,14 @@ mod tests {
                 open,
                 drawn,
                 asks,
+                skipped,
+                seen,
             }
+        }
+
+        /// Skip the pages numbered `numbers` from now on.
+        fn skip(&self, numbers: &[usize]) {
+            *self.skipped.borrow_mut() = numbers.to_vec();
         }
 
         /// Run a frame with `action` pressed; whether the flow is finished.
@@ -348,5 +431,110 @@ mod tests {
         );
         assert!(flow.press(PageAction::Next));
         assert!(FirstRun::done(&flow.ctx));
+    }
+
+    #[test]
+    fn a_page_can_finish_the_flow() {
+        let mut flow = Flow::new(3);
+        flow.asks.set(Some(PageAction::Finish));
+        assert!(flow.press(PageAction::Stay));
+        assert!(FirstRun::done(&flow.ctx));
+        flow.drawn.set(0);
+        assert!(flow.press(PageAction::Stay));
+        assert_eq!(flow.drawn.get(), 0);
+    }
+
+    #[test]
+    fn finish_is_not_held_by_can_continue() {
+        let mut flow = Flow::new(3);
+        flow.open.set(false);
+        flow.asks.set(Some(PageAction::Finish));
+        assert!(flow.press(PageAction::Stay));
+        assert!(FirstRun::done(&flow.ctx));
+    }
+
+    #[test]
+    fn a_skipped_page_is_never_drawn() {
+        let mut flow = Flow::new(3);
+        flow.skip(&[2]);
+        assert_eq!(flow.page(), 1);
+        flow.press(PageAction::Next);
+        assert_eq!(flow.page(), 3);
+        assert!(!flow.seen.borrow().contains(&2));
+    }
+
+    #[test]
+    fn skipped_pages_are_not_counted() {
+        let mut flow = Flow::new(4);
+        flow.skip(&[2]);
+        flow.page();
+        assert_eq!(flow.flow.step(), (1, 3));
+        flow.press(PageAction::Next);
+        flow.page();
+        assert_eq!(flow.flow.step(), (2, 3));
+        flow.press(PageAction::Next);
+        flow.page();
+        assert_eq!(flow.flow.step(), (3, 3));
+        assert!(flow.flow.on_last());
+    }
+
+    #[test]
+    fn next_over_only_skipped_pages_finishes() {
+        let mut flow = Flow::new(4);
+        flow.skip(&[2, 3, 4]);
+        assert!(flow.press(PageAction::Next));
+        assert!(FirstRun::done(&flow.ctx));
+        assert!(!flow.seen.borrow().iter().any(|&n| n > 1));
+    }
+
+    #[test]
+    fn a_page_answer_can_skip_the_rest() {
+        // Page 1's answer makes 2 and 3 skipped in the same frame it asks to move on.
+        let mut flow = Flow::new(3);
+        flow.page();
+        flow.skip(&[2, 3]);
+        flow.asks.set(Some(PageAction::Next));
+        assert!(flow.press(PageAction::Stay));
+        assert!(FirstRun::done(&flow.ctx));
+    }
+
+    #[test]
+    fn a_skipped_first_page_is_passed_over() {
+        let mut flow = Flow::new(3);
+        flow.skip(&[1]);
+        assert_eq!(flow.page(), 2);
+        assert!(!flow.seen.borrow().contains(&1));
+        assert_eq!(flow.flow.step(), (1, 2));
+    }
+
+    #[test]
+    fn back_steps_over_skipped_pages() {
+        let mut flow = Flow::new(4);
+        flow.skip(&[2, 3]);
+        flow.press(PageAction::Next);
+        assert_eq!(flow.page(), 4);
+        flow.press(PageAction::Back);
+        assert_eq!(flow.page(), 1);
+    }
+
+    #[test]
+    fn back_with_only_skipped_pages_before_stays() {
+        let mut flow = Flow::new(3);
+        flow.skip(&[1]);
+        assert_eq!(flow.page(), 2);
+        assert!(!flow.flow.can_go_back());
+        flow.press(PageAction::Back);
+        assert_eq!(flow.page(), 2);
+    }
+
+    #[test]
+    fn a_page_no_longer_skipped_is_shown_again_on_back() {
+        let mut flow = Flow::new(3);
+        flow.skip(&[2]);
+        flow.press(PageAction::Next);
+        assert_eq!(flow.page(), 3);
+        flow.skip(&[]);
+        flow.press(PageAction::Back);
+        assert_eq!(flow.page(), 2);
     }
 }

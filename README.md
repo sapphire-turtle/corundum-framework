@@ -87,7 +87,9 @@ desktops and on phones.
   pages (`FirstRunPage`, each answering a `PageAction`) over the window on the first start,
   remembers in `corundum.toml` that they were done, and runs them again from Settings.
   `FirstRun::new(app_name, pages)` makes it, `done(ctx)` says whether it ran, `reset(ctx)`
-  shows it again.
+  shows it again. A page can end the flow early with `PageAction::Finish`, or be left out
+  (neither drawn nor counted) by answering `true` from `FirstRunPage::skip`, say after an
+  earlier page's answer made it needless.
 - **Background services** (`service` feature, desktops only): `first_run::ServicePage`, the
   first-run question whether to keep the app's services running in the background, and
   `settings::ServiceRow`, an About-page row per service that says what it is doing and
