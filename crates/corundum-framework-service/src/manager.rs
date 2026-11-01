@@ -614,7 +614,8 @@ fn adopt_legacy_agent(
     Ok(())
 }
 
-/// Take every agent installed under one of the spec's [`legacy_labels`] off launchd and
+/// Take every agent installed under one of the spec's [`legacy_labels`] — or one of this
+/// crate's [`previous_labels`](crate::launchd::previous_labels) — off launchd and
 /// remove its plist, returning the label and the plist of the first one found; `None` off
 /// macOS or when there is none.
 ///
@@ -627,12 +628,19 @@ fn retire_legacy_agent(
     env: &Environment,
     manager: &dyn ServiceManager,
 ) -> Result<Option<(String, String)>> {
-    if env.os != Os::MacOs || spec.legacy_labels.is_empty() {
+    if env.os != Os::MacOs {
         return Ok(None);
+    }
+    // The app's own, then this crate's earlier ones.
+    let mut labels: Vec<String> = spec.legacy_labels.clone();
+    for previous in crate::launchd::previous_labels(spec.app_name) {
+        if !labels.contains(&previous) {
+            labels.push(previous);
+        }
     }
     let home = home_dir(env)?;
     let mut first = None;
-    for legacy_label in &spec.legacy_labels {
+    for legacy_label in &labels {
         let path = labelled_agent_path(legacy_label, &home);
         let Some(body) = manager.read_unit(&path)? else {
             continue;
@@ -944,7 +952,7 @@ mod tests {
             vec![command(&[
                 "launchctl",
                 "print",
-                "gui/1000/net.sapphire-turtle.sapphire-agent"
+                "gui/1000/org.sapphire-turtle.sapphire-agent"
             ])]
         );
     }
@@ -996,7 +1004,7 @@ mod tests {
 
     #[test]
     fn stop_and_start_run_each_backend_s_commands() {
-        let label = "gui/1000/net.sapphire-turtle.sapphire-agent";
+        let label = "gui/1000/org.sapphire-turtle.sapphire-agent";
         let plist = current_plist().display().to_string();
         for (env, stop_commands, start_commands) in [
             (
@@ -1226,7 +1234,7 @@ mod tests {
         let (path, body) = &calls.units[0];
         assert_eq!(path, &current_plist());
         assert!(
-            body.contains("<string>net.sapphire-turtle.sapphire-agent</string>"),
+            body.contains("<string>org.sapphire-turtle.sapphire-agent</string>"),
             "{body}"
         );
         assert!(
@@ -1301,12 +1309,41 @@ mod tests {
     }
 
     #[test]
-    fn without_legacy_labels_no_old_agent_is_looked_for() {
+    fn without_legacy_labels_only_corundum_s_previous_label_is_looked_for() {
         let manager = RecordingManager::new();
         let mut spec = spec();
         spec.legacy_labels.clear();
         install(&spec, &macos(), &manager).unwrap();
-        assert!(manager.calls().read.is_empty());
+        assert_eq!(
+            manager.calls().read,
+            [labelled_agent_path(
+                "net.sapphire-turtle.sapphire-agent",
+                Path::new("/home/user")
+            )]
+        );
+    }
+
+    #[test]
+    fn corundum_s_previous_label_is_adopted_without_legacy_labels() {
+        let mut spec = spec();
+        spec.legacy_labels.clear();
+        let previous = "net.sapphire-turtle.sapphire-agent";
+        let old = labelled_agent_path(previous, Path::new("/home/user"));
+        let manager =
+            RecordingManager::new().with_unit(&old, &legacy_body().replace(LEGACY_LABEL, previous));
+        state(&spec, &macos(), &manager).unwrap();
+        let calls = manager.calls();
+        assert!(calls.removed.contains(&old), "{:?}", calls.removed);
+        let (path, body) = calls
+            .units
+            .last()
+            .expect("the agent is written under the new label");
+        assert_eq!(path, &current_plist());
+        assert!(
+            body.contains("<string>org.sapphire-turtle.sapphire-agent</string>"),
+            "{body}"
+        );
+        assert!(!body.contains(previous), "{body}");
     }
 
     #[test]
@@ -1321,7 +1358,7 @@ mod tests {
                 command(&[
                     "launchctl",
                     "bootout",
-                    "gui/1000/net.sapphire-turtle.sapphire-agent"
+                    "gui/1000/org.sapphire-turtle.sapphire-agent"
                 ]),
                 command(&[
                     "launchctl",

@@ -83,7 +83,7 @@ fn a_launch_agent() {
 fn a_launch_agent_label_is_namespaced() {
     let rendered = render_launch_agent(&spec(), &ctx());
     assert!(
-        rendered.contains("net.sapphire-turtle.sapphire-agent"),
+        rendered.contains("org.sapphire-turtle.sapphire-agent"),
         "a LaunchAgent label is a global namespace: {rendered}"
     );
 }
