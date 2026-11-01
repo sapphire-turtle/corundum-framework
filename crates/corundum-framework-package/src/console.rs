@@ -16,8 +16,8 @@
 //! error.
 //!
 //! A binary without the shim (installed with `cargo install`, or run before there is a
-//! package) calls `corundum_framework_platform::console::attach_parent` first in `main`
-//! instead: its output then reaches the terminal it was started from, but the shell does
+//! package) calls `corundum_framework_platform::console::attach_parent` instead, on its
+//! command-line starts only (not the one that opens the window): its output then reaches the terminal it was started from, but the shell does
 //! not wait for it, so its exit code and typed input are lost. The shim stays the full
 //! command line.
 

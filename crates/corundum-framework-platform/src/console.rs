@@ -6,7 +6,13 @@
 //! console, so when the same binary is also the app's command line, what it prints goes
 //! nowhere. The package's console shim (`corundum_framework_package::console::forward`)
 //! fixes that from outside; a binary without the shim (installed with `cargo install`, or
-//! run before there is a package) calls [`attach_parent`] first in `main` instead.
+//! run before there is a package) calls [`attach_parent`] instead, once it knows the start
+//! is a command (a subcommand, `--help`) and before it prints.
+//!
+//! Not for a start that opens the window. Attached, the process shares the terminal's
+//! console: the terminal's Ctrl+C and its closing end the process, and whatever it logs to
+//! standard output or error lands in the shell. A window opened from a terminal stays
+//! detached from it.
 //!
 //! [`attach_parent`] makes output visible; it does not make a full command line. `cmd` and
 //! PowerShell do not wait for a GUI-subsystem process: the prompt comes back at once and

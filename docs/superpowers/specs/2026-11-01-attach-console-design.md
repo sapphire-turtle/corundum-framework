@@ -53,7 +53,9 @@ Success means:
 pub fn attach_parent() -> bool
 ```
 
-An app calls it first thing in `main`, before anything prints.
+An app calls it on its command-line starts (a subcommand, `--help`), before anything
+prints, and not on the start that opens the window: attached, the window would share the
+terminal's console and end with its Ctrl+C or its closing (found in the branch review).
 
 On Windows:
 
@@ -100,9 +102,11 @@ a row in its feature table.
 ## Demo
 
 The demo's desktop dependency on `corundum-framework` turns on `console`, and
-`demo/src/main.rs` calls `corundum_framework::platform::console::attach_parent()` first in
-`main`, so a `cargo install`ed demo (no `velopack`, no shim) prints its `--help` and
-`--version` in a terminal, and its daemon task opens no window.
+`demo/src/main.rs` calls `corundum_framework::platform::console::attach_parent()` for the
+starts that belong to the terminal (`--help`, `--version`, `daemon`; `CommandLine::in_terminal`),
+before printing, so a `cargo install`ed demo (no `velopack`, no shim) prints them in a
+terminal, while its window, opened from a terminal, stays detached, and its daemon task opens
+no window.
 
 ## Testing
 
