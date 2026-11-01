@@ -11,10 +11,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Breaking
 
 - *(corundum-framework-gui)* `first_run::PageAction` has a new variant `Finish`; a `match` on it needs an arm for it ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
+- *(corundum-framework-keys)* Every key names a profile: `Key::subject` / `KeyInfo::subject` are replaced by a required `profile: ProfileId`, and `KeyStore::add` takes a `ProfileId` instead of `Option<String>`. A key file without `profile` (or with an empty one) is skipped when read, so its token is refused ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
+- *(corundum-framework-keys)* `require_key(verifier, resolve, router)` takes the app's resolver from a key to its profile; a key whose profile it does not resolve is answered 403. `Authenticated` is `Authenticated<P> { key, profile }` ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
+- *(corundum-framework-keys)* `KeyCommand::run` / `run_to` take the app's `&[Profile]`, and `add` needs `--profile` naming one of them ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
+- *(corundum-framework-gui)* `LocalKeys::new` takes the app's profiles, `KeysRequest::Add` has a `profile`, and `KeysRequest` / `KeysAnswer` have a new `Profiles` variant ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
 
 ### Added
 
 - *(corundum-framework-gui)* `PageAction::Finish`, which ends the first-run flow at once from a page, and `FirstRunPage::skip`, which leaves a page out of the flow: it is not drawn, not counted among the steps, and **Next** and **Back** pass over it. It is asked each frame, so an earlier page's answer can skip the later ones without them showing for a frame ([#86](https://github.com/sapphire-turtle/corundum-framework/issues/86))
+- *(corundum-framework-keys)* `ProfileId`, `Profile` and `check_profile`: a key acts as one of the profiles the app offers (a role, a room profile, a user), and the app decides what each may do ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
+- *(corundum-framework-gui)* The API keys page has a required profile choice when adding a key, and shows each key's profile, or `<id> (unknown)` for one the app no longer offers ([#85](https://github.com/sapphire-turtle/corundum-framework/issues/85))
 
 ## [0.6.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.5.0...v0.6.0) - 2026-11-01
 

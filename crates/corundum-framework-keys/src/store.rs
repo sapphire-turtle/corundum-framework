@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 
 use crate::error::{Error, Result};
-use crate::{Key, KeyHash, KeyId, Token};
+use crate::{Key, KeyHash, KeyId, ProfileId, Token};
 
 /// A directory of keys.
 ///
@@ -193,7 +193,7 @@ impl KeyStore {
         &mut self,
         name: &str,
         description: Option<String>,
-        subject: Option<String>,
+        profile: ProfileId,
     ) -> Result<(Key, Token)> {
         self.reload()?;
         if self.keys.iter().any(|k| k.name == name && !k.is_retired()) {
@@ -204,7 +204,7 @@ impl KeyStore {
             id: KeyId::generate(),
             name: name.to_owned(),
             description,
-            subject,
+            profile,
             hash: KeyHash::of_blake3(token.expose()),
             created_at: Utc::now(),
             rotated_at: None,
@@ -285,7 +285,13 @@ mod tests {
     #[test]
     fn add_then_authenticate() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("pendant", Some("desk".into()), None).unwrap();
+        let (key, token) = s
+            .add(
+                "pendant",
+                Some("desk".into()),
+                crate::ProfileId::new("p").unwrap(),
+            )
+            .unwrap();
         assert_eq!(s.authenticate(token.expose()).unwrap().id, key.id);
         // and from a fresh read of the directory
         let again = KeyStore::open(dir.path()).unwrap();
@@ -297,7 +303,9 @@ mod tests {
     #[test]
     fn retired_is_refused_and_restore_accepts() {
         let (_dir, mut s) = store();
-        let (_, token) = s.add("p", None, None).unwrap();
+        let (_, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         assert!(s.retire("p").unwrap().is_retired());
         assert!(s.authenticate(token.expose()).is_none());
         assert!(!s.restore("p").unwrap().is_retired());
@@ -307,7 +315,9 @@ mod tests {
     #[test]
     fn rotate_keeps_id_and_replaces_token() {
         let (_dir, mut s) = store();
-        let (key, old) = s.add("p", None, None).unwrap();
+        let (key, old) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let (rotated, new) = s.rotate(key.id.as_str()).unwrap();
         assert_eq!(rotated.id, key.id);
         assert!(rotated.rotated_at.is_some());
@@ -327,7 +337,7 @@ mod tests {
             id: KeyId::new("abc123").unwrap(),
             name: "imported".into(),
             description: None,
-            subject: None,
+            profile: ProfileId::new("p").unwrap(),
             hash: format!("sha256:{hex}").parse().unwrap(),
             created_at: Utc::now(),
             rotated_at: None,
@@ -341,7 +351,9 @@ mod tests {
     #[test]
     fn bad_file_is_skipped() {
         let (dir, mut s) = store();
-        let (_, token) = s.add("p", None, None).unwrap();
+        let (_, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         std::fs::write(dir.path().join("garbage.toml"), "not = [toml").unwrap();
         let again = KeyStore::open(dir.path()).unwrap();
         assert_eq!(again.list().len(), 1);
@@ -351,7 +363,9 @@ mod tests {
     #[test]
     fn temp_files_are_ignored() {
         let (dir, mut s) = store();
-        let (key, _) = s.add("p", None, None).unwrap();
+        let (key, _) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let text = std::fs::read_to_string(dir.path().join(format!("{}.toml", key.id))).unwrap();
         std::fs::write(dir.path().join(".other.toml.tmp"), &text).unwrap();
         std::fs::write(dir.path().join(".other.toml"), &text).unwrap();
@@ -362,7 +376,9 @@ mod tests {
     fn prefix_is_hashed() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = KeyStore::open(dir.path()).unwrap().token_prefix("p-");
-        let (_, token) = s.add("k", None, None).unwrap();
+        let (_, token) = s
+            .add("k", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         assert!(token.expose().starts_with("p-"));
         assert!(s.authenticate(token.expose()).is_some());
         assert!(s.authenticate(&token.expose()[2..]).is_none());
@@ -371,10 +387,15 @@ mod tests {
     #[test]
     fn add_refuses_taken_name() {
         let (_dir, mut s) = store();
-        s.add("p", None, None).unwrap();
-        assert!(matches!(s.add("p", None, None), Err(Error::NameTaken(_))));
+        s.add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
+        assert!(matches!(
+            s.add("p", None, crate::ProfileId::new("p").unwrap()),
+            Err(Error::NameTaken(_))
+        ));
         s.retire("p").unwrap();
-        s.add("p", None, None).unwrap();
+        s.add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
     }
 
     #[test]
@@ -382,10 +403,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut a = KeyStore::open(dir.path()).unwrap();
         let mut b = KeyStore::open(dir.path()).unwrap();
-        let (ka, _) = a.add("pendant", None, None).unwrap();
+        let (ka, _) = a
+            .add("pendant", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         // `b` writes from its own view, as a second host would before syncing.
         std::fs::remove_file(dir.path().join(format!("{}.toml", ka.id))).unwrap();
-        let (kb, _) = b.add("pendant", None, None).unwrap();
+        let (kb, _) = b
+            .add("pendant", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         a.import(ka.clone()).unwrap();
         let s = KeyStore::open(dir.path()).unwrap();
         assert!(matches!(s.resolve("pendant"), Err(Error::Ambiguous(_))));
@@ -396,7 +421,8 @@ mod tests {
     #[test]
     fn empty_token_is_refused() {
         let (_dir, mut s) = store();
-        s.add("p", None, None).unwrap();
+        s.add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         assert!(s.authenticate("").is_none());
     }
 
@@ -414,7 +440,9 @@ mod tests {
     #[test]
     fn copy_alone_never_accepts() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let file = dir.path().join(format!("{}.toml", key.id));
         std::fs::rename(
             &file,
@@ -429,7 +457,9 @@ mod tests {
     #[test]
     fn retired_copy_retires_the_key() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let mut copy = key.clone();
         copy.retired_at = Some(Utc::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
@@ -442,7 +472,9 @@ mod tests {
     #[test]
     fn unretired_copy_does_not_change_the_key() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let other = Token::generate("");
         let mut copy = key.clone();
         copy.hash = KeyHash::of_blake3(other.expose());
@@ -456,7 +488,9 @@ mod tests {
     #[test]
     fn copy_under_a_different_name_groups_by_id() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let mut copy = key.clone();
         copy.retired_at = Some(Utc::now());
         plant(dir.path(), "B.conflict-r-1.toml", &copy);
@@ -469,7 +503,9 @@ mod tests {
     #[test]
     fn restore_clears_a_retired_copy() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let mut copy = key.clone();
         copy.retired_at = Some(Utc::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
@@ -482,7 +518,9 @@ mod tests {
     #[test]
     fn failed_write_keeps_the_retired_copy() {
         let (dir, mut s) = store();
-        let (key, token) = s.add("p", None, None).unwrap();
+        let (key, token) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         let mut copy = key.clone();
         copy.retired_at = Some(Utc::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
@@ -497,7 +535,9 @@ mod tests {
     #[test]
     fn a_leftover_tmp_does_not_block_a_write() {
         let (dir, mut s) = store();
-        let (key, _) = s.add("p", None, None).unwrap();
+        let (key, _) = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap();
         // Another writer's temporary file of the same key, still there.
         std::fs::create_dir(dir.path().join(format!(".{}.toml.tmp", key.id))).unwrap();
         s.retire("p").unwrap();
@@ -506,9 +546,50 @@ mod tests {
     #[test]
     fn import_refuses_an_id_differing_in_case() {
         let (_dir, mut s) = store();
-        let mut key = s.add("p", None, None).unwrap().0;
+        let mut key = s
+            .add("p", None, crate::ProfileId::new("p").unwrap())
+            .unwrap()
+            .0;
         key.id = KeyId::new(&key.id.as_str().to_uppercase()).unwrap();
         key.name = "q".into();
         assert!(matches!(s.import(key), Err(Error::IdTaken(_))));
+    }
+
+    fn pid(s: &str) -> crate::ProfileId {
+        crate::ProfileId::new(s).unwrap()
+    }
+
+    #[test]
+    fn add_stores_the_profile() {
+        let (dir, mut s) = store();
+        let (key, _) = s.add("p", None, pid("editor")).unwrap();
+        let again = KeyStore::open(dir.path()).unwrap();
+        assert_eq!(again.list()[0].profile.as_str(), "editor");
+        assert_eq!(again.list()[0].info().profile, pid("editor"));
+        let text = std::fs::read_to_string(dir.path().join(format!("{}.toml", key.id))).unwrap();
+        assert!(text.contains("profile = \"editor\""), "{text}");
+    }
+
+    /// Rewrite the key's `profile` line with `with`, and check the key is skipped.
+    fn assert_skipped_with_profile_line(with: &str) {
+        let (dir, mut s) = store();
+        let (key, token) = s.add("p", None, pid("admin")).unwrap();
+        let path = dir.path().join(format!("{}.toml", key.id));
+        let text = std::fs::read_to_string(&path).unwrap();
+        let text = text.replace("profile = \"admin\"", with);
+        std::fs::write(&path, text).unwrap();
+        let fresh = KeyStore::open(dir.path()).unwrap();
+        assert!(fresh.list().is_empty(), "{with:?} was read");
+        assert!(fresh.authenticate(token.expose()).is_none());
+    }
+
+    #[test]
+    fn file_without_profile_is_skipped() {
+        assert_skipped_with_profile_line("subject = \"x\"");
+    }
+
+    #[test]
+    fn file_with_empty_profile_is_skipped() {
+        assert_skipped_with_profile_line("profile = \"\"");
     }
 }

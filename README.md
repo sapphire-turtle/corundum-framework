@@ -107,7 +107,7 @@ desktops and on phones.
 | `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
-| `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend` (brings corundum-framework-keys) | no |
+| `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
 
@@ -182,8 +182,8 @@ through to the gui crate.
 | `package` | `package`: corundum-framework-package (brings `platform`) | no |
 | `service` | `service`: corundum-framework-service (brings `platform`) | no |
 | `keys` | `keys`: corundum-framework-keys | no |
-| `keys-axum` | `keys::require_key`, the layer that checks a router's requests (brings `keys`) | no |
-| `keys-clap` | `keys::KeyCommand`, the subcommand that manages a store (brings `keys`) | no |
+| `keys-axum` | `keys::require_key`, the layer that checks a router's requests and resolves each key's profile with the app's function (brings `keys`) | no |
+| `keys-clap` | `keys::KeyCommand`, the subcommand that manages a store; `add --profile` takes one of the app's profiles (brings `keys`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
