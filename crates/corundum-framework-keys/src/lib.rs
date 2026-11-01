@@ -6,13 +6,18 @@
 //! because two hosts adding keys never write the same file. Only a hash of each token is
 //! kept; the token is shown once, when it is made.
 //!
+//! Every key names a [`ProfileId`]: an id only the app understands. corundum authenticates
+//! the token; the app resolves the profile and decides what it may do.
+//!
 //! - [`KeyStore`]: add, list, retire, restore, rotate and import keys, and authenticate a
 //!   token.
 //! - [`KeyVerifier`]: the check a server makes on every request, with a short cache.
-//! - `axum` feature: [`require_key`], a layer that does that check for a router.
+//! - `axum` feature: [`require_key`], a layer that does that check for a router and
+//!   resolves the key's profile with the app's function.
 //! - `clap` feature: [`KeyCommand`], the subcommand that manages a store from a terminal.
 //!
-//! See `docs/superpowers/specs/2026-10-31-api-keys-design.md`.
+//! See `docs/superpowers/specs/2026-10-31-api-keys-design.md` and
+//! `docs/superpowers/specs/2026-11-01-key-profiles-design.md`.
 
 mod error;
 mod hash;

@@ -1,5 +1,8 @@
 # API keys: a key store, its verification and its management page
 
+> `subject` and the out-of-scope "per-key scopes" are replaced by
+> `2026-11-01-key-profiles-design.md`: every key names a required profile.
+
 Issue: sapphire-framework#364 (this crate is what it builds on). Users: sapphire-framework
 (keys in a workspace, synced with it) and asteria (keys in the server's config directory,
 managed through the server's API). The sapphire side is
@@ -233,5 +236,6 @@ which is not breaking; release-plz picks the versions.
 
 - Moving asteria to this crate: an issue in asteria (keys in
   `~/.config/asteria-<app>/api_keys/`, its GUI's backend over its server API).
-- Per-key scopes or permissions beyond `subject`.
+- Per-key scopes or permissions beyond `subject` (since done as profiles:
+  `2026-11-01-key-profiles-design.md`).
 - Expiry dates.
