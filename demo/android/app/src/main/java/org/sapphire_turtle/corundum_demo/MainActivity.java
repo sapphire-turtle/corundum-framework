@@ -1,4 +1,4 @@
-package net.sapphire_turtle.corundum_demo;
+package org.sapphire_turtle.corundum_demo;
 
 import android.content.Intent;
 

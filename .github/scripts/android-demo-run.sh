@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../demo/android"
 
-package=net.sapphire_turtle.corundum_demo
+package=org.sapphire_turtle.corundum_demo
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -c
 adb shell am start -W -n "$package/.MainActivity"

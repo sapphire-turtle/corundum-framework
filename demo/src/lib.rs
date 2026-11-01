@@ -44,7 +44,7 @@ pub(crate) const LAUNCHER: corundum_framework::platform::launcher::LauncherSpec 
         description: "Every piece corundum-framework shares",
         category: "Development",
         icon_svg: include_bytes!("../assets/app-icon.svg"),
-        bundle_prefix: "net.sapphire-turtle",
+        bundle_prefix: "org.sapphire-turtle",
     };
 
 /// The CJK font the window installed at start, for the Fonts screen: `Some(None)` when the

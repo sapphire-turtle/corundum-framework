@@ -12,10 +12,17 @@ use crate::scope::{InstallContext, ServiceSpec};
 ///
 /// A LaunchAgent label is a global namespace on the machine: a generic label such as
 /// `my-server` would collide with anything else that claims the same one, so the label
-/// carries the publisher's domain, `sapphire-turtle.net`, the namespace corundum's apps use
-/// too: `net.sapphire-turtle.<app>`.
+/// carries the publisher's domain, `sapphire-turtle.org`, the namespace corundum's apps use
+/// too: `org.sapphire-turtle.<app>`.
 pub fn label(app_name: &str) -> String {
-    format!("net.sapphire-turtle.{app_name}")
+    format!("org.sapphire-turtle.{app_name}")
+}
+
+/// The labels earlier versions of this crate registered an agent under, which it retires
+/// and adopts by itself, as it does an app's [`ServiceSpec::legacy_labels`]:
+/// `net.sapphire-turtle.<app>`, before the domain moved to `sapphire-turtle.org` (#81).
+pub fn previous_labels(app_name: &str) -> Vec<String> {
+    vec![format!("net.sapphire-turtle.{app_name}")]
 }
 
 /// Where a LaunchAgent is installed: `~/Library/LaunchAgents/<label>.plist`.
@@ -143,6 +150,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_label_is_in_the_org_namespace() {
+        assert_eq!(
+            label("sapphire-agent"),
+            "org.sapphire-turtle.sapphire-agent"
+        );
+        assert_eq!(
+            previous_labels("sapphire-agent"),
+            ["net.sapphire-turtle.sapphire-agent"]
+        );
+    }
+
+    #[test]
     fn the_program_is_the_first_program_argument() {
         let golden = include_str!("../tests/golden/launchagent.plist");
         assert_eq!(
@@ -178,7 +197,7 @@ mod tests {
         assert_eq!(
             agent_path("sapphire-agent", Path::new("/Users/alice")),
             PathBuf::from(
-                "/Users/alice/Library/LaunchAgents/net.sapphire-turtle.sapphire-agent.plist"
+                "/Users/alice/Library/LaunchAgents/org.sapphire-turtle.sapphire-agent.plist"
             )
         );
         assert_eq!(
