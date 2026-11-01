@@ -107,6 +107,9 @@ mod tests {
     fn with_every_standard_handle_present_it_does_not_attach() {
         // cargo gives a test process its handles (pipes or the terminal), as the shim does.
         assert!(!super::attach_parent());
-        assert!(!super::attach_parent(), "a second call changes nothing either");
+        assert!(
+            !super::attach_parent(),
+            "a second call changes nothing either"
+        );
     }
 }
