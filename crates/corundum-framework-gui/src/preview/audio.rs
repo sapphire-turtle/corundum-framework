@@ -23,6 +23,8 @@ const BUTTON_ICON: f32 = 16.0;
 
 /// The seek bar's widest, in points.
 const SEEK_WIDTH: f32 = 320.0;
+/// How far an arrow key on the seek bar moves, in ms.
+const SEEK_KEY_STEP_MS: f64 = 5_000.0;
 
 /// What the worker made of a file.
 enum Probed {
@@ -130,8 +132,7 @@ pub struct AudioPreview {
     /// Whether the last frame's seek bar was on, `None` when it drew none.
     #[cfg(test)]
     seek_enabled: Option<bool>,
-    /// The last seek bar's id, for a test to focus it.
-    #[cfg(test)]
+    /// The last seek bar's id: to tell a keyboard step from a drag, and for a test to focus it.
     seek_id: Option<egui::Id>,
 }
 
@@ -262,14 +263,23 @@ impl AudioPreview {
             .map(|(_, ms)| *ms);
         let position = shown_position(here, held, state.position_ms);
         let end = length.filter(|_| enabled).unwrap_or(0).max(1) as f64;
-        let mut value = (position as f64).min(end);
+        let mut value = seek_value(enabled, position, end as u64);
         ui.spacing_mut().slider_width = (ui.available_width() - 16.0).clamp(0.0, SEEK_WIDTH);
-        let slider = egui::Slider::new(&mut value, 0.0..=end).show_value(false);
+        let mut slider = egui::Slider::new(&mut value, 0.0..=end).show_value(false);
+        // An arrow key on the focused bar moves five seconds, not a point of the rail. The
+        // step also snaps the value, so it applies only to a keyboard (the bar has focus and
+        // no pointer is down): dragging stays smooth.
+        let focused = self
+            .seek_id
+            .is_some_and(|id| ui.memory(|m| m.has_focus(id)));
+        if focused && !ui.input(|i| i.pointer.any_down()) {
+            slider = slider.step_by(SEEK_KEY_STEP_MS);
+        }
         let response = ui.add_enabled(enabled, slider);
+        self.seek_id = Some(response.id);
         #[cfg(test)]
         {
             self.seek_enabled = Some(response.enabled());
-            self.seek_id = Some(response.id);
         }
         let (held, seek) = seek_step(
             held,
@@ -414,6 +424,15 @@ fn clock(ms: u64) -> String {
 /// learns it only once the decoder has opened the file); otherwise the probe's.
 pub(super) fn shown_length(here: bool, player: Option<u64>, probed: Option<u64>) -> Option<u64> {
     if here { player.or(probed) } else { probed }
+}
+
+/// The seek bar's value in ms: the position within `end`, or 0 while the bar is off.
+pub(super) fn seek_value(enabled: bool, position_ms: u64, end_ms: u64) -> f64 {
+    if enabled {
+        position_ms.min(end_ms) as f64
+    } else {
+        0.0
+    }
 }
 
 /// The position to show, in ms: where the bar is held, else the player's while this file

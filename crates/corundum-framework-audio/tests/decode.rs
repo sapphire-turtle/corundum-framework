@@ -171,7 +171,7 @@ fn probe(name: &str) -> Result<decode::Info, decode::DecodeError> {
 
 #[test]
 fn probe_reads_the_tags_and_length() {
-    for name in ["tone-tagged.flac", "tone-tagged.opus"] {
+    for name in ["tone-tagged.flac", "tone-tagged.opus", "tone-tagged.mp3"] {
         let info = probe(name).unwrap();
         assert_eq!(info.title.as_deref(), Some("Test Tone"), "{name}");
         assert_eq!(info.artist.as_deref(), Some("corundum"), "{name}");

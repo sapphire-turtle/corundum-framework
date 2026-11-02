@@ -752,7 +752,47 @@ impl TrackDecoder for OpusTrack {
 
 #[cfg(test)]
 mod tests {
-    use super::scan_last_granule;
+    use super::{parse_opus_tags, scan_last_granule};
+
+    fn tags_packet(comments: &[&str]) -> Vec<u8> {
+        let mut p = b"OpusTags".to_vec();
+        p.extend(4u32.to_le_bytes());
+        p.extend(b"test");
+        p.extend((comments.len() as u32).to_le_bytes());
+        for c in comments {
+            p.extend((c.len() as u32).to_le_bytes());
+            p.extend(c.as_bytes());
+        }
+        p
+    }
+
+    #[test]
+    fn opus_tag_keys_are_case_insensitive() {
+        let info = parse_opus_tags(&tags_packet(&["title=T", "Album=A", "artist=X"]));
+        assert_eq!(info.title.as_deref(), Some("T"));
+        assert_eq!(info.album.as_deref(), Some("A"));
+        assert_eq!(info.artist.as_deref(), Some("X"));
+    }
+
+    #[test]
+    fn repeated_opus_artists_are_joined() {
+        let info = parse_opus_tags(&tags_packet(&["ARTIST=A", "ARTIST=B", "ARTIST=A"]));
+        assert_eq!(info.artist.as_deref(), Some("A, B"));
+    }
+
+    #[test]
+    fn a_truncated_opus_tags_packet_does_not_panic() {
+        let full = tags_packet(&["TITLE=Test Tone", "ARTIST=corundum"]);
+        for cut in 0..full.len() {
+            let _ = parse_opus_tags(&full[..cut]);
+        }
+        // Cut inside the second comment: the first survives.
+        let info = parse_opus_tags(&full[..full.len() - 4]);
+        assert_eq!(info.title.as_deref(), Some("Test Tone"));
+        assert_eq!(info.artist, None);
+        // Too short for even a vendor length: no tags.
+        assert_eq!(parse_opus_tags(b"OpusTags").title, None);
+    }
 
     fn page(granule: u64, body: &[u8]) -> Vec<u8> {
         let mut p = b"OggS".to_vec();

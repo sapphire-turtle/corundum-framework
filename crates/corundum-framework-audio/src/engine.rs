@@ -71,9 +71,9 @@ pub enum Status {
 pub enum PlayerError {
     /// The track could not be played; it was skipped.
     Unplayable { title: String, reason: String },
-    /// The server could not be reached, or a fetch stalled; playback paused.
+    /// The source could not be reached, or a fetch stalled; playback paused.
     Network(String),
-    /// The server refused the token; playback paused.
+    /// The source refused access (a bad or expired credential); playback paused.
     Unauthorized,
     /// The audio device failed and could not be reopened; playback paused.
     Output(String),

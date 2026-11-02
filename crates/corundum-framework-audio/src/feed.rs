@@ -53,8 +53,9 @@ pub trait Watch: Send + Sync {
     fn status(&self) -> SourceStatus;
 }
 
-/// A feed that is already over.
-pub(crate) struct FailedFeed(pub(crate) TrackError);
+/// A feed that is already over: it reports `error` at the first poll. An opener returns it
+/// for a track it cannot even start (not connected, a bad URL, a disk error).
+pub struct FailedFeed(pub TrackError);
 
 impl Feed for FailedFeed {
     fn poll(&mut self) -> FeedEvent {

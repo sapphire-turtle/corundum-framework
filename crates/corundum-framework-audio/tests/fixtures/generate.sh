@@ -15,3 +15,4 @@ ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=440:duration=1:sample_rate
 ffmpeg -y -loglevel error -f lavfi -i "$STEREO" -fflags +bitexact -metadata title="Test Tone" -metadata artist="corundum" -metadata album="Fixtures" tone-tagged.flac
 ffmpeg -y -loglevel error -f lavfi -i "$STEREO" -fflags +bitexact -metadata title="Test Tone" -metadata artist="corundum" -metadata album="Fixtures" -c:a libopus -b:a 96k -ar 48000 tone-tagged.opus
 head -c 200 tone.flac > broken.flac
+ffmpeg -y -loglevel error -f lavfi -i "$STEREO" -fflags +bitexact -metadata title="Test Tone" -metadata artist="corundum" -metadata album="Fixtures" -c:a libmp3lame -b:a 64k -id3v2_version 3 tone-tagged.mp3

@@ -422,9 +422,19 @@ fn the_seek_bar_seeks_on_a_keyboard_change_and_on_release() {
 }
 
 #[test]
+fn a_disabled_seek_bar_shows_empty() {
+    use super::audio::seek_value;
+    assert_eq!(seek_value(true, 2_000, 10_000), 2_000.0);
+    assert_eq!(seek_value(true, 20_000, 10_000), 10_000.0);
+    // No length known, or not this file: the bar rests at 0, not full.
+    assert_eq!(seek_value(false, 5_000, 1), 0.0);
+    assert_eq!(seek_value(false, 0, 1), 0.0);
+}
+
+#[test]
 fn an_arrow_key_on_the_focused_seek_bar_seeks() {
     let dir = tempfile::tempdir().unwrap();
-    let path = wav(dir.path(), "tone.wav", 3.0, 8_000, 1);
+    let path = wav(dir.path(), "tone.wav", 30.0, 8_000, 1);
     let player = player(FakeOutputs::new());
     let screen = Screen::new();
     let mut preview = AudioPreview::new();
@@ -458,4 +468,7 @@ fn an_arrow_key_on_the_focused_seek_bar_seeks() {
         );
         std::thread::sleep(Duration::from_millis(5));
     }
+    // One press moves about five seconds, not a point of the bar.
+    let ms = player.state().position_ms;
+    assert!((4_000..=6_000).contains(&ms), "one press moved {ms} ms");
 }

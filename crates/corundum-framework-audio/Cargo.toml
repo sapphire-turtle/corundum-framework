@@ -18,7 +18,7 @@ cpal = ["dep:cpal", "dep:rtrb"]
 test-support = []
 
 [dependencies]
-symphonia = { version = "0.6.1", default-features = false, features = ["flac", "mp3", "aac", "alac", "isomp4", "ogg", "vorbis", "pcm", "wav"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["flac", "mp3", "aac", "alac", "isomp4", "ogg", "vorbis", "pcm", "wav", "id3v1", "id3v2", "ape"] }
 ogg = "0.9.2"
 opus-pure = { version = "0.2.2", default-features = false }
 rubato = "5.0.1"
