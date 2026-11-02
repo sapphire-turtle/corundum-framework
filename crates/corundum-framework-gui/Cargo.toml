@@ -87,6 +87,10 @@ keys = ["dep:corundum-framework-keys"]
 # thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
 # (WebP among them) only: an app wanting RAW previews turns on that crate's `raw` itself.
 image-preview = ["dep:corundum-framework-image"]
+# `preview::AudioPreview`: a picked audio file played in the detail pane, its tags read on a
+# worker thread and the sound made by corundum-framework-audio's `Player` on the default
+# device (cpal; ALSA's headers on Linux).
+audio-preview = ["dep:corundum-framework-audio", "corundum-framework-audio/cpal"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -104,6 +108,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
 ] }
 # The image previews' decoding (`image-preview`).
 corundum-framework-image = { version = "0.7.0", path = "../corundum-framework-image", optional = true }
+# The audio previews' tags and playback (`audio-preview`).
+corundum-framework-audio = { version = "0.7.0", path = "../corundum-framework-audio", optional = true }
 # The API keys page's store and types (`keys`).
 corundum-framework-keys = { version = "0.7.0", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.
@@ -135,6 +141,8 @@ toml = { version = "1", optional = true }
 unic-langid = "0.9"
 
 [dev-dependencies]
+# The fake sound device the audio preview's tests play on.
+corundum-framework-audio = { path = "../corundum-framework-audio", features = ["test-support"] }
 # Writes the PNGs the image preview's tests read.
 image = { version = "0.25", default-features = false, features = ["png"] }
 corundum-framework-package = { path = "../corundum-framework-package", features = ["test-support"] }

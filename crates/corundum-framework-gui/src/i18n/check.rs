@@ -159,7 +159,8 @@ mod tests {
                 "en",
                 &src,
                 "corundum-",
-                &["corundum-framework-gui"]
+                // Names, not ids: the crate's, and the audio preview's thread.
+                &["corundum-framework-gui", "corundum-audio-probe"]
             ),
             Vec::<String>::new()
         );

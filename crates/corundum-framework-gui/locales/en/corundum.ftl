@@ -197,3 +197,9 @@ corundum-keys-profile-unknown = { $id } (unknown)
 corundum-preview-unsupported = This file can't be previewed.
 corundum-preview-too-large = This image is too large to preview.
 corundum-preview-failed = Couldn't read this file: { $reason }
+
+# The audio preview (`preview::AudioPreview`): its button, and why the device did not play.
+# A file that is not audio, or that failed, says so with the strings above.
+corundum-preview-play = Play
+corundum-preview-pause = Pause
+corundum-preview-audio-device = Couldn't play through the audio device: { $reason }

@@ -1159,6 +1159,7 @@ version = "0.7.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
+ "corundum-framework-audio",
  "corundum-framework-image",
  "corundum-framework-keys",
  "corundum-framework-package",
