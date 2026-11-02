@@ -14,11 +14,16 @@ pub mod decode;
 mod engine;
 #[cfg(any(test, feature = "test-support"))]
 pub mod fakes;
+pub mod feed;
+mod file;
 mod output;
+mod player;
 pub mod resample;
 
 pub use engine::{
     AudioOutput, Command, Engine, Feed, FeedEvent, MAX_SKIPS, Opener, OutputFactory, PlayerError,
     PlayerState, QueueItem, RESTART_AFTER_MS, Status, TrackError, Wait,
 };
+pub use file::FileOpener;
 pub use output::OutputConfig;
+pub use player::Player;
