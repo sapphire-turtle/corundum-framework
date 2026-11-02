@@ -1,0 +1,23 @@
+[package]
+name = "corundum-framework-audio"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.7.0"
+edition.workspace = true
+description = "Decode and resample audio files without a GUI: FLAC, MP3, AAC, ALAC, Vorbis, WAV and Ogg Opus, with seeking, tags and length"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["audio", "decode", "symphonia", "opus", "resample"]
+categories = ["multimedia::audio"]
+
+[features]
+default = []
+
+[dependencies]
+symphonia = { version = "0.6.1", default-features = false, features = ["flac", "mp3", "aac", "alac", "isomp4", "ogg", "vorbis", "pcm", "wav"] }
+ogg = "0.9.2"
+opus-pure = { version = "0.2.2", default-features = false }
+rubato = "5.0.1"
+
+[dev-dependencies]
+tempfile = "3"
