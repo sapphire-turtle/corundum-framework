@@ -1,0 +1,21 @@
+[package]
+name = "corundum-framework-image"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.7.0"
+edition.workspace = true
+description = "Decode an image file or bytes to sRGB RGBA8: format detection, EXIF orientation and size limits, without a GUI"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["image", "decode", "exif", "thumbnail"]
+categories = ["multimedia::images"]
+
+[features]
+default = []
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "tiff", "webp"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
