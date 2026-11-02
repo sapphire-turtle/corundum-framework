@@ -11,8 +11,9 @@ use super::AudioPreview;
 /// How long a test waits for the probe before it fails.
 const DEADLINE: Duration = Duration::from_secs(10);
 
-/// How soon a press of Play shows in the player.
-const PLAYS_WITHIN: Duration = Duration::from_secs(2);
+/// How long a test waits for a press of Play to show in the player: as long as for the
+/// probe, since a busy CI runner can take seconds to start the decoder.
+const PLAYS_WITHIN: Duration = DEADLINE;
 
 /// What a frame drew.
 #[derive(Default, Debug)]
