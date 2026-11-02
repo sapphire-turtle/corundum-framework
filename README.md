@@ -60,7 +60,8 @@ desktops and on phones.
   tap. Entries are picked with clicks, Ctrl and Shift, and the keys; a right click (a long
   press) opens Open, Rename and the app's own items; picked entries dragged onto a folder
   ask to be moved, and F2 renames in place. The explorer touches no files: it returns
-  `ExplorerEvent`s, and the app moves, renames and opens.
+  `ExplorerEvent`s, and the app moves, renames and opens. Why its detail pane is meant to
+  preview files the app itself has no use for: [docs/file-previews.md](docs/file-previews.md).
 - **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
   to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
   folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the

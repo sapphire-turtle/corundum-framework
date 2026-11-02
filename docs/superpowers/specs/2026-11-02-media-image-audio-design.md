@@ -16,7 +16,8 @@ asteria already has in its own crates:
   ffmpeg, macOS `sips`). A pure-Rust decoder in the process would serve both a preview and
   most of those thumbnails.
 
-So corundum takes them over, each behind a feature. Success means:
+So corundum takes them over, each behind a feature. Why a framework previews formats its
+apps were not made for is recorded in [file-previews.md](../../file-previews.md). Success means:
 
 - an app turns on `image-preview` / `audio-preview` and shows a picked file in its detail
   pane with a few lines of code, without blocking the UI thread;
