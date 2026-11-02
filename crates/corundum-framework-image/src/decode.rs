@@ -104,13 +104,7 @@ fn is_heif_family(bytes: &[u8]) -> bool {
 
 fn decode_as(bytes: &[u8], format: ImageFormat, limits: &Limits) -> Result<Image, Error> {
     let mut reader = ImageReader::with_format(Cursor::new(bytes), format);
-    // `image` would otherwise cap the allocation at its own 512 MiB, whatever our limits say.
-    // Room for an RGBA16 buffer per pixel makes `max_pixels` the real bound.
-    let mut codec_limits = image::Limits::default();
-    codec_limits.max_image_width = None;
-    codec_limits.max_image_height = None;
-    codec_limits.max_alloc = Some(limits.max_pixels.saturating_mul(8));
-    reader.limits(codec_limits);
+    reader.limits(codec_limits(limits));
     let mut decoder = reader.into_decoder().map_err(map_error)?;
     let (width, height) = decoder.dimensions();
     if u64::from(width) * u64::from(height) > limits.max_pixels {
@@ -129,6 +123,18 @@ fn decode_as(bytes: &[u8], format: ImageFormat, limits: &Limits) -> Result<Image
     })
 }
 
+/// The codec's own limits, made to follow ours.
+///
+/// `image` would otherwise cap the allocation at its own 512 MiB, whatever our limits say.
+/// Room for an RGBA16 buffer per pixel makes `max_pixels` the real bound.
+fn codec_limits(limits: &Limits) -> image::Limits {
+    let mut codec = image::Limits::default();
+    codec.max_image_width = None;
+    codec.max_image_height = None;
+    codec.max_alloc = Some(limits.max_pixels.saturating_mul(8));
+    codec
+}
+
 /// The decoder's embedded ICC profile, if it has a readable one.
 fn icc_profile(decoder: &mut impl ImageDecoder) -> Option<Vec<u8>> {
     decoder.icc_profile().ok().flatten()
@@ -140,5 +146,25 @@ fn map_error(err: ImageError) -> Error {
         ImageError::Unsupported(_) => Error::Unsupported,
         ImageError::Limits(_) => Error::TooLarge,
         other => Error::Decode(other.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codec_limits_follow_ours() {
+        let l = codec_limits(&Limits {
+            max_pixels: 300_000_000,
+            ..Limits::default()
+        });
+        assert_eq!((l.max_image_width, l.max_image_height), (None, None));
+        assert_eq!(l.max_alloc, Some(2_400_000_000));
+        let l = codec_limits(&Limits {
+            max_pixels: u64::MAX,
+            ..Limits::default()
+        });
+        assert_eq!(l.max_alloc, Some(u64::MAX));
     }
 }

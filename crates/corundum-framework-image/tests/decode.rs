@@ -187,22 +187,38 @@ fn a_huge_header_is_too_large_before_decoding() {
     assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
 }
 
+fn png16(w: u32, h: u32) -> Vec<u8> {
+    let img = image::ImageBuffer::<Rgba<u16>, Vec<u16>>::new(w, h);
+    let mut out = Cursor::new(Vec::new());
+    img.write_to(&mut out, ImageFormat::Png).unwrap();
+    out.into_inner()
+}
+
 #[test]
-fn max_pixels_is_the_bound_not_the_codecs_own_cap() {
-    // 225 MP: over image's default 512 MiB allocation cap as RGBA, under our raised limit.
-    let png = png_header(15_000, 15_000);
+fn max_pixels_alone_bounds_a_decode() {
     let limits = Limits {
-        max_pixels: 300_000_000,
+        max_pixels: 64,
         ..Limits::default()
     };
+    let at = png16(8, 8);
+    let img = decode(
+        Source::Bytes {
+            bytes: &at,
+            ext: None,
+        },
+        &limits,
+    )
+    .unwrap();
+    assert_eq!((img.width, img.height), (8, 8));
+    let over = png16(9, 8);
     let r = decode(
         Source::Bytes {
-            bytes: &png,
-            ext: Some("png"),
+            bytes: &over,
+            ext: None,
         },
         &limits,
     );
-    assert!(!matches!(r, Err(Error::TooLarge)), "{r:?}");
+    assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
 }
 
 #[test]
