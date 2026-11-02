@@ -1074,6 +1074,7 @@ version = "0.7.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
+ "corundum-framework-image",
  "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-platform",
@@ -1086,6 +1087,7 @@ dependencies = [
  "fluent-langneg 0.14.2",
  "fluent-syntax",
  "fontdb",
+ "image",
  "objc2 0.6.5",
  "objc2-core-foundation",
  "objc2-core-text",

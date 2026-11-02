@@ -180,3 +180,8 @@ corundum-keys-profile = プロファイル
 corundum-keys-profile-choose = プロファイルを選択
 corundum-keys-profile-none = 選べるプロファイルがありません。
 corundum-keys-profile-unknown = { $id }（不明）
+
+# 画像のプレビュー（`preview::ImagePreview`）：ファイルの絵を出せない理由。
+corundum-preview-unsupported = このファイルはプレビューできません。
+corundum-preview-too-large = この画像は大きすぎてプレビューできません。
+corundum-preview-failed = このファイルを読めませんでした：{ $reason }

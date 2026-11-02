@@ -15,7 +15,8 @@
 //! [`store`] is corundum's file on the device, `corundum.toml`: what the person left the UI
 //! in — [`look`], the theme and the language in effect, and the order of the shell's rail —
 //! put back before the app's first frame. With the `qr-code` feature, [`qr`] draws text as
-//! a QR code, for a phone to read off the screen.
+//! a QR code, for a phone to read off the screen. With the `image-preview` feature,
+//! [`preview`] draws a picked image file in the detail pane, decoded on a worker thread.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -52,6 +53,8 @@ pub mod look;
 #[cfg(feature = "media-session")]
 pub mod media_session;
 pub mod platform;
+#[cfg(feature = "image-preview")]
+pub mod preview;
 #[cfg(feature = "qr-code")]
 pub mod qr;
 #[cfg(all(

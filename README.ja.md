@@ -44,6 +44,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `media-picker` | `platform::MediaPicker`：スマートフォンのアルバムから写真と動画を選ぶ（デスクトップではファイルダイアログ）。Android アプリは Activity の `onActivityResult` を corundum に渡します（`corundum_framework_platform::media::available` を参照）。iOS では Info.plist のキーは要りません | 無効 |
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
+| `image-preview` | `preview::ImagePreview`：選んだ画像ファイルを詳細ペインに描く。デコードはワーカースレッドで行う（corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 

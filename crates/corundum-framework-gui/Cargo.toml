@@ -83,6 +83,10 @@ single-instance = ["corundum-framework-platform/single-instance"]
 # `keys`: the API keys page (`keys::KeysPage`), over corundum-framework-keys's store on this
 # machine (`LocalKeys`) or the app's own backend.
 keys = ["dep:corundum-framework-keys"]
+# `preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a worker
+# thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
+# only: an app wanting RAW previews or WebP turns on that crate's `raw` / `webp` itself.
+image-preview = ["dep:corundum-framework-image"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -98,6 +102,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
     "system_fonts",
     "wgpu",
 ] }
+# The image previews' decoding (`image-preview`).
+corundum-framework-image = { version = "0.7.0", path = "../corundum-framework-image", optional = true }
 # The API keys page's store and types (`keys`).
 corundum-framework-keys = { version = "0.7.0", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.
@@ -129,6 +135,8 @@ toml = { version = "1", optional = true }
 unic-langid = "0.9"
 
 [dev-dependencies]
+# Writes the PNGs the image preview's tests read.
+image = { version = "0.25", default-features = false, features = ["png"] }
 corundum-framework-package = { path = "../corundum-framework-package", features = ["test-support"] }
 serde_json.workspace = true
 tempfile = "3"
