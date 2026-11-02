@@ -1,7 +1,7 @@
 mod common;
 
 use common::{crc32, encode, jpeg_with_orientation};
-use corundum_framework_image::{Limits, Source, decode, thumbnail};
+use corundum_framework_image::{Limits, Source, decode, shrink, thumbnail};
 use image::{
     ExtendedColorType, ImageEncoder, ImageFormat, Rgba, RgbaImage, codecs::png::PngEncoder,
 };
@@ -98,4 +98,19 @@ fn a_longest_of_zero_is_full_size() {
     let data = png(40, 20);
     let t = thumbnail(bytes(&data), 0, &Limits::default()).unwrap();
     assert_eq!((t.width, t.height), (40, 20));
+}
+
+#[test]
+fn shrinking_a_decoded_image_is_its_thumbnail() {
+    let data = jpeg_with_orientation(400, 200, 6);
+    let img = decode(bytes(&data), &Limits::default()).unwrap();
+    for longest in [0, 1, 10, 100, 399, 400, 2048] {
+        assert_eq!(
+            shrink(&img, longest),
+            thumbnail(bytes(&data), longest, &Limits::default()).unwrap(),
+            "{longest}"
+        );
+    }
+    let small = shrink(&img, 2048);
+    assert_eq!((small.width, small.height), (200, 400));
 }
