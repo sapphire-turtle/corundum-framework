@@ -1040,6 +1040,7 @@ name = "corundum-framework"
 version = "0.7.0"
 dependencies = [
  "corundum-framework-gui",
+ "corundum-framework-image",
  "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-platform",

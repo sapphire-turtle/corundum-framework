@@ -18,6 +18,7 @@ desktops and on phones.
 | [`corundum-framework-package`](crates/corundum-framework-package) | The app as a Velopack package on the desktops: its start and install hooks (`start`), its updates (`Updater`), its command line on `PATH` (`cli_path`) and the Windows console shim (`console`) | unreleased |
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
+| [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` are off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -191,6 +192,10 @@ through to the gui crate.
 | `keys` | `keys`: corundum-framework-keys | no |
 | `keys-axum` | `keys::require_key`, the layer that checks a router's requests and resolves each key's profile with the app's function (brings `keys`) | no |
 | `keys-clap` | `keys::KeyCommand`, the subcommand that manages a store; `add --profile` takes one of the app's profiles (brings `keys`) | no |
+| `image` | `image`: corundum-framework-image | no |
+| `image-raw` | `image` with camera RAW files; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) | no |
+| `image-webp` | `image` with WebP files (brings `image`) | no |
+| `image-preview` | The gui crate's `image-preview`: `preview::ImagePreview` (brings `gui` and `image`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
