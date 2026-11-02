@@ -108,9 +108,10 @@ impl Default for Limits {
 /// With the `raw` feature, a camera RAW file (CR2, CR3, NEF, ARW, RW2, RAF or DNG, told
 /// by its content, or else by its extension) decodes to the embedded preview rawler picks
 /// (the large one, where a file has several), with the RAW's own orientation applied; a
-/// file named as a RAW without one is [`Error::Unsupported`], while one only recognised by
-/// its content goes on to the other decoders. ORF, and any RAW file without the feature,
-/// is [`Error::Unsupported`].
+/// file named as a RAW without one, or with one rawler does not handle (such as a CR3's
+/// HDR preview), is [`Error::Unsupported`], while one only recognised by its content goes
+/// on to the other decoders. ORF, and any RAW file without the feature, is
+/// [`Error::Unsupported`].
 pub fn decode(source: Source, limits: &Limits) -> Result<Image, Error> {
     match source {
         Source::Path(path) => {

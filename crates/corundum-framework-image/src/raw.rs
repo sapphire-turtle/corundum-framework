@@ -24,7 +24,7 @@ pub(crate) fn decode(
     let source = RawSource::new_from_slice(bytes);
     let decoder = match rawler::get_decoder(&source) {
         Ok(decoder) => decoder,
-        Err(err) if named_raw => return Some(Err(Error::Decode(err.to_string()))),
+        Err(err) if named_raw => return Some(Err(preview_error(err))),
         Err(_) => return None,
     };
     let hint = decoder.format_hint();
@@ -54,9 +54,10 @@ fn preview(
 ) -> Result<Image, Error> {
     check_preview_header(hint, source, limits)?;
     let params = RawDecodeParams::default();
+    // A CR3 whose preview is HDR (HEIF or PQ) has none rawler can give: `None`.
     let img = decoder
         .preview_image(source, &params)
-        .map_err(|err| Error::Decode(err.to_string()))?
+        .map_err(preview_error)?
         .ok_or(Error::Unsupported)?;
     if u64::from(img.width()) * u64::from(img.height()) > limits.max_pixels {
         return Err(Error::TooLarge);
@@ -95,6 +96,24 @@ fn check_preview_header(
     match ifd {
         Some(ifd) => check_ifd(ifd, limits),
         None => Ok(()),
+    }
+}
+
+/// rawler's error, as ours: a file or preview it does not handle is [`Error::Unsupported`],
+/// so a caller can hand the file to another tool; anything else is a broken file.
+///
+/// rawler tells the two apart only in its message for some: a preview refused under
+/// `RAWLER_IGNORE_PREVIEWS` (a CR3's), and one in a compression it does not decode.
+fn preview_error(err: rawler::RawlerError) -> Error {
+    match err {
+        rawler::RawlerError::Unsupported { .. } => Error::Unsupported,
+        rawler::RawlerError::DecoderFailed(message)
+            if message == "Unable to extract preview image"
+                || message.starts_with("Unsupported compression method") =>
+        {
+            Error::Unsupported
+        }
+        other => Error::Decode(other.to_string()),
     }
 }
 
@@ -167,5 +186,36 @@ fn oriented(mut img: DynamicImage, orientation: Orientation) -> Image {
         width,
         height,
         rgba: rgba.into_raw(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rawler::RawlerError;
+
+    use super::*;
+
+    #[test]
+    fn a_preview_rawler_cannot_give_is_unsupported() {
+        let camera = RawlerError::Unsupported {
+            what: "preview".into(),
+            model: "m".into(),
+            make: "k".into(),
+            mode: String::new(),
+        };
+        assert!(matches!(preview_error(camera), Error::Unsupported));
+        // What a CR3 says under RAWLER_IGNORE_PREVIEWS.
+        let ignored = RawlerError::DecoderFailed("Unable to extract preview image".into());
+        assert!(matches!(preview_error(ignored), Error::Unsupported));
+        let deflate = RawlerError::DecoderFailed(
+            "Unsupported compression method: Deflate, storage: Strips".into(),
+        );
+        assert!(matches!(preview_error(deflate), Error::Unsupported));
+    }
+
+    #[test]
+    fn a_broken_preview_is_a_decode_error() {
+        let broken = RawlerError::DecoderFailed("Failed to read JPEG image: eof".into());
+        assert!(matches!(preview_error(broken), Error::Decode(_)));
     }
 }

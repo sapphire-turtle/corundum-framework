@@ -29,13 +29,20 @@ fn dng(w: u32, h: u32, orientation: u16) -> Vec<u8> {
 /// A DNG whose only preview IFD declares a `w`×`h` uncompressed RGB image over a few bytes
 /// of data: a malformed file that would make a decoder trusting the header allocate it.
 fn dng_with_declared_preview(w: u32, h: u32) -> Vec<u8> {
+    dng_with_preview_ifd(w, h, 1)
+}
+
+#[cfg(feature = "raw")]
+/// A DNG whose only preview IFD declares a `w`×`h` RGB image in TIFF `compression` over a
+/// few bytes of data.
+fn dng_with_preview_ifd(w: u32, h: u32, compression: u16) -> Vec<u8> {
     let mut buf = Cursor::new(Vec::new());
     let mut writer = DngWriter::new(&mut buf, [1, 4, 0, 0]).unwrap();
     let mut sub = writer.subframe(1);
     let ifd = sub.ifd_mut();
     ifd.add_tag(TiffCommonTag::ImageWidth, w);
     ifd.add_tag(TiffCommonTag::ImageLength, h);
-    ifd.add_tag(TiffCommonTag::Compression, 1_u16);
+    ifd.add_tag(TiffCommonTag::Compression, compression);
     ifd.add_tag(TiffCommonTag::BitsPerSample, [8_u16, 8, 8]);
     ifd.add_tag(TiffCommonTag::PhotometricInt, 2_u16);
     ifd.add_tag(TiffCommonTag::SamplesPerPixel, 3_u16);
@@ -144,6 +151,14 @@ mod with_the_feature {
     #[test]
     fn a_raw_with_no_preview_is_unsupported_when_named_so() {
         let data = dng_without_preview();
+        let r = decode(named(&data, "dng"), &Limits::default());
+        assert!(matches!(r, Err(Error::Unsupported)), "{r:?}");
+    }
+
+    #[test]
+    fn a_preview_in_a_compression_rawler_lacks_is_unsupported() {
+        // Deflate: a TIFF compression rawler knows of but does not decode.
+        let data = dng_with_preview_ifd(16, 16, 8);
         let r = decode(named(&data, "dng"), &Limits::default());
         assert!(matches!(r, Err(Error::Unsupported)), "{r:?}");
     }
