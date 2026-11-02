@@ -12,6 +12,8 @@ categories = ["multimedia::audio"]
 
 [features]
 default = []
+# The real sound device: cpal's default output, through a ring buffer.
+cpal = ["dep:cpal", "dep:rtrb"]
 # The fakes of the device and the opener, for tests.
 test-support = []
 
@@ -20,6 +22,8 @@ symphonia = { version = "0.6.1", default-features = false, features = ["flac", "
 ogg = "0.9.2"
 opus-pure = { version = "0.2.2", default-features = false }
 rubato = "5.0.1"
+cpal = { version = "0.18.2", optional = true }
+rtrb = { version = "0.3", optional = true }
 tracing.workspace = true
 
 [dev-dependencies]

@@ -19,6 +19,7 @@ desktops and on phones.
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
 | [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` (lossy WebP encoding; WebP decodes without it) are off by default | unreleased |
+| [`corundum-framework-audio`](crates/corundum-framework-audio) | Without egui: audio files decoded (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus), resampled and played from a queue; `cpal` (the real sound device) is off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |

@@ -151,7 +151,6 @@ pub trait Opener<T>: Send {
 }
 
 /// How soon `pump` wants to be called again while there is something to follow.
-/// How soon `pump` wants to be called again while there is something to follow.
 const TICK: Duration = Duration::from_millis(10);
 /// Feed events one `pump` takes at most, so a fast feed cannot hold the thread.
 const MAX_POLLS_PER_PUMP: usize = 64;
@@ -702,6 +701,7 @@ impl<T: QueueItem> Engine<T> {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

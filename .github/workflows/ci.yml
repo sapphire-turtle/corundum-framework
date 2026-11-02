@@ -8,7 +8,7 @@ jobs:
     uses: sapphire-turtle/.github/.github/workflows/rust-ci.yml@v1
     with:
       # eframe's windowing needs these to build on Linux.
-      linux-packages: libwayland-dev libxkbcommon-dev
+      linux-packages: libwayland-dev libxkbcommon-dev libasound2-dev
       # The all-features build (rawler, libwebp, eframe) and the restored cache together
       # outgrow the runner's disk; drop toolchains we never use before building.
       pre-build: |
@@ -51,6 +51,11 @@ jobs:
         cargo clippy -p corundum-framework-image --all-targets --locked -- -D warnings
         for f in raw webp; do
           cargo clippy -p corundum-framework-image --all-targets --features $f --locked -- -D warnings || exit 1
+        done
+        # The audio crate with no features, and `cpal` and `test-support` each alone.
+        cargo clippy -p corundum-framework-audio --all-targets --locked -- -D warnings
+        for f in cpal test-support; do
+          cargo clippy -p corundum-framework-audio --all-targets --features $f --locked -- -D warnings || exit 1
         done
         # Without `qr-scan` an iOS app links no camera API (AVFoundation), which App Store
         # review would ask an NSCameraUsageDescription for.
@@ -196,5 +201,19 @@ jobs:
           cargo tree --locked --target all -p corundum-framework-image --all-features -e normal > tree.txt
           if grep -qE ' (egui|eframe)[a-z_-]* v' tree.txt; then
             echo "egui is built for the image crate"
+            exit 1
+          fi
+
+  # The audio crate plays for a server too: none of its features may bring egui.
+  audio-without-egui:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: egui is not built for the audio crate
+        run: |
+          cargo tree --locked --target all -p corundum-framework-audio --all-features -e normal > tree.txt
+          if grep -qE ' (egui|eframe)[a-z_-]* v' tree.txt; then
+            echo "egui is built for the audio crate"
             exit 1
           fi
