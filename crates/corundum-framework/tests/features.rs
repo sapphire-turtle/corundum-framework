@@ -56,3 +56,14 @@ fn android_brings_eframe() {
     }
     is_app::<Nothing>();
 }
+
+#[cfg(feature = "image")]
+#[test]
+fn image_is_the_image_crate() {
+    let _: fn(
+        corundum_framework::image::Source,
+        u32,
+        &corundum_framework::image::Limits,
+    ) -> Result<corundum_framework::image::Image, corundum_framework::image::Error> =
+        corundum_framework::image::thumbnail;
+}

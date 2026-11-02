@@ -48,6 +48,13 @@ service = [
 keys = ["dep:corundum-framework-keys"]
 keys-axum = ["keys", "corundum-framework-keys/axum"]
 keys-clap = ["keys", "corundum-framework-keys/clap"]
+# A picture decoded to a thumbnail, without egui: for an app, or its server. The common
+# formats, WebP among them; `image-raw` adds camera RAW files, `image-webp` WebP encoding.
+image = ["dep:corundum-framework-image"]
+# Camera RAW files. rawler is LGPL-2.1: an app turning this on takes on its terms.
+image-raw = ["image", "corundum-framework-image/raw"]
+# Lossy WebP encoding (`encode_webp`), through libwebp; WebP decodes without it.
+image-webp = ["image", "corundum-framework-image/webp"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -81,6 +88,9 @@ qr-scan = ["gui", "corundum-framework-gui/qr-scan"]
 qr-code = ["gui", "corundum-framework-gui/qr-code"]
 # `gui::keys`: the API keys page in Settings (brings `gui` and `keys`).
 gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
+# `gui::preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a
+# worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
+image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,
@@ -116,3 +126,4 @@ corundum-framework-update = { version = "0.7.0", path = "../corundum-framework-u
 corundum-framework-package = { version = "0.7.0", path = "../corundum-framework-package", optional = true }
 corundum-framework-service = { version = "0.7.0", path = "../corundum-framework-service", optional = true, default-features = false }
 corundum-framework-keys = { version = "0.7.0", path = "../corundum-framework-keys", optional = true }
+corundum-framework-image = { version = "0.7.0", path = "../corundum-framework-image", optional = true }

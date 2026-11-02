@@ -18,6 +18,7 @@ desktops and on phones.
 | [`corundum-framework-package`](crates/corundum-framework-package) | The app as a Velopack package on the desktops: its start and install hooks (`start`), its updates (`Updater`), its command line on `PATH` (`cli_path`) and the Windows console shim (`console`) | unreleased |
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
+| [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` (lossy WebP encoding; WebP decodes without it) are off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -60,7 +61,8 @@ desktops and on phones.
   tap. Entries are picked with clicks, Ctrl and Shift, and the keys; a right click (a long
   press) opens Open, Rename and the app's own items; picked entries dragged onto a folder
   ask to be moved, and F2 renames in place. The explorer touches no files: it returns
-  `ExplorerEvent`s, and the app moves, renames and opens.
+  `ExplorerEvent`s, and the app moves, renames and opens. Why its detail pane is meant to
+  preview files the app itself has no use for: [docs/file-previews.md](docs/file-previews.md).
 - **Platform**: what a window asks of the system and egui cannot give: the system's dialogs
   to pick files (`platform::FilePicker`, with filters such as `IMAGE_EXTENSIONS`) and
   folders (`pick_folder`), the file manager (`open_in_file_manager`), and on Android the
@@ -112,6 +114,7 @@ desktops and on phones.
 | `media-picker` | `platform::MediaPicker`: photos and videos from a phone's album, the file dialog on a desktop. An Android app's activity forwards `onActivityResult` to corundum (see `corundum_framework_platform::media::available`); iOS needs no Info.plist key | no |
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
+| `image-preview` | `preview::ImagePreview`, a picked image file drawn in the detail pane, decoded on a worker thread (brings corundum-framework-image; its `raw` and `webp` stay the app's to turn on) | no |
 | `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
@@ -189,6 +192,10 @@ through to the gui crate.
 | `keys` | `keys`: corundum-framework-keys | no |
 | `keys-axum` | `keys::require_key`, the layer that checks a router's requests and resolves each key's profile with the app's function (brings `keys`) | no |
 | `keys-clap` | `keys::KeyCommand`, the subcommand that manages a store; `add --profile` takes one of the app's profiles (brings `keys`) | no |
+| `image` | `image`: corundum-framework-image | no |
+| `image-raw` | `image` with camera RAW files; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) | no |
+| `image-webp` | `image` with lossy WebP encoding (`encode_webp`, through libwebp); WebP decodes without it (brings `image`) | no |
+| `image-preview` | The gui crate's `image-preview`: `preview::ImagePreview` (brings `gui` and `image`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |

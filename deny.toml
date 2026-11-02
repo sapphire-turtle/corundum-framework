@@ -29,6 +29,7 @@ ignore = [
     # velopack 1.2.161 (corundum-framework-package) pins zip 8 and derivative; its develop
     # branch is on zip 9. Drop these when velopack's next stable release is in (#64).
     { id = "RUSTSEC-2026-0367", reason = "zip 8 keeps SUID/SGID bits on extraction; fixed in zip 9, which velopack 1.2.161 cannot take. The velopack crate in the app only reads package manifests, never extracts; the updater extracts only packages fetched over HTTPS from our own releases. Drop with #64." },
+    { id = "RUSTSEC-2026-0429", reason = "zip 8's `ZipArchive::extract` aborts on a symlink entry with a huge declared size; fixed in zip 9, which velopack 1.2.161 cannot take. velopack never calls `ZipArchive::extract` (it reads entries through `by_index`), and the updater opens only packages fetched over HTTPS from our own releases. Drop with #64." },
     { id = "RUSTSEC-2026-0368", reason = "zip 8 extraction follows symlink targets outside the destination; same path, use and reason as RUSTSEC-2026-0367. Drop with #64." },
     { id = "RUSTSEC-2026-0369", reason = "zip 8 extraction applies permissions through symlinks; same path, use and reason as RUSTSEC-2026-0367. Drop with #64." },
     { id = "RUSTSEC-2024-0388", reason = "derivative is unmaintained, with no vulnerability; velopack 1.2.161 depends on it. Re-check with #64." },
@@ -64,6 +65,10 @@ exceptions = [
     # govern the typefaces it embeds, not code, so they are scoped to this crate
     # rather than allowed for every dependency.
     { name = "epaint_default_fonts", allow = ["OFL-1.1", "Ubuntu-font-1.0"] },
+    # rawler reads camera RAW previews for corundum-framework-image's `raw` feature, which is
+    # off by default. It is LGPL-2.1 (declared with the deprecated id "LGPL-2.1", which
+    # reads as LGPL-2.1-only); an app that turns the feature on takes on its terms.
+    { name = "rawler", allow = ["LGPL-2.1"] },
 ]
 
 [bans]

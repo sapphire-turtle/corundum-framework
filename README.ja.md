@@ -14,6 +14,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
 | [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで Velopack パッケージとしてのアプリ：起動時の処理と、インストール・アンインストールのフック | 未リリース |
+| [`corundum-framework-image`](crates/corundum-framework-image) | egui に依存しない部分：画像を sRGB・RGBA8 のサムネイルにデコードする。サイズの上限はヘッダーの段階で確かめる。`raw`（カメラの RAW。LGPL-2.1）と `webp`（WebP への非可逆エンコード。デコードには要らない）は既定では無効 | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
@@ -28,7 +29,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 - **設定**：設定画面。ページの一覧と開いたページを並べ、アプリやその下のフレームワークがページを差し込みます。設定を保存できる場所（デバイスとワークグループ、クライアントとサーバーなど）ごとのスコープのタブと、それを使ってテーマと言語を設定する外観ページもあります。ページは値を保存しません。保存はアプリが行います。
 - **外観の保存**：実際に効いているテーマと言語を、レールの並び順と一緒に、アプリの設定ディレクトリの `corundum.toml` に保存します（`look` と `store`、`serde` feature）。起動時は最初のフレームより前にこれを適用するので、アプリは保存した外観で開きます。ほかの場所（ワークグループ、サーバーなど）の設定をマージするアプリは、その結果をここに適用します。外観以外に保存先を持たないアプリは、デモのようにここだけに保存します。
 - **詳細ペイン**：どのシェルも持ち（`Shell::show`）、どの画面の横にも出すサイドペイン。中身はアプリが `ShellApp::side_ui` で描きます。メインビューで選んだもの（再生中のプレイリスト、開いているジャーナルなど）の詳細や、レールのアクションで書き始めた新しい項目を表示します。広い画面では右カラムに表示し、ステータスバーのボタンで隠せます。隠しているときは画面中央のカードに、スマートフォンではメインビューと切り替えて表示します。
-- **ファイルエクスプローラー**：`explorer::FileExplorer`。アプリが一覧して渡す（必要ならページごとに）フォルダーの中身を、上の階層をたどるパンくずリストの下に、列見出しで並べ替える一覧か、サムネイルのグリッドで表示します。スマートフォンでは指で押しやすい高さの行になります。クリック、Ctrl・Shift、キーボードで選び、右クリック（長押し）で「開く」「名前を変更」とアプリ独自の項目のメニューを出します。選んだ項目をフォルダーへドラッグすると移動を、F2 でその場で名前の変更を求めます。エクスプローラー自身はファイルに触れず、`ExplorerEvent` を返すだけで、移動・名前の変更・開く処理はアプリが行います。
+- **ファイルエクスプローラー**：`explorer::FileExplorer`。アプリが一覧して渡す（必要ならページごとに）フォルダーの中身を、上の階層をたどるパンくずリストの下に、列見出しで並べ替える一覧か、サムネイルのグリッドで表示します。スマートフォンでは指で押しやすい高さの行になります。クリック、Ctrl・Shift、キーボードで選び、右クリック（長押し）で「開く」「名前を変更」とアプリ独自の項目のメニューを出します。選んだ項目をフォルダーへドラッグすると移動を、F2 でその場で名前の変更を求めます。エクスプローラー自身はファイルに触れず、`ExplorerEvent` を返すだけで、移動・名前の変更・開く処理はアプリが行います。詳細ペインがアプリの目的外のファイルまでプレビューする理由は [docs/file-previews.ja.md](docs/file-previews.ja.md) に書いています。
 - **プラットフォーム**：ウィンドウがシステムに求め、egui だけでは得られないもの。ファイルを選ぶダイアログ（`platform::FilePicker`、`IMAGE_EXTENSIONS` などのフィルタ付き）とフォルダを選ぶダイアログ（`pick_folder`）、ファイルマネージャー（`open_in_file_manager`）、Android ではクリップボードとインセット。ダイアログは今のところデスクトップのみで、スマートフォンでは `file_picker_available` が使えないことを返します。代わりにスマートフォンには写真アルバムがあります。`platform::MediaPicker`（`media-picker` feature）はそこから写真と動画を選びます（iOS は PHPicker、Android は写真選択ツール。デスクトップではファイルダイアログ）。結果は、アプリが毎フレーム調べる `Pending` で受け取ります。`platform::scan_qr`（`qr-scan`）は、同じ形でスマートフォンのカメラから QR コードを読みます。
 - **QR コード**：`qr::QrCode`（`qr-code` feature）は文字列を QR コードとして描きます。デスクトップの画面からスマートフォンで読み取るためのものです（招待チケット、トークンなど）。
 - **ウィンドウ**：`window::run` はどのアプリでも同じ方法で wgpu のデスクトップウィンドウを開きます。`window::run_android` は Android 端末（GameActivity）で同じことをします。iOS では、iOS 27 が求めるシーンにウィンドウを入れ（アプリの Info.plist でシーンを宣言し、デリゲートに `CorundumSceneDelegate` を指定します。`window` を参照）、winit 0.30 だけでは使えない変換のあるキーボード（日本語、中国語、韓国語）を使えるようにします。
@@ -44,6 +45,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `media-picker` | `platform::MediaPicker`：スマートフォンのアルバムから写真と動画を選ぶ（デスクトップではファイルダイアログ）。Android アプリは Activity の `onActivityResult` を corundum に渡します（`corundum_framework_platform::media::available` を参照）。iOS では Info.plist のキーは要りません | 無効 |
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
+| `image-preview` | `preview::ImagePreview`：選んだ画像ファイルを詳細ペインに描く。デコードはワーカースレッドで行う（corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
@@ -75,6 +77,10 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `update` | `update`：corundum-framework-update | いいえ |
 | `self-update` | ダウンロードと置き換えを含む `update`（ストア版では無効にします） | いいえ |
 | `package` | `package`：corundum-framework-package（`platform` も有効になる） | いいえ |
+| `image` | `image`：corundum-framework-image | いいえ |
+| `image-raw` | カメラの RAW ファイルも扱う `image`。rawler は LGPL-2.1 なので、有効にするアプリはその条件に従います（`image` も有効になる） | いいえ |
+| `image-webp` | WebP への非可逆エンコード（`encode_webp`。libwebp を使う）もできる `image`。WebP のデコードには要らない（`image` も有効になる） | いいえ |
+| `image-preview` | gui クレートの `image-preview`：`preview::ImagePreview`（`gui` と `image` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |
