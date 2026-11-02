@@ -56,6 +56,12 @@ impl Default for Limits {
 /// The format comes from the bytes; the extension decides only when they say nothing.
 /// HEIC, HEIF and AVIF, and any format this build lacks, are [`Error::Unsupported`]. A
 /// decoder that panics on a bad file is an [`Error::Decode`].
+///
+/// With the `raw` feature, a camera RAW file (CR2, CR3, NEF, ARW, RW2, RAF or DNG, told
+/// by its content, or else by its extension) decodes to its embedded preview (the largest,
+/// where rawler can tell), with the RAW's own orientation applied; a RAW without one is
+/// [`Error::Unsupported`]. ORF, and any RAW file without the feature, is
+/// [`Error::Unsupported`].
 pub fn decode(source: Source, limits: &Limits) -> Result<Image, Error> {
     match source {
         Source::Path(path) => {
@@ -77,12 +83,51 @@ fn decode_bytes(bytes: &[u8], ext: Option<&str>, limits: &Limits) -> Result<Imag
     if is_heif_family(bytes) {
         return Err(Error::Unsupported);
     }
-    let format = image::guess_format(bytes)
-        .ok()
+    let guessed = image::guess_format(bytes).ok();
+    // Most RAW files are TIFF underneath, and the rest have no signature `image` knows.
+    if matches!(guessed, None | Some(ImageFormat::Tiff)) {
+        let raw_ext = ext.and_then(RawExt::from_ext);
+        if raw_ext == Some(RawExt::Orf) {
+            return Err(Error::Unsupported);
+        }
+        #[cfg(feature = "raw")]
+        if let Some(result) = catch_panic(|| crate::raw::decode(bytes, raw_ext.is_some(), limits))
+            .unwrap_or_else(|err| Some(Err(err)))
+        {
+            return result;
+        }
+        #[cfg(not(feature = "raw"))]
+        if raw_ext.is_some() {
+            return Err(Error::Unsupported);
+        }
+    }
+    let format = guessed
         .or_else(|| ext.and_then(ImageFormat::from_extension))
         .ok_or(Error::Unsupported)?;
-    catch_unwind(AssertUnwindSafe(|| decode_as(bytes, format, limits)))
-        .unwrap_or_else(|_| Err(Error::Decode("decoder panicked".into())))
+    catch_panic(|| decode_as(bytes, format, limits))?
+}
+
+/// Run a decoder, turning its panic on a bad file into an [`Error::Decode`].
+fn catch_panic<T>(f: impl FnOnce() -> T) -> Result<T, Error> {
+    catch_unwind(AssertUnwindSafe(f)).map_err(|_| Error::Decode("decoder panicked".into()))
+}
+
+/// The extensions of the RAW families: read with the `raw` feature, except ORF.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RawExt {
+    Previewed,
+    Orf,
+}
+
+impl RawExt {
+    fn from_ext(ext: &str) -> Option<Self> {
+        let ext = ext.to_ascii_lowercase();
+        match ext.as_str() {
+            "cr2" | "cr3" | "nef" | "arw" | "rw2" | "raf" | "dng" => Some(Self::Previewed),
+            "orf" => Some(Self::Orf),
+            _ => None,
+        }
+    }
 }
 
 /// An ISO base media file whose brand is HEIC, HEIF or AVIF.

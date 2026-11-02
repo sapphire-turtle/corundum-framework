@@ -12,6 +12,11 @@ categories = ["multimedia::images"]
 
 [features]
 default = []
+# Lossy WebP encoding (`encode_webp`) through libwebp, built from its bundled C sources (BSD-3-Clause).
+webp = ["dep:libwebp-sys"]
+# Embedded previews of camera RAW files (CR2, CR3, NEF, ARW, RW2, RAF, DNG) through rawler.
+# rawler is LGPL-2.1: an app that turns this on takes on its terms (relinking, notices).
+raw = ["dep:rawler"]
 
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "tiff", "webp"] }
@@ -19,6 +24,10 @@ thiserror.workspace = true
 tracing.workspace = true
 moxcms = "0.8"
 fast_image_resize = "6"
+libwebp-sys = { version = "0.14", optional = true }
+rawler = { version = "0.8", default-features = false, optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+# Writes the DNG the RAW tests read.
+rawler = { version = "0.8", default-features = false }

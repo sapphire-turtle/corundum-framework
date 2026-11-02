@@ -1,9 +1,13 @@
-/// Why an image could not be decoded.
+/// Why an image could not be decoded (or, with the `webp` feature, encoded).
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// A format this build does not decode (HEIC, HEIF, AVIF, or one `image` was built without).
+    /// A format this build does not decode (HEIC, HEIF, AVIF, ORF, a RAW file without the
+    /// `raw` feature, or one `image` was built without).
     #[error("unsupported image format")]
     Unsupported,
+    /// The pixels could not be encoded.
+    #[error("could not encode the image: {0}")]
+    Encode(String),
     /// The bytes are not a valid image of their format.
     #[error("could not decode the image: {0}")]
     Decode(String),
