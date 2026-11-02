@@ -269,3 +269,50 @@ fn a_changed_file_is_shown_anew() {
     png(dir.path(), "small.png", 48, 16);
     screen.until(&mut preview, &path, |_, d| d.textures == [[48, 16]]);
 }
+
+#[test]
+fn the_default_limits_suit_a_phone() {
+    use corundum_framework_image::Limits;
+    let preview = ImagePreview::new();
+    assert_eq!(
+        preview.limits(),
+        Limits::default().with_max_pixels(64_000_000)
+    );
+}
+
+#[test]
+fn a_picture_over_the_limits_says_so() {
+    use corundum_framework_image::Limits;
+    let dir = tempfile::tempdir().unwrap();
+    let path = png(dir.path(), "small.png", 64, 32);
+    let screen = Screen::new();
+    let mut preview = ImagePreview::new().with_limits(Limits::default().with_max_pixels(100));
+
+    screen.until(&mut preview, &path, |_, d| {
+        assert!(d.textures.is_empty(), "{d:?}");
+        d.texts
+            .iter()
+            .any(|t| t == "This image is too large to preview.")
+    });
+}
+
+#[test]
+fn a_panic_while_decoding_fails_once() {
+    let dir = tempfile::tempdir().unwrap();
+    // The worker panics on this name, past the decoder's own guard (see `image::decode`).
+    let path = png(dir.path(), super::image::PANIC_NAME, 64, 32);
+    let screen = Screen::new();
+    let mut preview = ImagePreview::new();
+
+    screen.until(&mut preview, &path, |_, d| {
+        d.texts
+            .iter()
+            .any(|t| t.starts_with("Couldn't read this file:") && t.contains("panicked"))
+    });
+    for _ in 0..5 {
+        screen.frame(&mut preview, &path);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    screen.until(&mut preview, &path, |p, _| p.idle());
+    assert_eq!(super::image::panics(), 1);
+}

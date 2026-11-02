@@ -1,5 +1,6 @@
 //! [`ImagePreview`]: a picture file, decoded off the UI thread and fitted in the space given.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,6 +17,9 @@ const SIZES: [u32; 4] = [256, 512, 1024, 2048];
 
 /// How many decoded pictures are kept.
 const KEPT: usize = 8;
+
+/// The most pixels a picture may have, by default: 64 megapixels, a large camera's photo.
+const MAX_PIXELS: u64 = 64_000_000;
 
 /// How often the shown file is looked at again for a change, by the worker.
 const RECHECK: Duration = Duration::from_secs(2);
@@ -48,6 +52,8 @@ struct Request {
     path: PathBuf,
     /// The longest side to decode to.
     longest: u32,
+    /// How big a picture may be.
+    limits: Limits,
     /// The file as it was when a decode at least this large was kept: if it still is, the
     /// worker says so instead of decoding it again.
     known: Option<Key>,
@@ -166,22 +172,49 @@ fn answer(request: Request) -> Answer {
     let Request {
         path,
         longest,
+        limits,
         known,
     } = request;
     let key = Key::of(&path);
     if known.as_ref() == Some(&key) {
         return Answer::Unchanged { path, longest };
     }
-    let decoded = Decoded::of(thumbnail(
-        Source::Path(&key.path),
-        longest,
-        &Limits::default(),
-    ));
+    // The decoder guards itself, but a panic elsewhere (the resizer, say) would end the
+    // thread, and the next frame would start another to decode the file again: it fails
+    // instead, once, like a broken file.
+    let decoded = catch_unwind(AssertUnwindSafe(|| {
+        Decoded::of(decode(&key.path, longest, &limits))
+    }))
+    .unwrap_or_else(|_| Decoded::Failed("the image preview panicked".into()));
     Answer::Decoded {
         key,
         longest,
         decoded,
     }
+}
+
+/// Decode the picture at `path` to `longest` pixels on its longest side.
+fn decode(path: &Path, longest: u32, limits: &Limits) -> Result<Image, Error> {
+    #[cfg(test)]
+    if path.file_name() == Some(std::ffi::OsStr::new(PANIC_NAME)) {
+        PANICS.fetch_add(1, Ordering::SeqCst);
+        panic!("a test's panic in the image preview's worker");
+    }
+    thumbnail(Source::Path(path), longest, limits)
+}
+
+/// A file name the worker panics on, past the decoder's own guard, for a test.
+#[cfg(test)]
+pub(super) const PANIC_NAME: &str = "corundum-preview-panics.png";
+
+/// How many times the worker panicked on [`PANIC_NAME`].
+#[cfg(test)]
+static PANICS: AtomicUsize = AtomicUsize::new(0);
+
+/// How many times the worker panicked on [`PANIC_NAME`], for a test.
+#[cfg(test)]
+pub(super) fn panics() -> usize {
+    PANICS.load(Ordering::SeqCst)
 }
 
 /// A picture file in the detail pane: decoded on a worker thread to the size it is drawn
@@ -193,6 +226,13 @@ fn answer(request: Request) -> Answer {
 /// picked again, and every couple of seconds while it is shown, and decodes it again if it
 /// changed. A file the decoder does not know (HEIC, say) shows the file icon and says so;
 /// one too large or broken says why.
+///
+/// A picture over its [`Limits`] is too large: by default, over 64 megapixels. Peak memory
+/// while one is decoded is two of its buffers at a time (the decoded one and the copy an
+/// orientation, the RGBA conversion or the colour conversion makes), some 8 to 16 bytes a
+/// pixel: up to about 1 GB at 64 megapixels, where the 200 of [`Limits::default`] would
+/// take over 3. A failed allocation ends the app rather than failing the decode, so on a
+/// phone keep this low; [`ImagePreview::with_limits`] sets another bound.
 ///
 /// Make one and keep it across frames; the thread it starts ends when it is dropped.
 pub struct ImagePreview {
@@ -207,6 +247,8 @@ pub struct ImagePreview {
     kept: Vec<Kept>,
     /// How often the shown file is looked at again for a change.
     recheck: Duration,
+    /// How big a picture may be.
+    limits: Limits,
 }
 
 impl Default for ImagePreview {
@@ -217,6 +259,7 @@ impl Default for ImagePreview {
             current: None,
             kept: Vec::new(),
             recheck: RECHECK,
+            limits: Limits::default().with_max_pixels(MAX_PIXELS),
         }
     }
 }
@@ -225,6 +268,12 @@ impl ImagePreview {
     /// An empty preview; its thread starts on the first frame that needs it.
     pub fn new() -> ImagePreview {
         ImagePreview::default()
+    }
+
+    /// This preview with `limits` on the pictures it decodes, instead of the default:
+    /// [`Limits::default`] with 64 megapixels at most.
+    pub fn with_limits(self, limits: Limits) -> ImagePreview {
+        ImagePreview { limits, ..self }
     }
 
     /// Draw `path` in the space `ui` has left.
@@ -306,6 +355,7 @@ impl ImagePreview {
         let request = Request {
             path: path.to_owned(),
             longest,
+            limits: self.limits,
             known,
         };
         if worker.requests.send(request).is_err() {
@@ -365,6 +415,12 @@ impl ImagePreview {
                 }
             }
         }
+    }
+
+    /// The limits on the pictures decoded, for a test.
+    #[cfg(test)]
+    pub(super) fn limits(&self) -> Limits {
+        self.limits
     }
 
     /// How often the shown file is looked at again, for a test.
