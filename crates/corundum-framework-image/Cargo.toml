@@ -16,6 +16,9 @@ default = []
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "tiff", "webp"] }
 thiserror.workspace = true
+tracing.workspace = true
+moxcms = "0.9"
+fast_image_resize = "6"
 
 [dev-dependencies]
 tempfile = "3"

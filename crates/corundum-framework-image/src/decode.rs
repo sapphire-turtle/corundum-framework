@@ -4,7 +4,7 @@ use std::path::Path;
 
 use image::{DynamicImage, ImageDecoder, ImageError, ImageFormat, ImageReader};
 
-use crate::Error;
+use crate::{Error, color};
 
 /// Where an image comes from.
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +49,9 @@ impl Default for Limits {
     }
 }
 
-/// Decode `source` to RGBA8 with its EXIF orientation applied.
+/// Decode `source` to sRGB RGBA8 with its EXIF orientation applied.
+///
+/// An embedded ICC profile is converted to sRGB; one that cannot be read is ignored.
 ///
 /// The format comes from the bytes; the extension decides only when they say nothing.
 /// HEIC, HEIF and AVIF, and any format this build lacks, are [`Error::Unsupported`]. A
@@ -111,15 +113,22 @@ fn decode_as(bytes: &[u8], format: ImageFormat, limits: &Limits) -> Result<Image
         return Err(Error::TooLarge);
     }
     let orientation = decoder.orientation().map_err(map_error)?;
-    // Task 2 converts the pixels from this profile to sRGB.
-    let _icc = icc_profile(&mut decoder);
+    let icc = icc_profile(&mut decoder);
     let mut img = DynamicImage::from_decoder(decoder).map_err(map_error)?;
     img.apply_orientation(orientation);
+    // The colour step is a per-pixel map, so it commutes with orientation; doing it last
+    // keeps it on the final buffer. Grey and 16-bit sources are brought to RGBA8 first, so
+    // the transform runs at 8 bits.
     let rgba = img.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    let mut rgba = rgba.into_raw();
+    if let Some(icc) = icc {
+        color::to_srgb(&mut rgba, &icc);
+    }
     Ok(Image {
-        width: rgba.width(),
-        height: rgba.height(),
-        rgba: rgba.into_raw(),
+        width,
+        height,
+        rgba,
     })
 }
 
