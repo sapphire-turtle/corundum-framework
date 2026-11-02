@@ -9,6 +9,13 @@ jobs:
     with:
       # eframe's windowing needs these to build on Linux.
       linux-packages: libwayland-dev libxkbcommon-dev
+      # The all-features build (rawler, libwebp, eframe) and the restored cache together
+      # outgrow the runner's disk; drop toolchains we never use before building.
+      pre-build: |
+        if [ "$RUNNER_OS" = Linux ]; then
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h /
+        fi
       # The test job builds with --all-features; also build the gui crate without eframe,
       # as an app that renders egui on its own does, so the components never come to need
       # the window.
