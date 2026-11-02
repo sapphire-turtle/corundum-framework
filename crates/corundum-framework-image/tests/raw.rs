@@ -25,6 +25,40 @@ fn dng(w: u32, h: u32, orientation: u16) -> Vec<u8> {
     buf.into_inner()
 }
 
+#[cfg(feature = "raw")]
+/// A DNG whose only preview IFD declares a `w`×`h` uncompressed RGB image over a few bytes
+/// of data: a malformed file that would make a decoder trusting the header allocate it.
+fn dng_with_declared_preview(w: u32, h: u32) -> Vec<u8> {
+    let mut buf = Cursor::new(Vec::new());
+    let mut writer = DngWriter::new(&mut buf, [1, 4, 0, 0]).unwrap();
+    let mut sub = writer.subframe(1);
+    let ifd = sub.ifd_mut();
+    ifd.add_tag(TiffCommonTag::ImageWidth, w);
+    ifd.add_tag(TiffCommonTag::ImageLength, h);
+    ifd.add_tag(TiffCommonTag::Compression, 1_u16);
+    ifd.add_tag(TiffCommonTag::BitsPerSample, [8_u16, 8, 8]);
+    ifd.add_tag(TiffCommonTag::PhotometricInt, 2_u16);
+    ifd.add_tag(TiffCommonTag::SamplesPerPixel, 3_u16);
+    ifd.add_tag(TiffCommonTag::RowsPerStrip, h);
+    ifd.add_tag(TiffCommonTag::StripOffsets, 8_u32);
+    ifd.add_tag(TiffCommonTag::StripByteCounts, 16_u32);
+    sub.finalize().unwrap();
+    writer.close().unwrap();
+    buf.into_inner()
+}
+
+#[cfg(feature = "raw")]
+/// A DNG with no preview, only an uncompressed RGB thumbnail in its root IFD: a TIFF
+/// image that `image` can read.
+fn dng_without_preview() -> Vec<u8> {
+    let thumb = DynamicImage::ImageRgb8(RgbImage::from_pixel(80, 40, Rgb([10, 20, 30])));
+    let mut buf = Cursor::new(Vec::new());
+    let mut writer = DngWriter::new(&mut buf, [1, 4, 0, 0]).unwrap();
+    writer.thumbnail(&thumb).unwrap();
+    writer.close().unwrap();
+    buf.into_inner()
+}
+
 fn named<'a>(bytes: &'a [u8], ext: &'a str) -> Source<'a> {
     Source::Bytes {
         bytes,
@@ -103,6 +137,32 @@ mod with_the_feature {
         };
         let r = decode(named(&data, "dng"), &limits);
         assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
+    }
+
+    #[test]
+    fn a_preview_header_over_max_pixels_is_too_large_before_decoding() {
+        // 60000×60000×3 is 10.8 GB: refused from the header, never allocated.
+        let data = dng_with_declared_preview(60_000, 60_000);
+        let r = decode(named(&data, "dng"), &Limits::default());
+        assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
+    }
+
+    #[test]
+    fn a_raw_with_no_preview_is_unsupported_when_named_so() {
+        let data = dng_without_preview();
+        let r = decode(named(&data, "dng"), &Limits::default());
+        assert!(matches!(r, Err(Error::Unsupported)), "{r:?}");
+    }
+
+    #[test]
+    fn an_unnamed_file_rawler_cannot_preview_falls_back_to_image() {
+        let data = dng_without_preview();
+        let source = Source::Bytes {
+            bytes: &data,
+            ext: Some("tif"),
+        };
+        let img = decode(source, &Limits::default()).unwrap();
+        assert!(img.width > 0 && img.height > 0);
     }
 
     #[test]

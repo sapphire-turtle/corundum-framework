@@ -58,10 +58,11 @@ impl Default for Limits {
 /// decoder that panics on a bad file is an [`Error::Decode`].
 ///
 /// With the `raw` feature, a camera RAW file (CR2, CR3, NEF, ARW, RW2, RAF or DNG, told
-/// by its content, or else by its extension) decodes to its embedded preview (the largest,
-/// where rawler can tell), with the RAW's own orientation applied; a RAW without one is
-/// [`Error::Unsupported`]. ORF, and any RAW file without the feature, is
-/// [`Error::Unsupported`].
+/// by its content, or else by its extension) decodes to the embedded preview rawler picks
+/// (the large one, where a file has several), with the RAW's own orientation applied; a
+/// file named as a RAW without one is [`Error::Unsupported`], while one only recognised by
+/// its content goes on to the other decoders. ORF, and any RAW file without the feature,
+/// is [`Error::Unsupported`].
 pub fn decode(source: Source, limits: &Limits) -> Result<Image, Error> {
     match source {
         Source::Path(path) => {
@@ -92,7 +93,9 @@ fn decode_bytes(bytes: &[u8], ext: Option<&str>, limits: &Limits) -> Result<Imag
         }
         #[cfg(feature = "raw")]
         if let Some(result) = catch_panic(|| crate::raw::decode(bytes, raw_ext.is_some(), limits))
-            .unwrap_or_else(|err| Some(Err(err)))
+            // A panic in rawler is reported only for a file named as a RAW; anything else
+            // goes on to `image`, as when rawler does not recognise it.
+            .unwrap_or_else(|err| raw_ext.is_some().then_some(Err(err)))
         {
             return result;
         }

@@ -8,8 +8,9 @@
 //!
 //! - `webp`: `encode_webp`, lossy WebP encoding through libwebp, built from its bundled C
 //!   sources.
-//! - `raw`: camera RAW files (CR2, CR3, NEF, ARW, RW2, RAF, DNG) decode to their largest
-//!   embedded preview, through [rawler](https://crates.io/crates/rawler). rawler is licensed
+//! - `raw`: camera RAW files (CR2, CR3, NEF, ARW, RW2, RAF, DNG) decode to the embedded
+//!   preview [rawler](https://crates.io/crates/rawler) picks (the large one, where a file
+//!   has several). rawler is licensed
 //!   under LGPL-2.1, so an app that turns this feature on takes on its terms. ORF stays
 //!   unsupported.
 

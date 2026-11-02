@@ -3,16 +3,19 @@
 use image::DynamicImage;
 use image::metadata::Orientation;
 use rawler::decoders::{Decoder, FormatHint, RawDecodeParams, WellKnownIFD};
+use rawler::formats::tiff::reader::TiffReader;
+use rawler::formats::tiff::{GenericTiffReader, IFD};
 use rawler::rawsource::RawSource;
-use rawler::tags::TiffCommonTag;
+use rawler::tags::{ExifTag, TiffCommonTag};
 
 use crate::{Error, Image, Limits};
 
-/// Decode the largest embedded preview of a RAW file, with the RAW's own orientation applied.
+/// Decode the embedded preview of a RAW file, with the RAW's own orientation applied.
 ///
-/// `None` means rawler does not take the bytes for one of the RAW families we read and
-/// they were not named as one either, so another decoder may try them. ORF, whose files
-/// rawler gives no preview for, is [`Error::Unsupported`], as is a RAW without a preview.
+/// `None` means the bytes are not a RAW we read and were not named as one, so `image` may
+/// try them: rawler does not take them for one of our RAW families, or (when they were not
+/// named as a RAW) it finds no preview in them or fails on it. ORF, whose files rawler gives
+/// no preview for, is [`Error::Unsupported`], as is a file named as a RAW without a preview.
 pub(crate) fn decode(
     bytes: &[u8],
     named_raw: bool,
@@ -24,7 +27,8 @@ pub(crate) fn decode(
         Err(err) if named_raw => return Some(Err(Error::Decode(err.to_string()))),
         Err(_) => return None,
     };
-    match decoder.format_hint() {
+    let hint = decoder.format_hint();
+    match hint {
         FormatHint::ORF => return Some(Err(Error::Unsupported)),
         FormatHint::CR2
         | FormatHint::CR3
@@ -36,13 +40,20 @@ pub(crate) fn decode(
         _ if named_raw => return Some(Err(Error::Unsupported)),
         _ => return None,
     }
-    Some(preview(decoder.as_ref(), &source, limits))
+    match preview(decoder.as_ref(), hint, &source, limits) {
+        Err(Error::Decode(_) | Error::Unsupported) if !named_raw => None,
+        result => Some(result),
+    }
 }
 
-fn preview(decoder: &dyn Decoder, source: &RawSource, limits: &Limits) -> Result<Image, Error> {
+fn preview(
+    decoder: &dyn Decoder,
+    hint: FormatHint,
+    source: &RawSource,
+    limits: &Limits,
+) -> Result<Image, Error> {
+    check_preview_header(hint, source, limits)?;
     let params = RawDecodeParams::default();
-    // rawler decodes the preview JPEG itself, so its size is only known afterwards; the
-    // `image` crate's own allocation cap bounds that decode.
     let img = decoder
         .preview_image(source, &params)
         .map_err(|err| Error::Decode(err.to_string()))?
@@ -51,6 +62,78 @@ fn preview(decoder: &dyn Decoder, source: &RawSource, limits: &Limits) -> Result
         return Err(Error::TooLarge);
     }
     Ok(oriented(img, orientation(decoder, source, &params)))
+}
+
+/// Check the preview's size from its header, before rawler allocates it.
+///
+/// A DNG's preview, and a NEF's when it has no JPEG preview, is a TIFF image that rawler
+/// decodes itself, allocating the size the IFD declares; a failed allocation aborts the
+/// process. So that IFD (the one rawler will pick) is measured first. The other families'
+/// previews are JPEGs that rawler hands to `image`, whose own allocation cap (512 MiB by
+/// default) turns an oversized one into an error, and the `max_pixels` check after the
+/// decode applies to them.
+fn check_preview_header(
+    hint: FormatHint,
+    source: &RawSource,
+    limits: &Limits,
+) -> Result<(), Error> {
+    if !matches!(hint, FormatHint::DNG | FormatHint::NEF) {
+        return Ok(());
+    }
+    let tiff = GenericTiffReader::new(&mut source.reader(), 0, 0, None, &[])
+        .map_err(|err| Error::Decode(err.to_string()))?;
+    let root = tiff.root_ifd();
+    let ifd = if hint == FormatHint::DNG {
+        root.get_sub_ifd_all(TiffCommonTag::SubIFDs)
+            .and_then(|subs| subs.iter().find(|ifd| new_sub_file_type(ifd) == Some(1)))
+    } else {
+        let jpeg = tiff.find_ifds_with_filter(|ifd| {
+            new_sub_file_type(ifd) == Some(1) && ifd.has_entry(ExifTag::JPEGInterchangeFormatLength)
+        });
+        jpeg.is_empty().then_some(root)
+    };
+    match ifd {
+        Some(ifd) => check_ifd(ifd, limits),
+        None => Ok(()),
+    }
+}
+
+fn new_sub_file_type(ifd: &IFD) -> Option<u32> {
+    ifd.get_entry(TiffCommonTag::NewSubFileType)
+        .map(|e| e.force_u32(0))
+}
+
+/// The pixels an IFD's image takes once decoded (rounded up to whole tiles, as rawler
+/// allocates them) must fit `max_pixels`, with at most four samples a pixel.
+fn check_ifd(ifd: &IFD, limits: &Limits) -> Result<(), Error> {
+    let tag = |t: TiffCommonTag| ifd.get_entry(t).map(|e| u64::from(e.force_u32(0)));
+    let (Some(width), Some(height)) = (
+        tag(TiffCommonTag::ImageWidth),
+        tag(TiffCommonTag::ImageLength),
+    ) else {
+        // rawler refuses an IFD without them before allocating anything.
+        return Ok(());
+    };
+    if tag(TiffCommonTag::SamplesPerPixel).unwrap_or(1) > 4 {
+        return Err(Error::Decode(
+            "a preview with more than four samples a pixel".into(),
+        ));
+    }
+    let round_up = |side: u64, tile: Option<u64>| match tile {
+        Some(0) => None,
+        Some(tile) => Some(side.div_ceil(tile).saturating_mul(tile)),
+        None => Some(side),
+    };
+    let (Some(width), Some(height)) = (
+        round_up(width, tag(TiffCommonTag::TileWidth)),
+        round_up(height, tag(TiffCommonTag::TileLength)),
+    ) else {
+        return Err(Error::Decode("a preview with tiles of no size".into()));
+    };
+    if width.saturating_mul(height) > limits.max_pixels {
+        return Err(Error::TooLarge);
+    }
+    Ok(())
 }
 
 /// The RAW's EXIF orientation: from its metadata, or else from the root IFD (a DNG's

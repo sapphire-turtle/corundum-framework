@@ -27,7 +27,9 @@ relink against a changed rawler, and shipping its licence and notices).
 A RAW file is told by its content where rawler can, else by its extension. It decodes to
 the embedded preview rawler picks (the large one, where a file has several), not a
 developed raw image; the RAW's own orientation is then applied. `Limits` bound the RAW
-file's size and the preview's pixels, but the preview is measured after rawler decodes it.
+file's size and the preview's pixels. A DNG or NEF preview that rawler decodes from a TIFF
+IFD is measured from that header first; a JPEG preview is measured after rawler decodes it,
+with `image`'s own allocation cap guarding the decode.
 
 | Family | Status |
 | ------ | ------ |
