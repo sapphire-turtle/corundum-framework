@@ -158,11 +158,10 @@ fn crc32(data: &[u8]) -> u32 {
     !crc
 }
 
-#[test]
-fn a_huge_header_is_too_large_before_decoding() {
+fn png_header(w: u32, h: u32) -> Vec<u8> {
     let mut ihdr = b"IHDR".to_vec();
-    ihdr.extend_from_slice(&100_000u32.to_be_bytes());
-    ihdr.extend_from_slice(&100_000u32.to_be_bytes());
+    ihdr.extend_from_slice(&w.to_be_bytes());
+    ihdr.extend_from_slice(&h.to_be_bytes());
     ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
     let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
     png.extend_from_slice(&13u32.to_be_bytes());
@@ -172,6 +171,12 @@ fn a_huge_header_is_too_large_before_decoding() {
     png.extend_from_slice(&0u32.to_be_bytes());
     png.extend_from_slice(b"IDAT");
     png.extend_from_slice(&crc32(b"IDAT").to_be_bytes());
+    png
+}
+
+#[test]
+fn a_huge_header_is_too_large_before_decoding() {
+    let png = png_header(100_000, 100_000);
     let r = decode(
         Source::Bytes {
             bytes: &png,
@@ -180,6 +185,24 @@ fn a_huge_header_is_too_large_before_decoding() {
         &Limits::default(),
     );
     assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
+}
+
+#[test]
+fn max_pixels_is_the_bound_not_the_codecs_own_cap() {
+    // 225 MP: over image's default 512 MiB allocation cap as RGBA, under our raised limit.
+    let png = png_header(15_000, 15_000);
+    let limits = Limits {
+        max_pixels: 300_000_000,
+        ..Limits::default()
+    };
+    let r = decode(
+        Source::Bytes {
+            bytes: &png,
+            ext: Some("png"),
+        },
+        &limits,
+    );
+    assert!(!matches!(r, Err(Error::TooLarge)), "{r:?}");
 }
 
 #[test]

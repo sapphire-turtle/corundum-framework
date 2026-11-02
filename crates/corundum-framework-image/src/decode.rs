@@ -29,6 +29,9 @@ pub struct Image {
 }
 
 /// How big an image [`decode`] accepts. Checked from the header, before pixels are allocated.
+///
+/// Peak memory while decoding is a few times the pixel buffer (the decoded buffer, its
+/// RGBA conversion and the copy an orientation makes), so size `max_pixels` for that.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
     /// The most bytes the file may have.
@@ -100,9 +103,15 @@ fn is_heif_family(bytes: &[u8]) -> bool {
 }
 
 fn decode_as(bytes: &[u8], format: ImageFormat, limits: &Limits) -> Result<Image, Error> {
-    let mut decoder = ImageReader::with_format(Cursor::new(bytes), format)
-        .into_decoder()
-        .map_err(map_error)?;
+    let mut reader = ImageReader::with_format(Cursor::new(bytes), format);
+    // `image` would otherwise cap the allocation at its own 512 MiB, whatever our limits say.
+    // Room for an RGBA16 buffer per pixel makes `max_pixels` the real bound.
+    let mut codec_limits = image::Limits::default();
+    codec_limits.max_image_width = None;
+    codec_limits.max_image_height = None;
+    codec_limits.max_alloc = Some(limits.max_pixels.saturating_mul(8));
+    reader.limits(codec_limits);
+    let mut decoder = reader.into_decoder().map_err(map_error)?;
     let (width, height) = decoder.dimensions();
     if u64::from(width) * u64::from(height) > limits.max_pixels {
         return Err(Error::TooLarge);
