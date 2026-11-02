@@ -20,7 +20,14 @@ pub enum Source<'a> {
 }
 
 /// A decoded image: RGBA8, row after row, orientation applied.
+///
+/// Made by [`decode`] or, from pixels of your own, by [`Image::new`]:
+///
+/// ```compile_fail
+/// let img = corundum_framework_image::Image { width: 1, height: 1, rgba: vec![0; 4] };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Image {
     pub width: u32,
     pub height: u32,
@@ -28,16 +35,57 @@ pub struct Image {
     pub rgba: Vec<u8>,
 }
 
+impl Image {
+    /// An image of `width` × `height` pixels from `rgba` (RGBA8, row after row), or `None`
+    /// if `rgba` is not `width * height * 4` bytes.
+    pub fn new(width: u32, height: u32, rgba: Vec<u8>) -> Option<Image> {
+        let len = u64::from(width) * u64::from(height) * 4;
+        (rgba.len() as u64 == len).then_some(Image {
+            width,
+            height,
+            rgba,
+        })
+    }
+}
+
 /// How big an image [`decode`] accepts. Checked from the header, before pixels are allocated.
 ///
 /// Peak memory while decoding is a few times the pixel buffer (the decoded buffer, its
 /// RGBA conversion and the copy an orientation makes), so size `max_pixels` for that.
+///
+/// Made with [`Limits::new`], or from the default with [`Limits::with_max_pixels`] and
+/// [`Limits::with_max_bytes`]:
+///
+/// ```compile_fail
+/// let limits = corundum_framework_image::Limits { max_bytes: 1, max_pixels: 1 };
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Limits {
     /// The most bytes the file may have.
     pub max_bytes: u64,
     /// The most pixels (width times height) the image may have.
     pub max_pixels: u64,
+}
+
+impl Limits {
+    /// Limits of `max_bytes` for the file and `max_pixels` for the image.
+    pub const fn new(max_bytes: u64, max_pixels: u64) -> Limits {
+        Limits {
+            max_bytes,
+            max_pixels,
+        }
+    }
+
+    /// These limits with `max_bytes` for the file.
+    pub const fn with_max_bytes(self, max_bytes: u64) -> Limits {
+        Limits { max_bytes, ..self }
+    }
+
+    /// These limits with `max_pixels` for the image.
+    pub const fn with_max_pixels(self, max_pixels: u64) -> Limits {
+        Limits { max_pixels, ..self }
+    }
 }
 
 impl Default for Limits {

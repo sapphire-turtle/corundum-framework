@@ -146,10 +146,7 @@ fn png16(w: u32, h: u32) -> Vec<u8> {
 
 #[test]
 fn max_pixels_alone_bounds_a_decode() {
-    let limits = Limits {
-        max_pixels: 64,
-        ..Limits::default()
-    };
+    let limits = Limits::default().with_max_pixels(64);
     let at = png16(8, 8);
     let img = decode(
         Source::Bytes {
@@ -186,10 +183,7 @@ fn an_over_large_file_is_too_large() {
         &RgbaImage::from_pixel(8, 8, Rgba([1, 2, 3, 4])),
         ImageFormat::Png,
     );
-    let limits = Limits {
-        max_bytes: 10,
-        ..Limits::default()
-    };
+    let limits = Limits::default().with_max_bytes(10);
     let r = decode(
         Source::Bytes {
             bytes: &png,
@@ -205,4 +199,24 @@ fn an_over_large_file_is_too_large() {
         decode(Source::Path(&path), &limits),
         Err(Error::TooLarge)
     ));
+}
+
+#[test]
+fn limits_are_built_from_their_parts() {
+    let limits = Limits::new(10, 20);
+    assert_eq!((limits.max_bytes, limits.max_pixels), (10, 20));
+    let limits = Limits::default().with_max_pixels(64).with_max_bytes(5);
+    assert_eq!((limits.max_bytes, limits.max_pixels), (5, 64));
+    assert_eq!(
+        Limits::default().with_max_pixels(64).max_bytes,
+        Limits::default().max_bytes
+    );
+}
+
+#[test]
+fn an_image_is_made_only_from_the_right_number_of_bytes() {
+    let img = corundum_framework_image::Image::new(2, 3, vec![7; 24]).unwrap();
+    assert_eq!((img.width, img.height, img.rgba.len()), (2, 3, 24));
+    assert!(corundum_framework_image::Image::new(2, 3, vec![7; 23]).is_none());
+    assert!(corundum_framework_image::Image::new(2, 3, vec![7; 25]).is_none());
 }

@@ -1,5 +1,6 @@
 /// Why an image could not be decoded (or, with the `webp` feature, encoded).
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     /// A format this build does not decode (HEIC, HEIF, AVIF, ORF, a RAW file without the
     /// `raw` feature, or one `image` was built without).

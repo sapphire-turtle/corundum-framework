@@ -9,11 +9,7 @@ fn gradient(w: u32, h: u32) -> Image {
             rgba.extend_from_slice(&[(x * 4) as u8, (y * 8) as u8, ((x + y) * 3) as u8, 255]);
         }
     }
-    Image {
-        width: w,
-        height: h,
-        rgba,
-    }
+    Image::new(w, h, rgba).unwrap()
 }
 
 #[test]

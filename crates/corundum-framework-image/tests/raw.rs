@@ -120,10 +120,7 @@ mod with_the_feature {
     #[test]
     fn a_preview_over_max_pixels_is_too_large() {
         let data = dng(160, 120, 1);
-        let limits = Limits {
-            max_pixels: 160 * 120 - 1,
-            ..Limits::default()
-        };
+        let limits = Limits::default().with_max_pixels(160 * 120 - 1);
         let r = decode(named(&data, "dng"), &limits);
         assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
     }
@@ -131,10 +128,7 @@ mod with_the_feature {
     #[test]
     fn a_raw_file_over_max_bytes_is_too_large() {
         let data = dng(160, 120, 1);
-        let limits = Limits {
-            max_bytes: data.len() as u64 - 1,
-            ..Limits::default()
-        };
+        let limits = Limits::default().with_max_bytes(data.len() as u64 - 1);
         let r = decode(named(&data, "dng"), &limits);
         assert!(matches!(r, Err(Error::TooLarge)), "{r:?}");
     }
