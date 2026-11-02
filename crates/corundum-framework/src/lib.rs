@@ -28,7 +28,7 @@
 //! | `keys-clap` | `keys::KeyCommand` | the subcommand that manages a store; `add --profile` takes one of the app's profiles (brings `keys`) |
 //! | `image` | [`image`] | `corundum-framework-image`: a picture decoded to an sRGB RGBA8 thumbnail with its size limits checked from the header, without egui |
 //! | `image-raw` | `image` | camera RAW files too; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) |
-//! | `image-webp` | `image` | WebP files too (brings `image`) |
+//! | `image-webp` | `image::encode_webp` | lossy WebP encoding, through libwebp; WebP decodes without it (brings `image`) |
 //! | `image-preview` | `gui::preview::ImagePreview` | a picked image file drawn in the detail pane, decoded on a worker thread (brings `gui` and `image`) |
 //! | `gui-keys` | `gui::keys` | the API keys page in Settings, over a store on this machine or the app's own backend; each key is added with one of the app's profiles (brings `gui` and `keys`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |

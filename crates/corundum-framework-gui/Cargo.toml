@@ -85,7 +85,7 @@ single-instance = ["corundum-framework-platform/single-instance"]
 keys = ["dep:corundum-framework-keys"]
 # `preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a worker
 # thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
-# only: an app wanting RAW previews or WebP turns on that crate's `raw` / `webp` itself.
+# (WebP among them) only: an app wanting RAW previews turns on that crate's `raw` itself.
 image-preview = ["dep:corundum-framework-image"]
 
 [dependencies]

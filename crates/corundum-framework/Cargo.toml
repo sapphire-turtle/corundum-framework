@@ -48,12 +48,12 @@ service = [
 keys = ["dep:corundum-framework-keys"]
 keys-axum = ["keys", "corundum-framework-keys/axum"]
 keys-clap = ["keys", "corundum-framework-keys/clap"]
-# A picture decoded to a thumbnail, without egui: for an app, or its server. Common formats
-# only; `image-raw` and `image-webp` add the rest.
+# A picture decoded to a thumbnail, without egui: for an app, or its server. The common
+# formats, WebP among them; `image-raw` adds camera RAW files, `image-webp` WebP encoding.
 image = ["dep:corundum-framework-image"]
 # Camera RAW files. rawler is LGPL-2.1: an app turning this on takes on its terms.
 image-raw = ["image", "corundum-framework-image/raw"]
-# WebP files.
+# Lossy WebP encoding (`encode_webp`), through libwebp; WebP decodes without it.
 image-webp = ["image", "corundum-framework-image/webp"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────

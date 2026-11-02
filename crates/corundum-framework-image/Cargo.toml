@@ -3,7 +3,7 @@ name = "corundum-framework-image"
 # Versioned with the other corundum-framework crates (release-plz's `corundum` group).
 version = "0.7.0"
 edition.workspace = true
-description = "Decode an image file or bytes to sRGB RGBA8: format detection, EXIF orientation and size limits, without a GUI"
+description = "Decode an image file or bytes to RGBA8 without a GUI: format detection, EXIF orientation, ICC profiles converted to sRGB, size limits and thumbnails"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 readme = "README.md"

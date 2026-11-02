@@ -177,3 +177,17 @@ jobs:
               exit 1
             fi
           done
+
+  # The image crate decodes for a server too: none of its features may bring egui.
+  image-without-egui:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: egui is not built for the image crate
+        run: |
+          cargo tree --locked --target all -p corundum-framework-image --all-features -e normal > tree.txt
+          if grep -qE ' (egui|eframe)[a-z_-]* v' tree.txt; then
+            echo "egui is built for the image crate"
+            exit 1
+          fi
