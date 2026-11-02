@@ -1085,11 +1085,13 @@ dependencies = [
 name = "corundum-framework-audio"
 version = "0.7.0"
 dependencies = [
+ "corundum-framework-audio",
  "ogg",
  "opus-pure",
  "rubato",
  "symphonia",
  "tempfile",
+ "tracing",
 ]
 
 [[package]]

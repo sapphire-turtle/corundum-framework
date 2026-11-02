@@ -5,11 +5,20 @@
 //!   into a [`decode::TrackDecoder`] of interleaved `f32` blocks, with seeking and the
 //!   length. symphonia reads FLAC, MP3, AAC, ALAC, Vorbis, MP4 and WAV; ogg + opus-pure
 //!   read Ogg Opus. [`decode::probe`] reads only the tags and the length.
+//! - [`Engine`]: the playback state machine over a queue of any [`QueueItem`], an
+//!   [`Opener`] and an [`OutputFactory`].
 //! - [`resample`]: [`resample::Converter`] turns decoded blocks into an [`OutputConfig`]:
 //!   channels first, then the rate with rubato.
 
 pub mod decode;
+mod engine;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fakes;
 mod output;
 pub mod resample;
 
+pub use engine::{
+    AudioOutput, Command, Engine, Feed, FeedEvent, MAX_SKIPS, Opener, OutputFactory, PlayerError,
+    PlayerState, QueueItem, RESTART_AFTER_MS, Status, TrackError, Wait,
+};
 pub use output::OutputConfig;
