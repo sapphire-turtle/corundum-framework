@@ -236,3 +236,36 @@ fn the_target_size_rounds_up_to_a_step() {
     assert_eq!(target(egui::vec2(3000.0, 2000.0), 1.0), 2048);
     assert_eq!(target(egui::vec2(1500.0, 800.0), 3.0), 2048);
 }
+
+#[test]
+fn a_file_is_not_looked_at_every_frame() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = png(dir.path(), "small.png", 64, 32);
+    let screen = Screen::new();
+    let mut preview = ImagePreview::new();
+    screen.until(&mut preview, &path, |_, d| d.textures == [[64, 32]]);
+
+    // Gone from under it: the frames that follow (well within the recheck) do not stat the
+    // file, as a hung network mount would freeze them, and keep the picture.
+    std::fs::remove_file(&path).unwrap();
+    for _ in 0..3 {
+        screen.frame(&mut preview, &path);
+    }
+    let drawn = screen.until(&mut preview, &path, |p, _| p.idle());
+    assert_eq!(drawn.textures, [[64, 32]], "{drawn:?}");
+    let drawn = screen.frame(&mut preview, &path);
+    assert_eq!(drawn.textures, [[64, 32]], "{drawn:?}");
+}
+
+#[test]
+fn a_changed_file_is_shown_anew() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = png(dir.path(), "small.png", 64, 32);
+    let screen = Screen::new();
+    let mut preview = ImagePreview::new();
+    preview.set_recheck(Duration::ZERO);
+    screen.until(&mut preview, &path, |_, d| d.textures == [[64, 32]]);
+
+    png(dir.path(), "small.png", 48, 16);
+    screen.until(&mut preview, &path, |_, d| d.textures == [[48, 16]]);
+}
