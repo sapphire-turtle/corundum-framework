@@ -130,6 +130,9 @@ pub struct AudioPreview {
     /// Whether the last frame's seek bar was on, `None` when it drew none.
     #[cfg(test)]
     seek_enabled: Option<bool>,
+    /// The last seek bar's id, for a test to focus it.
+    #[cfg(test)]
+    seek_id: Option<egui::Id>,
 }
 
 impl AudioPreview {
@@ -188,11 +191,8 @@ impl AudioPreview {
 
             self.button(ui, path, player, &state, here);
 
-            let length = if here {
-                state.duration_ms
-            } else {
-                info.as_ref().and_then(|i| i.duration_ms)
-            };
+            let probed = info.as_ref().and_then(|i| i.duration_ms);
+            let length = shown_length(here, state.duration_ms, probed);
             let position = self.seek_bar(ui, path, player, &state, here, length);
             let time = format!(
                 "{} / {}",
@@ -239,8 +239,9 @@ impl AudioPreview {
         }
     }
 
-    /// The seek bar, on only while this file plays and its length is known; letting it go
-    /// seeks there. Returns the position to show, in ms.
+    /// The seek bar, on only while this file plays and its length is known; letting it go,
+    /// or a key on it, seeks there. Returns the position to show, in ms: the player's (or
+    /// where the bar is held), whatever the bar can show.
     fn seek_bar(
         &mut self,
         ui: &mut egui::Ui,
@@ -254,34 +255,34 @@ impl AudioPreview {
         if !enabled {
             self.held = None;
         }
-        let end = length.filter(|_| here).unwrap_or(0).max(1) as f64;
         let held = self
             .held
             .as_ref()
             .filter(|(p, _)| p == path)
             .map(|(_, ms)| *ms);
-        let mut value = match held {
-            Some(ms) => ms,
-            None if here => state.position_ms as f64,
-            None => 0.0,
-        }
-        .min(end);
+        let position = shown_position(here, held, state.position_ms);
+        let end = length.filter(|_| enabled).unwrap_or(0).max(1) as f64;
+        let mut value = (position as f64).min(end);
         ui.spacing_mut().slider_width = (ui.available_width() - 16.0).clamp(0.0, SEEK_WIDTH);
         let slider = egui::Slider::new(&mut value, 0.0..=end).show_value(false);
         let response = ui.add_enabled(enabled, slider);
         #[cfg(test)]
         {
             self.seek_enabled = Some(response.enabled());
+            self.seek_id = Some(response.id);
         }
-        if response.dragged() || response.changed() {
-            self.held = Some((path.to_owned(), value));
+        let (held, seek) = seek_step(
+            held,
+            value,
+            response.dragged(),
+            response.changed(),
+            response.drag_stopped(),
+        );
+        self.held = held.map(|ms| (path.to_owned(), ms));
+        if let Some(ms) = seek {
+            player.send(Command::Seek(ms));
         }
-        if (response.drag_stopped() || response.clicked())
-            && let Some((_, ms)) = self.held.take()
-        {
-            player.send(Command::Seek(ms.max(0.0) as u64));
-        }
-        value.max(0.0) as u64
+        held.map_or(position, |ms| ms.max(0.0) as u64)
     }
 
     /// Send the worker `path`, unless it is the one still unanswered.
@@ -333,6 +334,12 @@ impl AudioPreview {
     #[cfg(test)]
     pub(super) fn seek_enabled(&self) -> Option<bool> {
         self.seek_enabled
+    }
+
+    /// The last seek bar's id, for a test.
+    #[cfg(test)]
+    pub(super) fn seek_id(&self) -> Option<egui::Id> {
+        self.seek_id
     }
 
     /// Something the worker thread holds while it runs.
@@ -401,4 +408,42 @@ fn error_text(ui: &egui::Ui, error: &PlayerError) -> String {
 fn clock(ms: u64) -> String {
     let secs = ms / 1000;
     format!("{}:{:02}", secs / 60, secs % 60)
+}
+
+/// The length to show: while this file plays, the player's, else the probe's (the player
+/// learns it only once the decoder has opened the file); otherwise the probe's.
+pub(super) fn shown_length(here: bool, player: Option<u64>, probed: Option<u64>) -> Option<u64> {
+    if here { player.or(probed) } else { probed }
+}
+
+/// The position to show, in ms: where the bar is held, else the player's while this file
+/// plays, else its head.
+pub(super) fn shown_position(here: bool, held: Option<f64>, position_ms: u64) -> u64 {
+    match held {
+        Some(ms) => ms.max(0.0) as u64,
+        None if here => position_ms,
+        None => 0,
+    }
+}
+
+/// What a frame of the seek bar does: where it is now held, and where to seek, if anywhere.
+/// A drag holds the bar and seeks when it is let go; a change without a drag (an arrow key,
+/// a press on the rail) seeks at once.
+pub(super) fn seek_step(
+    held: Option<f64>,
+    value: f64,
+    dragged: bool,
+    changed: bool,
+    released: bool,
+) -> (Option<f64>, Option<u64>) {
+    let ms = |v: f64| v.max(0.0) as u64;
+    if dragged {
+        (Some(value), None)
+    } else if released {
+        (None, held.or(changed.then_some(value)).map(ms))
+    } else if changed {
+        (None, Some(ms(value)))
+    } else {
+        (held, None)
+    }
 }

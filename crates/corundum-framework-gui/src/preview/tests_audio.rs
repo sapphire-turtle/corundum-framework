@@ -373,3 +373,89 @@ fn the_probe_thread_ends_with_the_preview() {
         std::thread::sleep(Duration::from_millis(5));
     }
 }
+
+#[test]
+fn the_time_is_the_player_s_position_when_the_length_is_unknown() {
+    use super::audio::shown_position;
+    // Playing, length unknown: the player's position, not a bar clamped to nothing.
+    assert_eq!(shown_position(true, None, 75_000), 75_000);
+    // A held bar shows where it is held.
+    assert_eq!(shown_position(true, Some(12_500.0), 75_000), 12_500);
+    // Another file: from its head.
+    assert_eq!(shown_position(false, None, 75_000), 0);
+}
+
+#[test]
+fn the_length_falls_back_to_the_probe_s() {
+    use super::audio::shown_length;
+    assert_eq!(shown_length(true, None, Some(3_000)), Some(3_000));
+    assert_eq!(shown_length(true, Some(2_000), Some(3_000)), Some(2_000));
+    assert_eq!(shown_length(true, None, None), None);
+    // Not playing: the player's length is another file's.
+    assert_eq!(shown_length(false, Some(2_000), Some(3_000)), Some(3_000));
+}
+
+#[test]
+fn the_seek_bar_seeks_on_a_keyboard_change_and_on_release() {
+    use super::audio::seek_step;
+    // An arrow key: changed, not dragged — seek at once, nothing held.
+    assert_eq!(
+        seek_step(None, 500.0, false, true, false),
+        (None, Some(500))
+    );
+    // Dragging: held, no seek yet.
+    assert_eq!(
+        seek_step(None, 700.0, true, true, false),
+        (Some(700.0), None)
+    );
+    assert_eq!(
+        seek_step(Some(700.0), 800.0, true, false, false),
+        (Some(800.0), None)
+    );
+    // Let go: seek where it was held.
+    assert_eq!(
+        seek_step(Some(800.0), 800.0, false, false, true),
+        (None, Some(800))
+    );
+    // Nothing happened: nothing changes.
+    assert_eq!(seek_step(None, 0.0, false, false, false), (None, None));
+}
+
+#[test]
+fn an_arrow_key_on_the_focused_seek_bar_seeks() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "tone.wav", 3.0, 8_000, 1);
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    screen.until(&mut preview, &path, &player, DEADLINE, |p, _| p.idle());
+    screen.click(&mut preview, &path, &player, "Play");
+    wait_playing(&player, &path);
+    screen.until(&mut preview, &path, &player, DEADLINE, |p, _| {
+        p.seek_enabled() == Some(true)
+    });
+    // The fake device plays nothing out, so the position stays at 0 until a seek.
+    assert_eq!(player.state().position_ms, 0);
+
+    let id = preview.seek_id().expect("a seek bar was drawn");
+    screen.ctx.memory_mut(|m| m.request_focus(id));
+    screen.frame(&mut preview, &path, &player);
+    let right = egui::Event::Key {
+        key: egui::Key::ArrowRight,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::default(),
+    };
+    screen.frame_with(&mut preview, &path, &player, vec![right]);
+    let start = Instant::now();
+    while player.state().position_ms == 0 {
+        assert!(
+            start.elapsed() < PLAYS_WITHIN,
+            "no seek: {:?}",
+            player.state()
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
