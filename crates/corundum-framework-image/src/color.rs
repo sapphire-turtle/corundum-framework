@@ -1,11 +1,19 @@
-use moxcms::{ColorProfile, Layout, TransformOptions};
+use moxcms::{ColorProfile, DataColorSpace, Layout, TransformOptions};
 
 /// Convert `rgba` (RGBA8) from the embedded ICC profile `icc` to sRGB, in place.
 ///
-/// A profile moxcms cannot read, or cannot build a transform from, leaves the pixels as
-/// they are. Alpha is carried over unchanged.
+/// Only an RGB profile (connected through XYZ or Lab) is applied. Anything else leaves the
+/// pixels as they are: a CMYK or grey profile describes the file's own samples, not the RGB
+/// the decoder has already made from them (and moxcms would misread RGBA as CMYK, or
+/// refuse a grey profile). A profile moxcms cannot read or build a transform from is
+/// ignored too. Alpha is carried over unchanged.
 pub(crate) fn to_srgb(rgba: &mut [u8], icc: &[u8]) {
     let result = ColorProfile::new_from_slice(icc).and_then(|src| {
+        if src.color_space != DataColorSpace::Rgb
+            || !matches!(src.pcs, DataColorSpace::Xyz | DataColorSpace::Lab)
+        {
+            return Err(moxcms::CmsError::UnsupportedProfileConnection);
+        }
         let transform = src.create_transform_8bit(
             Layout::Rgba,
             &ColorProfile::new_srgb(),
@@ -30,6 +38,16 @@ mod tests {
     fn garbage_leaves_the_pixels_alone() {
         let mut px = [200, 100, 50, 255];
         to_srgb(&mut px, &[7; 16]);
+        assert_eq!(px, [200, 100, 50, 255]);
+    }
+
+    #[test]
+    fn a_cmyk_profile_leaves_the_pixels_alone() {
+        // An sRGB profile whose header says the data colour space is CMYK.
+        let mut icc = ColorProfile::new_srgb().encode().unwrap();
+        icc[16..20].copy_from_slice(b"CMYK");
+        let mut px = [200, 100, 50, 255];
+        to_srgb(&mut px, &icc);
         assert_eq!(px, [200, 100, 50, 255]);
     }
 }

@@ -5,7 +5,8 @@ use crate::{Error, Image, Limits, Source, decode};
 
 /// Decode `source` and shrink it so its longest side is `longest` pixels, keeping the aspect
 /// ratio (the short side is rounded, and at least 1). An image already that small is
-/// returned as decoded: a thumbnail is never enlarged.
+/// returned as decoded: a thumbnail is never enlarged. `longest == 0` also returns the
+/// image at full size.
 pub fn thumbnail(source: Source, longest: u32, limits: &Limits) -> Result<Image, Error> {
     let img = decode(source, limits)?;
     let long = img.width.max(img.height);

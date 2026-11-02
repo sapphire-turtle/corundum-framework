@@ -92,3 +92,10 @@ fn an_unreadable_profile_is_ignored() {
     let img = decode(bytes(&data), &Limits::default()).unwrap();
     assert_eq!(img.rgba, [200, 100, 50, 255]);
 }
+
+#[test]
+fn a_longest_of_zero_is_full_size() {
+    let data = png(40, 20);
+    let t = thumbnail(bytes(&data), 0, &Limits::default()).unwrap();
+    assert_eq!((t.width, t.height), (40, 20));
+}
