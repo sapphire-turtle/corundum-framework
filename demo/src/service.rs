@@ -25,8 +25,8 @@ pub fn service() -> ServiceSpec {
 /// The `daemon` subcommand: note the start in the package's log, then run [`daemon`] with
 /// its heartbeat in the demo's data directory.
 pub fn run_daemon() -> ! {
-    #[cfg(feature = "velopack")]
-    crate::velopack::log(&format!(
+    #[cfg(feature = "package")]
+    crate::package::log(&format!(
         "daemon start exe={:?}",
         std::env::current_exe().unwrap_or_default()
     ));

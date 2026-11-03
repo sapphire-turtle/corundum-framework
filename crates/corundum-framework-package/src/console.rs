@@ -7,10 +7,10 @@
 //!
 //! On Windows the child is put in a job object that kills it when the shim goes away, so
 //! Ctrl+C in the console takes the GUI process with it. Only the child: the job lets the
-//! processes it starts leave silently (`JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`). Velopack
-//! starts its `Update.exe` without asking to leave the job, and the GUI exits for the
-//! update to be applied; in the shim's job, `Update.exe` would be killed with it halfway
-//! through replacing the files, and so would the app it restarts and any daemon.
+//! processes it starts leave silently (`JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`). An update
+//! starts a PowerShell that waits for the GUI to exit and then runs the installer; in the
+//! shim's job it would be killed with the GUI before the installer ran, and so would the
+//! app it restarts and any daemon.
 //!
 //! A shim has no logging set up, so a job that cannot be made is reported on standard
 //! error.
@@ -103,8 +103,8 @@ mod job {
         unsafe {
             let job = Job(CreateJobObjectW(None, None)?);
             let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-            // Only the child is killed: what it starts (Velopack's `Update.exe`, which must
-            // outlive the GUI to apply an update) leaves the job.
+            // Only the child is killed: what it starts (an update's installer, which must
+            // outlive the GUI) leaves the job.
             info.BasicLimitInformation.LimitFlags =
                 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
             SetInformationJobObject(

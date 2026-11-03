@@ -33,7 +33,7 @@ pub fn service_exe() -> std::io::Result<PathBuf> {
 /// executable is taken with its links resolved. Not on Windows — the rule
 /// `corundum_framework_platform::package` follows too: the canonical form there is a `\\?\`
 /// path, which would end up in the task's XML, and a Windows package is started from its
-/// `current` directory, never through a link.
+/// install directory, never through a link.
 fn resolve(running: PathBuf, layout: Option<&PackageLayout>, on_windows: bool) -> PathBuf {
     match layout {
         Some(layout) if layout.kind == PackageKind::AppImage => layout.root.clone(),

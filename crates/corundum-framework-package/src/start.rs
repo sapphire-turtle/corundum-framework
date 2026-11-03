@@ -5,24 +5,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use corundum_framework_platform::dirs::AppDirs;
 use corundum_framework_platform::package;
 use semver::Version;
-use velopack::VelopackApp;
 
-use crate::backend::{self, Located};
+use crate::backend;
 use crate::services::Services;
 
 #[cfg(windows)]
 use crate::cli_path;
 use crate::cli_path::CliSpec;
 
-/// Set by Velopack for the app's first start after an install. Its `run` removes it, so it
-/// is read before.
-const FIRSTRUN: &str = "VELOPACK_FIRSTRUN";
-
-/// Set by Velopack's updater when it starts the app again after an update, applied or
-/// not. Its `run` removes it, so it is read before.
-const RESTART: &str = "VELOPACK_RESTART";
-
-/// Whether [`start`] saw [`RESTART`].
+/// Whether [`start`] saw [`backend::RESTART`]: this start follows an apply.
 static RESTARTED: AtomicBool = AtomicBool::new(false);
 
 /// The file, in the app's data directory, holding the version the app last ran with.
@@ -32,9 +23,16 @@ const KEPT_VERSION: &str = "package-version";
 #[derive(Clone, Debug)]
 pub struct PackageSpec {
     /// The app's directory name, where the last version run is kept: `sapphire-journal`.
+    /// Its update feed is the release's `<app_name>-latest.json`.
     pub app_name: &'static str,
-    /// Run once per install: in the install hook on Windows, at the first start elsewhere.
-    /// It must be safe to run again.
+    /// The running app's version: `env!("CARGO_PKG_VERSION")`.
+    pub version: &'static str,
+    /// The minisign public key the updates are signed for (`cargo packager signer
+    /// generate`'s `.pub`, as it is): an update whose signature does not match is not
+    /// installed.
+    pub update_pubkey: &'static str,
+    /// Run once per install: in the install hook on Windows (at every install, updates
+    /// included), at the first start elsewhere. It must be safe to run again.
     pub on_installed: Option<fn()>,
     /// Run before uninstalling, on Windows only (no other OS runs anything): 30 seconds,
     /// no window.
@@ -63,30 +61,20 @@ pub enum Start {
     Same { version: Version },
 }
 
-/// Velopack's start, then what this start is. The first thing `main` runs but the app's
-/// logging: started for a Windows hook, it runs the hook and exits, and what goes wrong in
-/// a hook (the command line not put on `PATH`) is only logged, so initialise logging
-/// before calling `start`.
+/// What this start is, after the Windows install hooks. The first thing `main` runs but the
+/// app's logging: started by the installer for a hook (`--corundum-package installed` or
+/// `uninstalling`), it runs the hook and exits, and what goes wrong in a hook (the command
+/// line not put on `PATH`) is only logged, so initialise logging before calling `start`.
 pub fn start(spec: &PackageSpec) -> Start {
-    let firstrun = std::env::var_os(FIRSTRUN).is_some();
-    RESTARTED.store(std::env::var_os(RESTART).is_some(), Ordering::Relaxed);
-    // The app applies an update when it asks to, after `before_apply`, never behind its back
-    // at a start.
-    let app = VelopackApp::build().set_auto_apply_on_startup(false);
-    // Found from the executable with its links resolved: see `backend::locate`. Outside a
-    // package Velopack searches by itself, and finds nothing either.
-    let located = backend::locate();
-    let app = match &located {
-        Ok(Located {
-            config: Some(config),
-            ..
-        }) => app.set_locator(config.clone()),
-        _ => app,
-    };
+    RESTARTED.store(
+        std::env::var_os(backend::RESTART).is_some(),
+        Ordering::Relaxed,
+    );
     #[cfg(windows)]
-    let app = windows_hooks(app, spec);
-    let mut app = app;
-    app.run();
+    if let Some(hook) = hook_arg(std::env::args_os()) {
+        run_hook(&hook, spec);
+        std::process::exit(0);
+    }
 
     // Whatever this start is, as the first process to start after an update starts the
     // services it stopped: the GUI, the command line, or one installed by the scripts.
@@ -103,10 +91,13 @@ pub fn start(spec: &PackageSpec) -> Start {
     if package::current().is_none() {
         return Start::NotPackaged;
     }
-    let now = match located {
-        Ok(Located { version, .. }) => version,
+    let now = match Version::parse(spec.version) {
+        Ok(version) => version,
         Err(e) => {
-            tracing::warn!("in a package, but its version could not be read: {e}");
+            tracing::warn!(
+                "in a package, but the version {:?} is not one: {e}",
+                spec.version
+            );
             return Start::NotPackaged;
         }
     };
@@ -117,7 +108,7 @@ pub fn start(spec: &PackageSpec) -> Start {
         .as_deref()
         .and_then(|path| fs::read(path).ok())
         .map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
-    let start = classify(kept.as_deref(), firstrun, &now);
+    let start = classify(kept.as_deref(), &now);
     match &kept_path {
         Some(path) => {
             if let Err(e) = keep(path, &now) {
@@ -137,52 +128,60 @@ pub fn start(spec: &PackageSpec) -> Start {
     start
 }
 
-/// Whether Velopack's updater started this process, after applying an update or failing
-/// to: `Updater::apply_pending_at_start` then applies nothing, as an update that failed
-/// would be tried again at every start.
+/// Whether an apply started this process again, after installing an update or failing to:
+/// `Updater::apply_pending_at_start` then applies nothing, as an update that failed would
+/// be tried again at every start.
 pub(crate) fn restarted() -> bool {
     RESTARTED.load(Ordering::Relaxed)
 }
 
-/// The app's install and uninstall hooks. Velopack runs a hook and exits when the installer
-/// starts the app for one; the update hooks are left unset, so it exits for those without
-/// running anything.
+/// The install hook the installer asks for: `--corundum-package <hook>` as the first
+/// arguments (corundum's NSIS template runs `installed` after every install and
+/// `uninstalling` before an uninstall).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn hook_arg(mut args: impl Iterator<Item = std::ffi::OsString>) -> Option<String> {
+    args.next();
+    if args.next()? != "--corundum-package" {
+        return None;
+    }
+    args.next()?.into_string().ok()
+}
+
+/// Runs the install hook `hook`. A hook has no window: a failure is logged, never shown or
+/// panicked on.
 #[cfg(windows)]
-fn windows_hooks<'a>(app: VelopackApp<'a>, spec: &PackageSpec) -> VelopackApp<'a> {
-    let on_installed = spec.on_installed;
-    let on_uninstalling = spec.on_uninstalling;
-    let cli = spec.cli;
-    #[cfg(feature = "service")]
-    let services = spec.clone();
-    // A hook has 30 seconds and no window: a failure is logged, never shown or panicked on.
-    app.on_after_install_fast_callback(move |_| {
-        if let Some(cli) = cli
-            && let Err(e) = cli_path::install(&cli)
-        {
-            tracing::warn!("could not put {} on PATH: {e}", cli.command);
+fn run_hook(hook: &str, spec: &PackageSpec) {
+    match hook {
+        "installed" => {
+            if let Some(cli) = spec.cli
+                && let Err(e) = cli_path::install(&cli)
+            {
+                tracing::warn!("could not put {} on PATH: {e}", cli.command);
+            }
+            if let Some(on_installed) = spec.on_installed {
+                on_installed();
+            }
         }
-        if let Some(on_installed) = on_installed {
-            on_installed();
+        "uninstalling" => {
+            // First, so the services' programs are no longer running when the files go:
+            // each service's uninstall ends its task (`schtasks /end`) before deleting it.
+            #[cfg(feature = "service")]
+            crate::services::uninstall_all(
+                spec,
+                &corundum_framework_service::Environment::detect(),
+                &corundum_framework_service::SystemManager,
+            );
+            if let Some(on_uninstalling) = spec.on_uninstalling {
+                on_uninstalling();
+            }
+            if let Some(cli) = spec.cli
+                && let Err(e) = cli_path::uninstall(&cli)
+            {
+                tracing::warn!("could not take {} off PATH: {e}", cli.command);
+            }
         }
-    })
-    .on_before_uninstall_fast_callback(move |_| {
-        // First, so the services' programs are no longer running when the files go: each
-        // service's uninstall ends its task (`schtasks /end`) before deleting it.
-        #[cfg(feature = "service")]
-        crate::services::uninstall_all(
-            &services,
-            &corundum_framework_service::Environment::detect(),
-            &corundum_framework_service::SystemManager,
-        );
-        if let Some(on_uninstalling) = on_uninstalling {
-            on_uninstalling();
-        }
-        if let Some(cli) = cli
-            && let Err(e) = cli_path::uninstall(&cli)
-        {
-            tracing::warn!("could not take {} off PATH: {e}", cli.command);
-        }
-    })
+        other => tracing::warn!("unknown install hook {other:?}"),
+    }
 }
 
 /// Keeps `version` as the one the app last ran with.
@@ -193,12 +192,12 @@ fn keep(path: &Path, version: &Version) -> std::io::Result<()> {
     fs::write(path, version.to_string())
 }
 
-/// Which start this is: a first one when nothing readable is kept or Velopack says so, an
-/// update when the kept version differs from the package's either way (a downgrade is a
-/// change too), and the same otherwise.
-pub(crate) fn classify(kept: Option<&str>, firstrun: bool, now: &Version) -> Start {
+/// Which start this is: a first one when nothing readable is kept, an update when the kept
+/// version differs from the package's either way (a downgrade is a change too), and the
+/// same otherwise.
+pub(crate) fn classify(kept: Option<&str>, now: &Version) -> Start {
     match kept.and_then(|kept| Version::parse(kept.trim()).ok()) {
-        Some(from) if !firstrun => {
+        Some(from) => {
             if from == *now {
                 Start::Same {
                     version: now.clone(),
@@ -225,29 +224,39 @@ mod tests {
     }
 
     #[test]
-    fn a_start_is_told_from_the_kept_version_the_variable_and_the_package() {
+    fn a_start_is_told_from_the_kept_version_and_the_package() {
         let first = |now: &str| Start::FirstStart { version: v(now) };
         let same = |now: &str| Start::Same { version: v(now) };
         let updated = |from: &str, to: &str| Start::Updated {
             from: v(from),
             to: v(to),
         };
-        let cases: &[(Option<&str>, bool, &str, Start)] = &[
-            (None, false, "1.0.0", first("1.0.0")),
-            (Some("1.0.0"), false, "1.0.0", same("1.0.0")),
-            (Some("1.0.0"), false, "1.1.0", updated("1.0.0", "1.1.0")),
-            (Some("1.1.0"), false, "1.0.0", updated("1.1.0", "1.0.0")),
-            (Some("1.0.0"), true, "1.0.0", first("1.0.0")),
-            (Some(""), false, "1.0.0", first("1.0.0")),
-            (Some("garbage"), false, "1.0.0", first("1.0.0")),
-            (Some(" 1.0.0\n"), false, "1.0.0", same("1.0.0")),
+        let cases: &[(Option<&str>, &str, Start)] = &[
+            (None, "1.0.0", first("1.0.0")),
+            (Some("1.0.0"), "1.0.0", same("1.0.0")),
+            (Some("1.0.0"), "1.1.0", updated("1.0.0", "1.1.0")),
+            (Some("1.1.0"), "1.0.0", updated("1.1.0", "1.0.0")),
+            (Some(""), "1.0.0", first("1.0.0")),
+            (Some("garbage"), "1.0.0", first("1.0.0")),
+            (Some(" 1.0.0\n"), "1.0.0", same("1.0.0")),
         ];
-        for (kept, firstrun, now, want) in cases {
-            assert_eq!(
-                classify(*kept, *firstrun, &v(now)),
-                *want,
-                "kept {kept:?}, firstrun {firstrun}, now {now}"
-            );
+        for (kept, now, want) in cases {
+            assert_eq!(classify(*kept, &v(now)), *want, "kept {kept:?}, now {now}");
         }
+    }
+
+    #[test]
+    fn the_install_hook_is_the_first_arguments() {
+        let args = |a: &[&str]| a.iter().map(std::ffi::OsString::from).collect::<Vec<_>>();
+        assert_eq!(
+            hook_arg(args(&["app.exe", "--corundum-package", "installed"]).into_iter()),
+            Some("installed".to_owned())
+        );
+        assert_eq!(hook_arg(args(&["app.exe", "serve"]).into_iter()), None);
+        assert_eq!(hook_arg(args(&["app.exe"]).into_iter()), None);
+        assert_eq!(
+            hook_arg(args(&["app.exe", "--corundum-package"]).into_iter()),
+            None
+        );
     }
 }

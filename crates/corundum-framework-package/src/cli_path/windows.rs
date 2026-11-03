@@ -1,4 +1,4 @@
-//! Windows: the package's `current` directory on the user `Path`, kept in
+//! Windows: the package's install directory on the user `Path`, kept in
 //! `HKCU\Environment` with the type it has (`REG_EXPAND_SZ` when new), then announced to
 //! the running programs so that a new terminal sees it.
 
@@ -16,7 +16,7 @@ use windows::core::w;
 use super::{CliSpec, CliStatus, path_with, path_without};
 use crate::error::Error;
 
-/// The package's `current` directory, as the `Path` names it; `None` outside a package.
+/// The package's install directory, as the `Path` names it; `None` outside a package.
 fn dir() -> Option<String> {
     let layout = package::current()?;
     if layout.kind != PackageKind::Windows {

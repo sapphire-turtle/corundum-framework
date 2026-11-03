@@ -37,3 +37,6 @@ target
 /demo/android/app/build
 /demo/android/build
 /demo/android/app/src/main/jniLibs
+
+# The demo's icons, rendered for its package (demo-release.yml).
+/demo/icons/

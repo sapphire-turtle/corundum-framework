@@ -1,6 +1,7 @@
 # corundum-framework-package
 
-A desktop app as a [Velopack](https://velopack.io) package, for Windows, macOS and Linux.
+A desktop app as a [cargo-packager](https://github.com/crabnebula-dev/cargo-packager)
+package, for Windows, macOS and Linux, with updates signed with minisign.
 
 `start` is the first thing the app's `main` runs. Started by the Windows installer or
 uninstaller for a hook, it runs the app's hook and exits; otherwise it tells the app whether
@@ -12,6 +13,9 @@ use corundum_framework_package::{PackageSpec, Services, Start, start};
 
 static SPEC: PackageSpec = PackageSpec {
     app_name: "my-app",
+    version: env!("CARGO_PKG_VERSION"),
+    // `cargo packager signer generate`'s public key.
+    update_pubkey: "dW50cnVzdGVkIGNvbW1lbnQ6...",
     on_installed: None,
     on_uninstalling: None,
     before_apply: None,
@@ -30,10 +34,15 @@ The crate's other parts:
 
 - `Updater` finds and downloads the app's updates on a thread of its own, and applies one
   only when asked, after the app's `before_apply` has stopped its background processes.
-  `apply` hands the update to Velopack's updater: with `After::Exit` (a daemon, a command)
-  it exits the process; with a restart it returns, and the app ends the process itself, a
-  GUI by closing its window. `apply_pending_at_start` applies, at a GUI's start, an update
-  downloaded earlier and never applied.
+  The feed is the release's `<app_name>-latest.json` (`Source::Github`: the latest
+  release's, or with `prerelease` the newest one that has it), as cargo-packager-updater
+  reads it: the version, and per platform the package's URL, its minisign signature and its
+  format. A package whose signature does not match `PackageSpec::update_pubkey` is not
+  installed. `apply` installs the update: on macOS and Linux at once, on Windows by a
+  silent installer that waits for the process to end. With `After::Exit` (a daemon, a
+  command) it exits the process; with a restart it returns, and the app ends the process
+  itself, a GUI by closing its window; the app starts again once it has. `apply_pending_at_start`
+  applies, at a GUI's start, an update downloaded earlier and never applied.
 - `cli_path` puts the app's command line on `PATH`: the user `Path` on Windows, from the
   install hook; a link in `/usr/local/bin` on macOS and in `~/.local/bin` on Linux, when
   the user asks. Another program's command of the same name is left alone.
@@ -60,24 +69,23 @@ The crate's other parts:
 
 ## Packaging
 
-The command on `PATH` (`CliSpec::command`) need not be the cargo binary's name. On macOS and
-Linux it links to the running executable, whatever `vpk --mainExe` named it; on Windows it
-is the shim `<command>.exe` beside the GUI executable in `current\`.
+The packages are cargo-packager's (sapphire-turtle/.github's `release-packager.yml` makes
+them): an AppImage on Linux, a signed and notarized `.app` on macOS (and a `.tar.gz` of it
+for updates), an NSIS installer on Windows, installing for the current user. Each package
+file has its minisign signature (`.sig`), and the feed `<app_name>-latest.json` lists them.
 
-Cargo cannot build two binaries of one name in a workspace (cargo#6313), so an app's desktop
-package is built as `<app>-desktop`, while its headless build keeps `<app>`. Pack it so:
-
-- macOS and Linux: rename the desktop binary to `<app>` in the pack directory, and run
-  `vpk pack --mainExe <app>`.
-- Windows: keep the GUI executable's name, add the console shim as `<app>.exe`, and run
-  `vpk pack --mainExe <app>-desktop.exe`. The shim calls `console::forward("<app>-desktop.exe")`.
-  Without the shim (`cargo install`, or before packaging) the GUI executable prints in the
-  terminal through `corundum_framework_platform::console::attach_parent`, which the shell
-  does not wait for: no exit code, no typed input.
-- `--packTitle` equals `LauncherSpec::name`, so the installer's shortcut and the launcher's
-  path coincide.
-- Velopack's `Update.exe` (`UpdateMac` on macOS) stays beside the executable; vpk puts it
-  there, and the package's detection looks for it.
+- Windows: the installer is made from this crate's NSIS template (`nsis/installer.nsi`,
+  cargo-packager's with the hooks added), which runs `<app> --corundum-package installed`
+  after every install and `--corundum-package uninstalling` before an uninstall. The
+  console shim is installed as `<command>.exe` beside the GUI executable, and calls
+  `console::forward("<app>-desktop.exe")`. Without the shim (`cargo install`, or before
+  packaging) the GUI executable prints in the terminal through
+  `corundum_framework_platform::console::attach_parent`, which the shell does not wait for:
+  no exit code, no typed input.
+- macOS and Linux: the command on `PATH` (`CliSpec::command`) links to the running
+  executable, whatever its name.
+- The product name equals `LauncherSpec::name`, so the installer's shortcut and the
+  launcher's path coincide.
 
 On iOS and Android the crate is empty: the store installs and updates the app there.
 

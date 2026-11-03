@@ -143,7 +143,7 @@ demo-settings-look-file = レールの並び順と一緒に { $path } に保存�
 demo-settings-look-memory = デモの実行中だけ保持します。このプラットフォームには設定ディレクトリがありません。
 demo-settings-about = このアプリについて
 demo-settings-version = バージョン { $version }
-demo-settings-velopack = Velopack
+demo-settings-package = パッケージ
 demo-settings-first-run-again = 初回セットアップをもう一度行う
 
 # 初回セットアップ：ようこそのページと、デーモンをバックグラウンドで動かし続けるかの質問。

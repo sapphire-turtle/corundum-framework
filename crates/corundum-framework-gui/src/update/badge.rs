@@ -14,7 +14,7 @@ use crate::{icons, tr};
 ///
 /// The restart runs [`Updater::apply`] on a thread of its own, so the window does not
 /// freeze while the app's `before_apply` stops its background processes. On success the
-/// badge closes the root window, as Velopack's updater waits for the app to end; an
+/// badge closes the root window, as the update's install waits for the app to end; an
 /// error is the icon's tooltip.
 pub struct ReadyBadge {
     updater: Updater,
@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn a_restart_handed_to_velopack_closes_the_window() {
+    fn a_restart_handed_over_closes_the_window() {
         let (badge, ctx) = clicked(Updater::for_tests(PackageState::Ready {
             version: "1.1.0".parse().unwrap(),
         }));

@@ -87,27 +87,25 @@ and the question whether to keep the daemon running; Settings › About has the 
 and runs the setup again. A build in a cargo target directory registers nothing: the
 question page and the row say it is a development build.
 
-### As a Velopack package
+### As a package
 
-The names differ by design (corundum-framework#75). Cargo builds `corundum-framework-demo`;
-the package's executable is `corundum-demo` on macOS and Linux (the release workflow renames
-it, and the command on `PATH` links to it), while on Windows the GUI keeps
-`corundum-framework-demo.exe` and the console shim `corundum-demo.exe` sits beside it in
-`current\`.
+The names differ by design (corundum-framework#75). Cargo builds `corundum-framework-demo`,
+the package's executable, and the command on `PATH` is `corundum-demo`: on macOS and Linux
+a link to the executable, on Windows the console shim `corundum-demo.exe` beside it in the
+install directory.
 
-The `velopack` feature builds the demo as a Velopack package (corundum-framework#51,
-`docs/superpowers/specs/2026-10-29-velopack-runtime-design.md`), on
-`corundum-framework-package`: Velopack's start and hooks, updates from the repository's
-pre-releases (checked at start and daily, applied from the About page's row or the status
-bar's badge), and the command line `corundum-demo` (on `Path` by the installer on Windows,
-through the console shim `corundum-framework-demo-console`; installed from the About page
-on macOS and Linux). A second start of the package exits before it applies a
+The `package` feature builds the demo as a cargo-packager package (corundum-framework#103),
+on `corundum-framework-package`: the Windows install hooks, signed updates from the
+repository's pre-releases (checked at start and daily, applied from the About page's row or
+the status bar's badge), and the command line `corundum-demo` (on `Path` by the installer
+on Windows, through the console shim `corundum-framework-demo-console`; installed from the
+About page on macOS and Linux). A second start of the package exits before it applies a
 downloaded update: `main` takes the single-instance lock first and hands it to the window.
 The daemon is the package's service: an update stops it if it runs, and the next start
-starts it again. A Settings › Velopack page shows the log the package's steps write. Pushing
-a tag
-`demo-v<x.y.z>` packages it on each desktop (`demo-release.yml`) and puts the installers on
-that pre-release.
+starts it again. A Settings › Package page shows the log the package's steps write. Pushing
+a tag `demo-v<x.y.z>`, for the version in `demo/Cargo.toml`, packages it on each desktop
+(`demo-release.yml`, with sapphire-turtle/.github's `release-packager.yml`) and puts the
+installers and the update feed on that pre-release.
 
 ## iOS simulator
 

@@ -15,11 +15,11 @@ use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, 
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod first_run;
+#[cfg(feature = "package")]
+pub mod package;
 mod screens;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod service;
-#[cfg(feature = "velopack")]
-pub mod velopack;
 
 pub use screens::Screen;
 
@@ -78,7 +78,7 @@ struct App {
     applied: Look,
     state: screens::State,
     /// The status bar's icon for a downloaded update, in a package.
-    #[cfg(feature = "velopack")]
+    #[cfg(feature = "package")]
     badge: Option<corundum_framework::gui::update::ReadyBadge>,
 }
 
@@ -122,8 +122,8 @@ impl Demo {
                 language: applied.language.clone(),
                 applied,
                 state: screens::State::new(CJK_FAMILY.get().cloned()),
-                #[cfg(feature = "velopack")]
-                badge: velopack::updater().map(|updater| {
+                #[cfg(feature = "package")]
+                badge: package::updater().map(|updater| {
                     // The badge appears when the background download ends: draw it then.
                     let ctx = ctx.clone();
                     updater.on_change(move || ctx.request_repaint());
@@ -185,7 +185,7 @@ impl ShellApp<Screen> for App {
     }
 
     fn status_ui(&mut self, ui: &mut egui::Ui) {
-        #[cfg(feature = "velopack")]
+        #[cfg(feature = "package")]
         if let Some(badge) = &mut self.badge {
             badge.ui(ui);
         }
@@ -391,14 +391,15 @@ pub fn command_line(args: impl IntoIterator<Item = std::ffi::OsString>) -> Comma
 
 /// Log to standard error, `RUST_LOG` or the demo's default filter. Called again, it does
 /// nothing: `main` calls it before `package::start`, whose hooks only log, and [`run`]
-/// for the other starts (iOS, a build without `velopack`). Velopack's own log is kept to its
+/// for the other starts (iOS, a build without `package`). The package's own log is kept to its
 /// errors: it notes every start, which would print before each command's output.
 #[cfg(not(target_os = "android"))]
 pub fn init_logging() {
     use tracing_subscriber::EnvFilter;
 
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info,corundum_demo=debug,velopack=error"));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new("info,corundum_demo=debug,corundum_framework_package=warn")
+    });
     let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }
 
@@ -409,9 +410,9 @@ pub fn init_logging() {
 ///
 /// A move that fails may have stopped halfway, so the demo does not run on what is in
 /// Local: it says why on standard error and exits with 1, and the next start goes on with
-/// the move. A start for one of Velopack's hooks (`--veloapp-install`, ...) is the
-/// exception: it has 30 seconds and no window, its exit code goes to the installer, and
-/// all it writes is a line of the hooks' log (`velopack::log`), so the failure is only
+/// the move. A start for one of the installer's hooks (`--corundum-package installed`, ...)
+/// is the exception: it has no window, its exit code goes to the installer, and
+/// all it writes is a line of the hooks' log (`package::log`), so the failure is only
 /// logged there.
 #[cfg(not(target_os = "android"))]
 pub fn migrate_dirs() {
@@ -424,7 +425,7 @@ pub fn migrate_dirs() {
         };
         let hook = std::env::args_os()
             .nth(1)
-            .is_some_and(|arg| arg.as_encoded_bytes().starts_with(b"--veloapp-"));
+            .is_some_and(|arg| arg == "--corundum-package");
         if hook {
             tracing::warn!("corundum demo: could not move the directory from Roaming: {err}");
             return;
@@ -444,7 +445,7 @@ pub fn run() -> corundum_framework::eframe::Result<()> {
 }
 
 /// [`run`] as the instance `main` took before applying a downloaded update, which a second
-/// start must not do under the first (`velopack::start_updates`).
+/// start must not do under the first (`package::start_updates`).
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn run_as(
     instance: corundum_framework::platform::instance::Instance,

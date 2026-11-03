@@ -1,6 +1,8 @@
 [package]
 name = "corundum-framework-demo"
-version = "0.0.0"
+# The version a release reports and its `demo-v<version>` tag (demo-release.yml checks
+# they agree).
+version = "0.1.0"
 edition.workspace = true
 description = "A demo of corundum-framework's shared pieces, to try them on each OS apart from the apps"
 license.workspace = true
@@ -25,9 +27,10 @@ path = "src/main.rs"
 [[bin]]
 name = "corundum-framework-demo-console"
 path = "src/bin/console.rs"
-required-features = ["velopack"]
+required-features = ["package"]
 
-# The icon files `vpk pack --icon` takes, for the release workflow.
+# The icon files the package takes ([package.metadata.packager]'s `icons`), for the release
+# workflow.
 [[example]]
 name = "icons"
 path = "examples/icons.rs"
@@ -70,6 +73,18 @@ corundum-framework = { path = "../crates/corundum-framework", features = ["andro
 
 [features]
 # Built by the release workflow (demo-release.yml), not by `cargo run`: the demo as a
-# Velopack package, with its updates, its command line, and its daemon, the service an update
-# stops and starts again (src/velopack.rs).
-velopack = ["corundum-framework/gui-package", "corundum-framework/gui-service"]
+# cargo-packager package, with its updates, its command line, and its daemon, the service an
+# update stops and starts again (src/package.rs).
+package = ["corundum-framework/gui-package", "corundum-framework/gui-service"]
+
+# The package (demo-release.yml, sapphire-turtle/.github's release-packager.yml): the window's
+# binary; the release workflow adds the Windows console shim as `corundum-demo.exe`. The
+# icons are rendered into `icons/` by the `icons` example before packaging.
+[package.metadata.packager]
+productName = "Corundum Demo"
+# The launcher writes the same bundle id; it steps aside inside a package (#51), so the one
+# in ~/Applications and this one do not clash.
+identifier = "org.sapphire-turtle.corundum-demo"
+category = "DeveloperTool"
+binaries = [{ path = "corundum-framework-demo", main = true }]
+icons = ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"]

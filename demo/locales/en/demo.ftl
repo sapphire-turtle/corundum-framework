@@ -149,7 +149,7 @@ demo-settings-look-file = Saved in { $path } with the rail's order, and shown ag
 demo-settings-look-memory = Kept while the demo runs: this platform gives it no config directory.
 demo-settings-about = About
 demo-settings-version = Version { $version }
-demo-settings-velopack = Velopack
+demo-settings-package = Package
 demo-settings-first-run-again = Run first-run setup again
 
 # The first-run flow: a welcome, then whether to keep the daemon running in the background.

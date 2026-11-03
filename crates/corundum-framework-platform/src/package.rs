@@ -1,7 +1,7 @@
-//! Whether the running executable is a Velopack package, told from the files around it.
+//! Whether the running executable was installed from a package (cargo-packager's), told
+//! from the files around it.
 //!
-//! Velopack's own locator decides this in its updater; the checks are repeated here, with
-//! plain path tests, so that an app can ask without linking the updater (a cargo build, an
+//! Plain path tests, so that an app can ask without linking the updater (a cargo build, an
 //! unpackaged binary and a phone all answer `None`). Every OS's rule is checked on every OS,
 //! so [`current_with`] is testable anywhere.
 //!
@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 /// The kind of package the executable was installed from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PackageKind {
-    /// `<root>/current/app.exe` beside `<root>/Update.exe`.
+    /// The NSIS installer's install directory: `app.exe` beside its `uninstall.exe`.
     Windows,
-    /// `X.app/Contents/MacOS/` holding `UpdateMac`.
+    /// `X.app/Contents/MacOS/`, in a bundle with its `Info.plist`.
     MacBundle,
-    /// An AppImage whose `usr/bin` holds `UpdateNix`.
+    /// The `usr/bin` of a running AppImage (`$APPIMAGE` set).
     AppImage,
 }
 
@@ -28,7 +28,7 @@ pub struct PackageLayout {
     pub kind: PackageKind,
     /// The install directory on Windows, the `.app` on macOS, the AppImage file on Linux.
     pub root: PathBuf,
-    /// The directory holding the executable and Velopack's updater binary.
+    /// The directory holding the executable.
     pub bin_dir: PathBuf,
 }
 
@@ -74,7 +74,7 @@ pub fn is_cargo_build(exe: &Path) -> bool {
 
 /// `exe` with its links resolved, or as it is when that fails. Not on Windows: the canonical
 /// form there is a `\\?\` path, which would end up on the user `Path`, and a Windows
-/// package is started from its `current` directory, never through a link.
+/// package is started from its install directory, never through a link.
 fn resolved(exe: &Path) -> PathBuf {
     if cfg!(windows) {
         return exe.to_path_buf();
@@ -83,15 +83,11 @@ fn resolved(exe: &Path) -> PathBuf {
 }
 
 fn windows(exe: &Path) -> Option<PackageLayout> {
-    let bin_dir = exe.parent()?;
-    if bin_dir.file_name()? != "current" {
-        return None;
-    }
-    let root = bin_dir.parent()?;
-    root.join("Update.exe").exists().then(|| PackageLayout {
+    let dir = exe.parent()?;
+    dir.join("uninstall.exe").exists().then(|| PackageLayout {
         kind: PackageKind::Windows,
-        root: root.to_path_buf(),
-        bin_dir: bin_dir.to_path_buf(),
+        root: dir.to_path_buf(),
+        bin_dir: dir.to_path_buf(),
     })
 }
 
@@ -100,17 +96,20 @@ fn mac_bundle(exe: &Path) -> Option<PackageLayout> {
         .ancestors()
         .find(|p| p.extension().is_some_and(|e| e == "app"))?;
     let bin_dir = root.join("Contents").join("MacOS");
-    bin_dir.join("UpdateMac").exists().then(|| PackageLayout {
-        kind: PackageKind::MacBundle,
-        root: root.to_path_buf(),
-        bin_dir,
-    })
+    root.join("Contents")
+        .join("Info.plist")
+        .exists()
+        .then(|| PackageLayout {
+            kind: PackageKind::MacBundle,
+            root: root.to_path_buf(),
+            bin_dir,
+        })
 }
 
 fn app_image(exe: &Path, appimage: Option<&Path>) -> Option<PackageLayout> {
     let appimage = appimage?;
     let bin_dir = exe.parent()?;
-    (bin_dir.ends_with("usr/bin") && bin_dir.join("UpdateNix").exists()).then(|| PackageLayout {
+    bin_dir.ends_with("usr/bin").then(|| PackageLayout {
         kind: PackageKind::AppImage,
         root: appimage.to_path_buf(),
         bin_dir: bin_dir.to_path_buf(),
@@ -137,34 +136,34 @@ mod tests {
     }
 
     #[test]
-    fn a_windows_install_is_current_beside_update_exe() {
+    fn a_windows_install_holds_the_installers_uninstall_exe() {
         let (_d, d) = tempdir();
-        touch(&d.join("Update.exe"));
-        let exe = d.join("current").join("app.exe");
+        touch(&d.join("uninstall.exe"));
+        let exe = d.join("app.exe");
         touch(&exe);
         assert_eq!(
             current_with(&exe, None),
             Some(PackageLayout {
                 kind: PackageKind::Windows,
                 root: d.clone(),
-                bin_dir: d.join("current"),
+                bin_dir: d.clone(),
             })
         );
     }
 
     #[test]
-    fn current_without_update_exe_is_not_a_package() {
+    fn an_exe_without_uninstall_exe_is_not_a_package() {
         let (_d, d) = tempdir();
-        let exe = d.join("current").join("app.exe");
+        let exe = d.join("app.exe");
         touch(&exe);
         assert_eq!(current_with(&exe, None), None);
     }
 
     #[test]
-    fn a_mac_bundle_holds_update_mac() {
+    fn a_mac_bundle_has_an_info_plist() {
         let (_d, d) = tempdir();
+        touch(&d.join("Demo.app/Contents/Info.plist"));
         let macos = d.join("Demo.app/Contents/MacOS");
-        touch(&macos.join("UpdateMac"));
         let exe = macos.join("demo");
         touch(&exe);
         assert_eq!(
@@ -178,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn an_app_without_update_mac_is_not_a_package() {
+    fn an_app_directory_without_info_plist_is_not_a_package() {
         let (_d, d) = tempdir();
         let exe = d.join("Demo.app/Contents/MacOS/demo");
         touch(&exe);
@@ -186,10 +185,9 @@ mod tests {
     }
 
     #[test]
-    fn an_appimage_needs_the_variable_and_update_nix() {
+    fn an_appimage_needs_the_variable_and_usr_bin() {
         let (_m, m) = tempdir();
         let bin = m.join("usr/bin");
-        touch(&bin.join("UpdateNix"));
         let exe = bin.join("demo");
         touch(&exe);
         let image = Path::new("/home/u/Demo.AppImage");
@@ -204,12 +202,23 @@ mod tests {
         assert_eq!(current_with(&exe, None), None);
     }
 
+    #[test]
+    fn a_binary_outside_usr_bin_is_not_the_appimage_even_with_the_variable() {
+        let (_m, m) = tempdir();
+        let exe = m.join("elsewhere/demo");
+        touch(&exe);
+        assert_eq!(
+            current_with(&exe, Some(Path::new("/home/u/Demo.AppImage"))),
+            None
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_link_to_the_binary_in_a_mac_bundle_is_in_the_package() {
         let (_d, d) = tempdir();
+        touch(&d.join("Demo.app/Contents/Info.plist"));
         let macos = d.join("Demo.app/Contents/MacOS");
-        touch(&macos.join("UpdateMac"));
         let exe = macos.join("demo");
         touch(&exe);
         let link = d.join("bin/demo");

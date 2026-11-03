@@ -10,9 +10,8 @@ use std::time::{Duration, Instant};
 use corundum_framework_platform::package;
 use corundum_framework_update::{PackageState, PackageStatus};
 use semver::Version;
-use velopack::UpdateInfo;
 
-use crate::backend::{Applied, Backend, Velopack};
+use crate::backend::{Applied, Backend, Found, Packager};
 use crate::error::Error;
 use crate::services::{self, ServiceDriver};
 use crate::start::{self, PackageSpec};
@@ -20,10 +19,11 @@ use crate::start::{self, PackageSpec};
 /// Where a package's updates are published.
 #[derive(Clone, Debug)]
 pub enum Source {
-    /// A GitHub repository's releases, by its URL: `https://github.com/owner/name`.
-    /// Velopack reads only the 10 newest releases.
+    /// A GitHub repository's releases, by its URL: `https://github.com/owner/name`. The
+    /// feed is the release's `<app_name>-latest.json`: the latest release's, or with
+    /// `prerelease` the newest release's that has one.
     Github { repo: String, prerelease: bool },
-    /// A feed of the app's own, by its base URL.
+    /// A feed of the app's own: the URL of its JSON.
     Http(String),
 }
 
@@ -61,7 +61,7 @@ struct Shared {
     /// clone ends the worker.
     worker: Mutex<Option<Sender<Request>>>,
     /// Whether an apply runs: a status-bar badge and the update panel may both ask at
-    /// once. It stays set once an update is handed to Velopack, as the process is ending.
+    /// once. It stays set once an update is handed over, as the process is ending.
     applying: AtomicBool,
 }
 
@@ -75,11 +75,11 @@ impl Backend for Inert {
         Version::new(1, 0, 0)
     }
 
-    fn check(&self) -> Result<Option<UpdateInfo>, Error> {
+    fn check(&self) -> Result<Option<Found>, Error> {
         Ok(None)
     }
 
-    fn download(&self, _info: &UpdateInfo, _progress: &dyn Fn(u8)) -> Result<(), Error> {
+    fn download(&self, _info: &Found, _progress: &dyn Fn(u8)) -> Result<(), Error> {
         Ok(())
     }
 
@@ -95,7 +95,7 @@ impl Backend for Inert {
 struct State {
     state: PackageState,
     /// What `Ready` stands for.
-    downloaded: Option<UpdateInfo>,
+    downloaded: Option<Found>,
 }
 
 enum Request {
@@ -107,13 +107,13 @@ impl Updater {
     /// `Error::NotPackaged` outside a package.
     pub fn new(spec: &'static PackageSpec, source: Source) -> Result<Updater, Error> {
         // Told from the files first, as `start` does, so a development build never asks
-        // Velopack to find a manifest that is not there.
+        // the updater to find what is not there.
         if package::current().is_none() {
             return Err(Error::NotPackaged);
         }
         Ok(Updater::with_backend(
             spec,
-            Arc::new(Velopack::new(&source)?),
+            Arc::new(Packager::new(spec, source)?),
             services::driver(spec),
         ))
     }
@@ -148,6 +148,8 @@ impl Updater {
     pub fn for_tests(state: PackageState) -> Updater {
         static SPEC: PackageSpec = PackageSpec {
             app_name: "test",
+            version: "1.0.0",
+            update_pubkey: "",
             on_installed: None,
             on_uninstalling: None,
             before_apply: None,
@@ -156,13 +158,7 @@ impl Updater {
         };
         let updater = Updater::with_backend(&SPEC, Arc::new(Inert), Arc::new(()));
         let downloaded = match &state {
-            PackageState::Ready { version } => Some(UpdateInfo {
-                TargetFullRelease: velopack::VelopackAsset {
-                    Version: version.to_string(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            }),
+            PackageState::Ready { version } => Some(Found::version(version.clone())),
             _ => None,
         };
         *lock(&updater.shared.state) = State { state, downloaded };
@@ -194,22 +190,23 @@ impl Updater {
         self.send(Request::Every(every));
     }
 
-    /// Runs `before_apply`, then hands the downloaded update to Velopack's updater, which
-    /// waits for this process to end before it replaces the files.
+    /// Runs `before_apply`, then installs the downloaded update: on macOS and Linux at once
+    /// (the running process keeps its files), on Windows by a silent installer that waits
+    /// for this process to end. For a restart, the app is started again once this process
+    /// has ended.
     ///
     /// Who ends the process: for [`After::Exit`] this call exits it and returns only on an
     /// error. For [`After::RestartApp`] and [`After::RestartWith`] it returns `Ok`, and the
-    /// caller must end the process soon (Velopack waits 60 seconds), a GUI by closing its
-    /// window so that what it saves on exit is saved.
+    /// caller must end the process, a GUI by closing its window so that what it saves on
+    /// exit is saved: the installer (Windows) and the restart wait for it.
     ///
-    /// Once this returns `Ok`, the update is Velopack's: if the app cancels the close (a
+    /// Once this returns `Ok`, the update is handed over: if the app cancels the close (a
     /// "save your changes?" it answers with Cancel) or otherwise keeps running, a later
-    /// call in this process fails with [`Error::Applying`]. Whether the update is applied
-    /// then is up to Velopack's updater, which waits for this process to end.
+    /// call in this process fails with [`Error::Applying`].
     ///
     /// An error: nothing downloaded, an apply already running on another thread
     /// ([`Error::Applying`]), `before_apply` refused (nothing is applied, and a later call
-    /// tries again), or Velopack failed.
+    /// tries again), or the install failed.
     pub fn apply(&self, after: After) -> Result<(), Error> {
         let applying = self.shared.begin_apply()?;
         // Whatever the state shows: after a refused `before_apply` it is `Failed`, and the
@@ -217,7 +214,7 @@ impl Updater {
         let info = lock(&self.shared.state)
             .downloaded
             .clone()
-            .ok_or_else(|| Error::Velopack("nothing downloaded".into()))?;
+            .ok_or_else(|| Error::Update("nothing downloaded".into()))?;
         self.shared.prepare()?;
         self.shared.apply(Applied::Downloaded(info), &after)?;
         applying.keep();
@@ -227,8 +224,8 @@ impl Updater {
     /// For a GUI's start only, before its window opens: apply an update downloaded earlier
     /// and never applied, and start the app again; this call then exits the process itself,
     /// as there is no window to close. Looks at the downloaded packages only, never the
-    /// network, so the start is not delayed. `Ok` when there is none, and on a start by
-    /// Velopack's updater: an update it failed to apply would otherwise be tried at every
+    /// network, so the start is not delayed. `Ok` when there is none, and on the start that
+    /// follows an apply: an update that failed to apply would otherwise be tried at every
     /// start.
     ///
     /// Only the app's single GUI instance may call this: an app that can run two must
@@ -242,7 +239,7 @@ impl Updater {
     }
 
     /// [`apply_pending_at_start`](Self::apply_pending_at_start) but the exit: whether an
-    /// update was handed to Velopack.
+    /// update was handed over.
     fn apply_pending(&self, restarted: bool) -> Result<bool, Error> {
         if restarted {
             return Ok(false);
@@ -278,7 +275,7 @@ impl Updater {
 }
 
 /// An apply under way: dropped, it lets the next one run, unless [`keep`](Self::keep)
-/// says the update was handed to Velopack.
+/// says the update was handed over.
 struct ApplyGuard<'a>(Option<&'a AtomicBool>);
 
 impl ApplyGuard<'_> {
@@ -355,9 +352,7 @@ impl Shared {
         let ready = {
             let state = lock(&self.state);
             match (&state.state, &state.downloaded) {
-                (PackageState::Failed(_), Some(info)) => {
-                    Version::parse(&info.TargetFullRelease.Version).ok()
-                }
+                (PackageState::Failed(_), Some(found)) => Some(found.version.clone()),
                 _ => None,
             }
         };
@@ -385,15 +380,7 @@ impl Shared {
             }
             Err(e) => return fail(e.to_string()),
         };
-        let version = match Version::parse(&info.TargetFullRelease.Version) {
-            Ok(version) => version,
-            Err(e) => {
-                return fail(format!(
-                    "the update's version {:?} is not a version: {e}",
-                    info.TargetFullRelease.Version
-                ));
-            }
-        };
+        let version = info.version.clone();
         if !quiet {
             self.set(PackageState::Downloading { percent: 0 });
         }
@@ -461,10 +448,9 @@ mod tests {
 
     use corundum_framework_update::{PackageState, PackageStatus};
     use semver::Version;
-    use velopack::{UpdateInfo, VelopackAsset};
 
     use super::*;
-    use crate::backend::{Applied, Backend};
+    use crate::backend::{Applied, Backend, Found};
     use crate::error::Error;
     use crate::services::ServiceDriver;
     use crate::start::PackageSpec;
@@ -487,20 +473,15 @@ mod tests {
         Version::parse(s).unwrap()
     }
 
-    fn info(version: &str) -> UpdateInfo {
-        UpdateInfo {
-            TargetFullRelease: VelopackAsset {
-                Version: version.to_owned(),
-                FileName: format!("app-{version}-full.nupkg"),
-                ..Default::default()
-            },
-            ..Default::default()
-        }
+    fn info(version: &str) -> Found {
+        Found::version(v(version))
     }
 
     fn spec(before_apply: Option<fn() -> Result<(), String>>) -> &'static PackageSpec {
         Box::leak(Box::new(PackageSpec {
             app_name: "updater-test",
+            version: "1.0.0",
+            update_pubkey: "",
             on_installed: None,
             on_uninstalling: None,
             before_apply,
@@ -519,11 +500,11 @@ mod tests {
         Err("stop failed".to_owned())
     }
 
-    /// A Velopack that answers checks from a list, downloads in three steps and records an
+    /// An update feed that answers checks from a list, downloads in three steps and records an
     /// apply instead of handing it over.
     struct Fake {
         current: Version,
-        checks: Mutex<VecDeque<Result<Option<UpdateInfo>, Error>>>,
+        checks: Mutex<VecDeque<Result<Option<Found>, Error>>>,
         checked: AtomicUsize,
         pending: Option<Version>,
         /// Whether `apply` fails, after recording itself.
@@ -533,7 +514,7 @@ mod tests {
     impl Fake {
         fn new(
             current: &str,
-            checks: Vec<Result<Option<UpdateInfo>, Error>>,
+            checks: Vec<Result<Option<Found>, Error>>,
             pending: Option<&str>,
         ) -> Arc<Fake> {
             Arc::new(Fake {
@@ -551,12 +532,12 @@ mod tests {
             self.current.clone()
         }
 
-        fn check(&self) -> Result<Option<UpdateInfo>, Error> {
+        fn check(&self) -> Result<Option<Found>, Error> {
             self.checked.fetch_add(1, Ordering::SeqCst);
             self.checks.lock().unwrap().pop_front().unwrap_or(Ok(None))
         }
 
-        fn download(&self, _info: &UpdateInfo, progress: &dyn Fn(u8)) -> Result<(), Error> {
+        fn download(&self, _info: &Found, progress: &dyn Fn(u8)) -> Result<(), Error> {
             for percent in [0, 50, 100] {
                 progress(percent);
             }
@@ -569,12 +550,12 @@ mod tests {
 
         fn apply(&self, applied: Applied, after: &After) -> Result<(), Error> {
             let what = match applied {
-                Applied::Downloaded(info) => info.TargetFullRelease.Version,
+                Applied::Downloaded(found) => found.version.to_string(),
                 Applied::Pending => "pending".to_owned(),
             };
             log(format!("apply {what} {after:?}"));
             if self.fails_apply.load(Ordering::SeqCst) {
-                return Err(Error::Velopack("apply failed".into()));
+                return Err(Error::Update("apply failed".into()));
             }
             Ok(())
         }
@@ -726,9 +707,9 @@ mod tests {
         updater.check_now();
         wait_for(&updater, settled);
         let err = updater.apply(After::RestartApp).unwrap_err();
-        assert!(matches!(err, Error::Velopack(_)), "{err:?}");
+        assert!(matches!(err, Error::Update(_)), "{err:?}");
         let err = updater.apply_pending(false).unwrap_err();
-        assert!(matches!(err, Error::Velopack(_)), "{err:?}");
+        assert!(matches!(err, Error::Update(_)), "{err:?}");
         let once = [
             "before_apply",
             "stop services",
@@ -787,7 +768,7 @@ mod tests {
             apply_log(),
             ["again Err(Applying)", "apply 1.1.0 RestartApp"]
         );
-        // Handed to Velopack: the process is ending, and nothing applies again.
+        // Handed over: the process is ending, and nothing applies again.
         assert!(matches!(
             updater.apply(After::RestartApp),
             Err(Error::Applying)
@@ -819,7 +800,7 @@ mod tests {
         let updater = updater(spec(Some(stopping)), Fake::new("1.0.0", vec![], None));
         let err = updater.apply(After::RestartApp).unwrap_err();
         assert!(
-            matches!(err, Error::Velopack(ref m) if m == "nothing downloaded"),
+            matches!(err, Error::Update(ref m) if m == "nothing downloaded"),
             "{err:?}"
         );
         assert!(apply_log().is_empty());
@@ -845,7 +826,7 @@ mod tests {
     }
 
     #[test]
-    fn a_start_by_velopack_s_updater_applies_no_pending_package() {
+    fn the_start_after_an_apply_applies_no_pending_package() {
         let updater = updater(
             spec(Some(stopping)),
             Fake::new("1.0.0", vec![], Some("1.1.0")),

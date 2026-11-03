@@ -359,7 +359,7 @@ impl UpdatesPanel {
                     }
                     Event::Applied(applied) => {
                         package.applying = false;
-                        // Velopack's updater waits for this app to end: the window closes,
+                        // The update's install waits for this app to end: the window closes,
                         // as for a relaunched binary, so what the app saves on exit is saved.
                         // The app's main window, wherever the panel is drawn: closing a
                         // settings window of its own would leave the app running.
@@ -596,7 +596,7 @@ fn how_ui(
         (Some(InstallMethod::PackageManager), None) => {
             tr!(ui, "corundum-update-by-package-manager")
         }
-        (Some(InstallMethod::Velopack), None) => tr!(ui, "corundum-update-by-the-app"),
+        (Some(InstallMethod::Package), None) => tr!(ui, "corundum-update-by-the-app"),
         (Some(InstallMethod::Store(store)), None) => tr!(
             ui,
             match store {

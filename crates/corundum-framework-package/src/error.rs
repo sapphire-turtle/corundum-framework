@@ -7,9 +7,9 @@ pub enum Error {
     /// The update feed could not be reached.
     #[error("network error: {0}")]
     Network(String),
-    /// Velopack itself failed.
-    #[error("Velopack error: {0}")]
-    Velopack(String),
+    /// Finding, downloading, verifying or installing the update failed.
+    #[error("update error: {0}")]
+    Update(String),
     /// An update is being applied already, from another thread.
     #[error("an update is being applied already")]
     Applying,
