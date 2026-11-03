@@ -20,7 +20,7 @@ jobs:
       pull-requests: write
     uses: sapphire-turtle/.github/.github/workflows/release-plz.yml@v1
     with:
-      # eframe's windowing needs these to build on Linux, as in ci.yml: publishing builds
-      # each crate.
-      linux-packages: libwayland-dev libxkbcommon-dev
+      # eframe's windowing and cpal's ALSA need these to build on Linux, as in ci.yml:
+      # publishing builds each crate, and the semver check documents them with every feature.
+      linux-packages: libwayland-dev libxkbcommon-dev libasound2-dev
     secrets: inherit
