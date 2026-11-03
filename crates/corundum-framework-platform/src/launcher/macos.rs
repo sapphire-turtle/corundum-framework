@@ -116,14 +116,11 @@ pub(crate) fn unregister(spec: &LauncherSpec, root: &Root) -> io::Result<()> {
     }
 }
 
-/// Whether `bundle` is one [`register`] wrote: its executable is a link, and it holds none
-/// of the `sq.version` files a Velopack package's bundle has.
+/// Whether `bundle` is one [`register`] wrote: its executable is a link, where a package's
+/// bundle holds the binary itself.
 pub(crate) fn is_generated(spec: &LauncherSpec, bundle: &Path) -> bool {
-    let contents = bundle.join("Contents");
-    std::fs::symlink_metadata(contents.join("MacOS").join(spec.id))
+    std::fs::symlink_metadata(bundle.join("Contents").join("MacOS").join(spec.id))
         .is_ok_and(|m| m.file_type().is_symlink())
-        && !contents.join("MacOS/sq.version").exists()
-        && !contents.join("Resources/sq.version").exists()
 }
 
 /// Removes the bundle [`register`] wrote under the app's name, as a package's installer
@@ -254,15 +251,13 @@ mod tests {
         unregister(&SPEC, &root).unwrap();
     }
 
-    /// A bundle as a Velopack package lays it out: the real executable, the updater and
-    /// the version file.
+    /// A bundle as a package lays it out: the real executable and the `Info.plist`.
     fn package_bundle(at: &Path) {
         let macos = at.join("Contents/MacOS");
         std::fs::create_dir_all(&macos).unwrap();
         std::fs::create_dir_all(at.join("Contents/Resources")).unwrap();
         std::fs::write(macos.join("corundum-demo"), b"binary").unwrap();
-        std::fs::write(macos.join("UpdateMac"), b"updater").unwrap();
-        std::fs::write(macos.join("sq.version"), b"<package/>").unwrap();
+        std::fs::write(at.join("Contents/Info.plist"), b"<plist/>").unwrap();
     }
 
     #[test]
@@ -274,13 +269,6 @@ mod tests {
         let package = dir.path().join("Package/Corundum Demo.app");
         package_bundle(&package);
         assert!(!is_generated(&SPEC, &package));
-        // A bundle holding only the version file is still a package's.
-        let half = dir.path().join("Half/Corundum Demo.app");
-        std::fs::create_dir_all(half.join("Contents/MacOS")).unwrap();
-        std::os::unix::fs::symlink("/opt/a/x", half.join("Contents/MacOS/corundum-demo")).unwrap();
-        std::fs::create_dir_all(half.join("Contents/Resources")).unwrap();
-        std::fs::write(half.join("Contents/Resources/sq.version"), b"").unwrap();
-        assert!(!is_generated(&SPEC, &half));
         assert!(!is_generated(&SPEC, &dir.path().join("Missing.app")));
     }
 
@@ -307,7 +295,7 @@ mod tests {
         let running = dir.path().join("Elsewhere/Corundum Demo.app");
         package_bundle(&running);
         remove_generated(&SPEC, &root, &running).unwrap();
-        assert!(installed.join("Contents/MacOS/UpdateMac").is_file());
+        assert!(installed.join("Contents/MacOS/corundum-demo").is_file());
     }
 
     #[test]
