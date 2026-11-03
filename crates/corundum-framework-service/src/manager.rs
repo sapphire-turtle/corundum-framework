@@ -378,7 +378,7 @@ pub fn install(
         unit_path: install_path(spec, env)?,
         exe: crate::exe::service_exe()?,
     };
-    let body = render_install(spec, &context, env.os);
+    let body = render_install(spec, &context, env)?;
     manager.write_unit(&context.unit_path, &body)?;
     for command in preparation_commands(spec, env) {
         // An agent that is not loaded has nothing to boot out, which is the usual case.
@@ -671,12 +671,16 @@ fn install_path(spec: &ServiceSpec, env: &Environment) -> Result<PathBuf> {
 }
 
 /// Render the platform's file for a resolved install.
-fn render_install(spec: &ServiceSpec, context: &InstallContext, os: Os) -> String {
-    match os {
+fn render_install(
+    spec: &ServiceSpec,
+    context: &InstallContext,
+    env: &Environment,
+) -> Result<String> {
+    Ok(match env.os {
         Os::Linux => render_unit(spec, context),
         Os::MacOs => render_launch_agent(spec, context),
-        Os::Windows => render_task(spec, context),
-    }
+        Os::Windows => render_task(spec, context, user(env)?),
+    })
 }
 
 /// The commands run before activation whose failure means nothing: on macOS, booting out an
@@ -770,6 +774,17 @@ fn home_dir(env: &Environment) -> Result<PathBuf> {
     })
 }
 
+/// The invoking user's account, which a Windows logon task is limited to.
+///
+/// Taken from [`Environment::user`]. Without it the task would be for any user's logon,
+/// which only an administrator can register, so its absence is reported rather than
+/// turned into an "access is denied" from the scheduler.
+fn user(env: &Environment) -> Result<&str> {
+    env.user.as_deref().ok_or_else(|| {
+        Error::Config("USERNAME is not set; there is no user to limit the logon task to".to_owned())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,6 +806,7 @@ mod tests {
             euid: 1000,
             os: Os::Linux,
             home: Some(PathBuf::from("/home/user")),
+            user: None,
         }
     }
 
@@ -799,6 +815,7 @@ mod tests {
             euid: 1000,
             os: Os::MacOs,
             home: Some(PathBuf::from("/home/user")),
+            user: None,
         }
     }
 
@@ -807,6 +824,7 @@ mod tests {
             euid: 1000,
             os: Os::Windows,
             home: Some(PathBuf::from("/home/user")),
+            user: Some("WORKSTATION\\user".to_owned()),
         }
     }
 
@@ -1396,6 +1414,38 @@ mod tests {
         assert_eq!(
             commands[1],
             command(&["schtasks", "/run", "/tn", "sapphire-agent"])
+        );
+    }
+
+    #[test]
+    fn a_windows_task_is_limited_to_the_installing_user() {
+        // A logon trigger for any user takes an administrator to register (issue #105).
+        let manager = RecordingManager::default();
+        install(&spec(), &windows(), &manager).unwrap();
+        let units = manager.calls().units;
+        assert_eq!(units.len(), 1, "{units:?}");
+        assert!(
+            units[0].1.contains("<UserId>WORKSTATION\\user</UserId>"),
+            "{}",
+            units[0].1
+        );
+    }
+
+    #[test]
+    fn a_windows_install_without_a_user_registers_nothing() {
+        let manager = RecordingManager::default();
+        let env = Environment {
+            user: None,
+            ..windows()
+        };
+        let message = install(&spec(), &env, &manager).unwrap_err().to_string();
+        assert!(message.contains("USERNAME"), "{message}");
+        let calls = manager.calls();
+        assert!(calls.units.is_empty(), "{:?}", calls.units);
+        assert!(
+            !calls.commands.iter().flatten().any(|w| w == "/create"),
+            "{:?}",
+            calls.commands
         );
     }
 
