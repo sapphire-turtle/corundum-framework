@@ -8,6 +8,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.8.0...v0.9.0) - 2026-11-03
+
+### Breaking
+
+- *(corundum-framework-service)* `Environment` has a new field `user`, the invoking account (`DOMAIN\user`), which `Environment::detect` fills on Windows from `USERDOMAIN` and `USERNAME` and leaves `None` elsewhere; `render_task` takes it as a third argument. A Windows install without a user is an `Error::Config` ([#105](https://github.com/sapphire-turtle/corundum-framework/issues/105))
+
+### Fixed
+
+- *(corundum-framework-service)* The Windows logon task is for the installing user's own logon, so an app installed for the current user registers it without an administrator; it was refused with "access is denied", and no elevation prompt came up ([#105](https://github.com/sapphire-turtle/corundum-framework/issues/105))
+
 ## [0.8.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.7.0...v0.8.0) - 2026-11-03
 
 ### Breaking

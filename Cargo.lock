@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "corundum-framework-audio",
  "corundum-framework-gui",
@@ -1150,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-audio"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "corundum-framework-audio",
  "cpal",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-build"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "corundum-framework-platform",
  "winresource",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-gui"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "android-activity",
  "android_log-sys",
@@ -1229,7 +1229,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-image"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "fast_image_resize",
  "image",
@@ -1243,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-keys"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-package"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "cargo-packager-updater",
  "corundum-framework-platform",
@@ -1283,7 +1283,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-platform"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "block2 0.6.2",
  "dirs 7.0.0",
@@ -1313,7 +1313,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-service"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-update"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
