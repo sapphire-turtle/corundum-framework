@@ -10,30 +10,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.8.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.7.0...v0.8.0) - 2026-11-03
 
+### Breaking
+
+- *(corundum-framework-package)* Packages are cargo-packager's, not Velopack's: an AppImage, a `.app` (and a `.tar.gz` of it for updates) and an NSIS installer for the current user, each signed with minisign. The API stays; `PackageSpec` has two new fields, `version` (the app's `CARGO_PKG_VERSION`) and `update_pubkey` (the minisign public key the updates are signed for: a package whose signature does not match is not installed). The feed is the release's `<app_name>-latest.json`, as cargo-packager-updater reads it, one per app. `Error::Velopack` is `Error::Update`. The Windows install hooks come from this crate's NSIS template (`nsis/installer.nsi`), which runs `<app> --corundum-package installed|uninstalling`; `start` runs them and exits. An app installed by a Velopack package does not find the new updates: install it again ([#103](https://github.com/sapphire-turtle/corundum-framework/issues/103))
+- *(corundum-framework-platform)* `package::current` tells cargo-packager's layouts (the NSIS install directory with its `uninstall.exe`, a bundle with its `Info.plist`, a running AppImage's `usr/bin`), no longer Velopack's ([#103](https://github.com/sapphire-turtle/corundum-framework/issues/103))
+- *(corundum-framework-update)* `InstallMethod::Velopack` is `InstallMethod::Package` ([#103](https://github.com/sapphire-turtle/corundum-framework/issues/103))
+
 ### Added
 
-- audio and audio-preview in the facade; CI and docs
-- *(audio)* the cpal device; CI and docs
-- image and image-preview in the facade; CI and docs
-- *(gui)* ImagePreview, a picture in the detail pane (image-preview)
-- *(platform)* [**breaking**] tell a cargo-packager package from its layout ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
-- *(package)* [**breaking**] packages and signed updates with cargo-packager ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
-- *(gui)* AudioPreview, a picked audio file played in the detail pane (audio-preview)
+- *(corundum-framework-audio)* New crate: the cpal output device and audio decoding, in the facade as `audio`
+- *(corundum-framework-gui)* `AudioPreview` (feature `audio-preview`): a picked audio file played in the detail pane
+- *(corundum-framework-image)* New crate: image decoding for the previews, in the facade as `image`
+- *(corundum-framework-gui)* `ImagePreview` (feature `image-preview`): a picture in the detail pane, bounded at 64 MP
+- *(corundum-framework-package)* Updates are downloaded, verified and kept in the app's cache directory until applied, so `apply_pending_at_start` applies one an earlier run downloaded; on Windows the installer runs once the app has exited, and the app starts again with its arguments ([#103](https://github.com/sapphire-turtle/corundum-framework/issues/103))
 
 ### Fixed
 
-- *(audio)* read ID3/APE tags; 5 s arrow-key seek; disabled seek bar shows empty; public FailedFeed
-- *(gui)* the audio preview's time follows the player, its length falls back to the tags, and keys on the seek bar seek
-- *(gui)* the image preview bounds pictures at 64 MP and survives a panic
-- *(gui)* the image preview never stats the file on the UI thread
-- *(package)* the Win32_Security feature the job object needs; CI on the package feature
-
-### Other
-
-- *(demo)* release the demo with release-packager.yml ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
-- docs, ci: image-webp is WebP encoding; the image crate builds no egui
-- why the detail pane previews files the app was not made for
-- *(gui)* the audio preview's tests wait as long for play as for the probe
+- *(corundum-framework-audio)* ID3 and APE tags are read; arrow keys seek by 5 s; a disabled seek bar shows empty; `FailedFeed` is public
+- *(corundum-framework-gui)* The audio preview's time follows the player, its length falls back to the tags, and keys on the seek bar seek
+- *(corundum-framework-gui)* The image preview never reads the file's metadata on the UI thread, and survives a panic in the decoder
+- *(corundum-framework-package)* velopack's `zip` 8 and `derivative` are gone with it, and so are their advisories ([#64](https://github.com/sapphire-turtle/corundum-framework/issues/64))
 
 ## [0.7.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.6.0...v0.7.0) - 2026-11-01
 
