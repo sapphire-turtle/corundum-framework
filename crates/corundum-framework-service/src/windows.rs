@@ -55,7 +55,14 @@ fn arguments(args: &[String]) -> String {
 /// copy from stepping on the first, the counterpart of a single-instance service. The
 /// limit-free `ExecutionTimeLimit` matters: the scheduler's default thirty days would stop
 /// a long-running agent.
-pub fn render_task(spec: &ServiceSpec, ctx: &InstallContext) -> String {
+///
+/// `user` is the installing account, `DOMAIN\user` ([`Environment::user`]). The trigger's
+/// `UserId` limits it to that user's own logon: a trigger for any user's logon is a
+/// machine-wide setting, and registering one takes an administrator ("access is denied"
+/// otherwise), while a task for the user's own logon is theirs to register (issue #105).
+///
+/// [`Environment::user`]: crate::Environment::user
+pub fn render_task(spec: &ServiceSpec, ctx: &InstallContext, user: &str) -> String {
     let mut task = String::new();
     // No XML declaration: `schtasks /create /xml` rejects a UTF-8 file that declares its
     // encoding ("cannot switch encoding"), and a file without one is read as the text it is.
@@ -71,6 +78,7 @@ pub fn render_task(spec: &ServiceSpec, ctx: &InstallContext) -> String {
     task.push_str("  <Triggers>\n");
     task.push_str("    <LogonTrigger>\n");
     task.push_str("      <Enabled>true</Enabled>\n");
+    task.push_str(&format!("      <UserId>{}</UserId>\n", escape(user)));
     task.push_str("    </LogonTrigger>\n");
     task.push_str("  </Triggers>\n");
     task.push_str("  <Principals>\n");

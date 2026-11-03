@@ -44,6 +44,9 @@ fn spec() -> ServiceSpec {
     }
 }
 
+/// The installing account a logon task is limited to.
+const USER: &str = "WORKSTATION\\sapphire";
+
 fn ctx() -> InstallContext {
     InstallContext {
         unit_path: PathBuf::from("/dev/null"),
@@ -90,12 +93,12 @@ fn a_launch_agent_label_is_namespaced() {
 
 #[test]
 fn a_scheduled_task() {
-    check("task.xml", &render_task(&spec(), &ctx()));
+    check("task.xml", &render_task(&spec(), &ctx(), USER));
 }
 
 #[test]
 fn a_scheduled_task_runs_at_logon() {
-    let rendered = render_task(&spec(), &ctx());
+    let rendered = render_task(&spec(), &ctx(), USER);
     assert!(rendered.contains("LogonTrigger"), "{rendered}");
 }
 
@@ -103,7 +106,7 @@ fn a_scheduled_task_runs_at_logon() {
 fn an_argument_with_a_space_survives_the_xml() {
     let mut with_space = spec();
     with_space.args = vec!["server".into(), "--note".into(), "a b".into()];
-    let rendered = render_task(&with_space, &ctx());
+    let rendered = render_task(&with_space, &ctx(), USER);
     assert!(rendered.contains("\"a b\""), "{rendered}");
 }
 
@@ -111,7 +114,7 @@ fn an_argument_with_a_space_survives_the_xml() {
 fn an_ampersand_in_a_description_is_escaped() {
     let mut awkward = spec();
     awkward.description = "Notes & ledger".into();
-    let rendered = render_task(&awkward, &ctx());
+    let rendered = render_task(&awkward, &ctx(), USER);
     assert!(rendered.contains("Notes &amp; ledger"), "{rendered}");
     assert!(
         !rendered.contains("Notes & ledger"),

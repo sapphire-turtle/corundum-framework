@@ -69,11 +69,15 @@ pub struct Environment {
     /// The invoking user's home directory, where a user-level install writes; `None` when
     /// the platform's variable for it (see [`Os::home_variable`]) is unset or empty.
     pub home: Option<PathBuf>,
+    /// The invoking user's account, `DOMAIN\user`: on Windows, the user a logon task's
+    /// trigger is limited to — without one, registering the task takes an administrator.
+    /// `None` elsewhere, or when the variables naming it are unset or empty.
+    pub user: Option<String>,
 }
 
 impl Environment {
-    /// Read this machine's own facts: the effective uid, the platform and the home
-    /// directory.
+    /// Read this machine's own facts: the effective uid, the platform, the home directory
+    /// and, on Windows, the account.
     ///
     /// The one place these are read from the world. Every rule in this module turns on the
     /// value this returns, which is exactly why a test builds one itself instead: the rules
@@ -86,8 +90,24 @@ impl Environment {
             home: std::env::var_os(os.home_variable())
                 .map(PathBuf::from)
                 .filter(|path| !path.as_os_str().is_empty()),
+            user: if os == Os::Windows {
+                windows_account()
+            } else {
+                None
+            },
         }
     }
+}
+
+/// The account this process runs as, `DOMAIN\user`, from `USERDOMAIN` and `USERNAME` — set
+/// in every Windows logon session; the domain is the machine's own name for a local account.
+fn windows_account() -> Option<String> {
+    let variable = |name| std::env::var(name).ok().filter(|value| !value.is_empty());
+    let name = variable("USERNAME")?;
+    Some(match variable("USERDOMAIN") {
+        Some(domain) => format!("{domain}\\{name}"),
+        None => name,
+    })
 }
 
 /// The effective uid of this process.

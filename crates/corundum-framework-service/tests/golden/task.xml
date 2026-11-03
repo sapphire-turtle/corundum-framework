@@ -5,6 +5,7 @@
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
+      <UserId>WORKSTATION\sapphire</UserId>
     </LogonTrigger>
   </Triggers>
   <Principals>
