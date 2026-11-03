@@ -15,6 +15,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
 | [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで Velopack パッケージとしてのアプリ：起動時の処理と、インストール・アンインストールのフック | 未リリース |
 | [`corundum-framework-image`](crates/corundum-framework-image) | egui に依存しない部分：画像を sRGB・RGBA8 のサムネイルにデコードする。サイズの上限はヘッダーの段階で確かめる。`raw`（カメラの RAW。LGPL-2.1）と `webp`（WebP への非可逆エンコード。デコードには要らない）は既定では無効 | 未リリース |
+| [`corundum-framework-audio`](crates/corundum-framework-audio) | egui に依存しない部分：音声ファイル（FLAC、MP3、AAC、ALAC、Vorbis、WAV、Ogg Opus）をデコードしてリサンプリングし、キューから再生する。`cpal`（実際のサウンドデバイス）は既定では無効 | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
@@ -46,6 +47,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
 | `image-preview` | `preview::ImagePreview`：選んだ画像ファイルを詳細ペインに描く。デコードはワーカースレッドで行う（corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
+| `audio-preview` | `preview::AudioPreview`：選んだ音声ファイルを詳細ペインでアプリの `Player` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
@@ -81,6 +83,9 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `image-raw` | カメラの RAW ファイルも扱う `image`。rawler は LGPL-2.1 なので、有効にするアプリはその条件に従います（`image` も有効になる） | いいえ |
 | `image-webp` | WebP への非可逆エンコード（`encode_webp`。libwebp を使う）もできる `image`。WebP のデコードには要らない（`image` も有効になる） | いいえ |
 | `image-preview` | gui クレートの `image-preview`：`preview::ImagePreview`（`gui` と `image` も有効になる） | いいえ |
+| `audio` | `audio`：corundum-framework-audio | いいえ |
+| `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
+| `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |

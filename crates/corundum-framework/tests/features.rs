@@ -67,3 +67,29 @@ fn image_is_the_image_crate() {
     ) -> Result<corundum_framework::image::Image, corundum_framework::image::Error> =
         corundum_framework::image::thumbnail;
 }
+
+#[cfg(feature = "audio")]
+#[test]
+fn audio_is_the_audio_crate() {
+    use corundum_framework::audio::decode::{DecodeError, Info, Source};
+    use std::path::PathBuf;
+
+    type Probe = fn(Box<dyn Source>, Option<&str>) -> Result<Info, DecodeError>;
+    let _: Probe = corundum_framework::audio::decode::probe;
+    let _ = corundum_framework::audio::Command::<PathBuf>::Toggle;
+    let _: corundum_framework::audio::FileOpener = corundum_framework::audio::FileOpener::new();
+}
+
+#[cfg(feature = "audio-cpal")]
+#[test]
+fn audio_cpal_brings_the_device() {
+    fn is_outputs<O: corundum_framework::audio::OutputFactory>() {}
+    is_outputs::<corundum_framework::audio::CpalOutputs>();
+}
+
+#[cfg(feature = "audio-preview")]
+#[test]
+fn audio_preview_is_the_gui_crate_s() {
+    let _: fn() -> corundum_framework::gui::preview::AudioPreview =
+        corundum_framework::gui::preview::AudioPreview::new;
+}

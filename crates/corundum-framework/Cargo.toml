@@ -55,6 +55,10 @@ image = ["dep:corundum-framework-image"]
 image-raw = ["image", "corundum-framework-image/raw"]
 # Lossy WebP encoding (`encode_webp`), through libwebp; WebP decodes without it.
 image-webp = ["image", "corundum-framework-image/webp"]
+# Audio files decoded, resampled and played from a queue, without egui: for an app, or its
+# server. `audio-cpal` adds the real sound device (cpal; ALSA's headers on Linux).
+audio = ["dep:corundum-framework-audio"]
+audio-cpal = ["audio", "corundum-framework-audio/cpal"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -91,6 +95,9 @@ gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
 # `gui::preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a
 # worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
 image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
+# `gui::preview::AudioPreview`: a picked audio file played in the detail pane, its tags read
+# on a worker thread, through the app's `audio::Player` (brings `audio` and `audio-cpal`).
+audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-preview"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,
@@ -127,3 +134,4 @@ corundum-framework-package = { version = "0.7.0", path = "../corundum-framework-
 corundum-framework-service = { version = "0.7.0", path = "../corundum-framework-service", optional = true, default-features = false }
 corundum-framework-keys = { version = "0.7.0", path = "../corundum-framework-keys", optional = true }
 corundum-framework-image = { version = "0.7.0", path = "../corundum-framework-image", optional = true }
+corundum-framework-audio = { version = "0.7.0", path = "../corundum-framework-audio", optional = true }

@@ -30,6 +30,9 @@
 //! | `image-raw` | `image` | camera RAW files too; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) |
 //! | `image-webp` | `image::encode_webp` | lossy WebP encoding, through libwebp; WebP decodes without it (brings `image`) |
 //! | `image-preview` | `gui::preview::ImagePreview` | a picked image file drawn in the detail pane, decoded on a worker thread (brings `gui` and `image`) |
+//! | `audio` | [`audio`] | `corundum-framework-audio`: audio files (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus) decoded, resampled and played from a queue by `audio::Player`, without egui |
+//! | `audio-cpal` | `audio::CpalOutputs` | the real sound device, cpal's default output (brings `audio`) |
+//! | `audio-preview` | `gui::preview::AudioPreview` | a picked audio file played in the detail pane, its tags read on a worker thread (brings `gui`, `audio` and `audio-cpal`) |
 //! | `gui-keys` | `gui::keys` | the API keys page in Settings, over a store on this machine or the app's own backend; each key is added with one of the app's profiles (brings `gui` and `keys`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |
@@ -62,6 +65,9 @@ pub use corundum_framework_keys as keys;
 
 #[cfg(feature = "image")]
 pub use corundum_framework_image as image;
+
+#[cfg(feature = "audio")]
+pub use corundum_framework_audio as audio;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.

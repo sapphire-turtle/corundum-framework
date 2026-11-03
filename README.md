@@ -19,6 +19,7 @@ desktops and on phones.
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
 | [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` (lossy WebP encoding; WebP decodes without it) are off by default | unreleased |
+| [`corundum-framework-audio`](crates/corundum-framework-audio) | Without egui: audio files decoded (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus), resampled and played from a queue; `cpal` (the real sound device) is off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -115,6 +116,7 @@ desktops and on phones.
 | `qr-scan` | `platform::scan_qr`: a QR code read with the phone's camera (AVFoundation on iOS, Google's code scanner on Android); nothing on a desktop. iOS needs `NSCameraUsageDescription`, Android the app's `play-services-code-scanner` dependency (see `corundum_framework_platform::qr::available`). Without it, iOS links no camera API | no |
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
 | `image-preview` | `preview::ImagePreview`, a picked image file drawn in the detail pane, decoded on a worker thread (brings corundum-framework-image; its `raw` and `webp` stay the app's to turn on) | no |
+| `audio-preview` | `preview::AudioPreview`, a picked audio file played in the detail pane through the app's `Player`, its tags read on a worker thread (brings corundum-framework-audio with `cpal`, the real sound device) | no |
 | `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
@@ -196,6 +198,9 @@ through to the gui crate.
 | `image-raw` | `image` with camera RAW files; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) | no |
 | `image-webp` | `image` with lossy WebP encoding (`encode_webp`, through libwebp); WebP decodes without it (brings `image`) | no |
 | `image-preview` | The gui crate's `image-preview`: `preview::ImagePreview` (brings `gui` and `image`) | no |
+| `audio` | `audio`: corundum-framework-audio | no |
+| `audio-cpal` | `audio` with `CpalOutputs`, the real sound device (cpal) (brings `audio`) | no |
+| `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview` (brings `gui`, `audio` and `audio-cpal`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |
