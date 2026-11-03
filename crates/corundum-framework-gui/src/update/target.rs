@@ -17,7 +17,7 @@ pub enum Target {
     /// A binary replaced from a GitHub release: the app, its server, a bridge outside a
     /// package.
     Binary(UpdateTarget),
-    /// This app's own Velopack package, updated by its [`Updater`].
+    /// This app's own package, updated by its [`Updater`].
     #[cfg(all(
         feature = "package",
         not(any(target_os = "ios", target_os = "android"))
@@ -97,7 +97,7 @@ impl DelegatedTarget for PackageTarget {
         Ok(())
     }
 
-    /// On success Velopack's updater waits for this process to end, and the panel closes
+    /// On success the update's install waits for this process to end, and the panel closes
     /// the window (see [`Target::closes_on_apply`]).
     fn apply(&self) -> Result<(), String> {
         self.updater

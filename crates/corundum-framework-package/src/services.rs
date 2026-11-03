@@ -258,6 +258,8 @@ mod with_services {
         fn package(services: &'static [fn() -> ServiceSpec]) -> PackageSpec {
             PackageSpec {
                 app_name: "demo",
+                version: "1.0.0",
+                update_pubkey: "",
                 on_installed: None,
                 on_uninstalling: None,
                 before_apply: None,

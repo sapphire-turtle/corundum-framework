@@ -25,7 +25,7 @@ path = "src/main.rs"
 [[bin]]
 name = "corundum-framework-demo-console"
 path = "src/bin/console.rs"
-required-features = ["velopack"]
+required-features = ["package"]
 
 # The icon files `vpk pack --icon` takes, for the release workflow.
 [[example]]
@@ -70,6 +70,6 @@ corundum-framework = { path = "../crates/corundum-framework", features = ["andro
 
 [features]
 # Built by the release workflow (demo-release.yml), not by `cargo run`: the demo as a
-# Velopack package, with its updates, its command line, and its daemon, the service an update
-# stops and starts again (src/velopack.rs).
-velopack = ["corundum-framework/gui-package", "corundum-framework/gui-service"]
+# cargo-packager package, with its updates, its command line, and its daemon, the service an
+# update stops and starts again (src/package.rs).
+package = ["corundum-framework/gui-package", "corundum-framework/gui-service"]

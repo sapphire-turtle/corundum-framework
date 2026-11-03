@@ -1,12 +1,12 @@
-//! A desktop app as a Velopack package.
+//! A desktop app as a cargo-packager package, with signed updates.
 //!
-//! [`start`] is the first thing an app's `main` runs: Velopack's own start, the Windows
-//! install and uninstall hooks, and which [`Start`] this is (the first, the first after an
-//! update, or neither), told from the version the app last ran with. [`Updater`] finds and
-//! downloads updates by itself and applies one only when asked, after the app's
-//! `before_apply`.
+//! [`start`] is the first thing an app's `main` runs: the Windows install and uninstall
+//! hooks, and which [`Start`] this is (the first, the first after an update, or neither),
+//! told from the version the app last ran with. [`Updater`] finds and downloads updates by
+//! itself, checks their minisign signature against the app's public key, and applies one
+//! only when asked, after the app's `before_apply`.
 //!
-//! Velopack packages the desktops only; on iOS and Android the crate is empty.
+//! cargo-packager packages the desktops only; on iOS and Android the crate is empty.
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod backend;

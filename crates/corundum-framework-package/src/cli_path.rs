@@ -1,6 +1,6 @@
 //! The app's command line on `PATH`.
 //!
-//! Windows puts the package's `current` directory on the user `Path` from the install hook
+//! Windows puts the package's install directory on the user `Path` from the install hook
 //! and takes it off from the uninstall hook. macOS links `/usr/local/bin/<command>` to the
 //! binary in the `.app`, with administrator rights asked through `osascript`; Linux links
 //! `~/.local/bin/<command>` to the AppImage. Both are made and removed when the user asks.
@@ -21,8 +21,8 @@ mod windows;
 pub struct CliSpec {
     /// The name typed in a terminal: `sapphire-journal`. It need not be the cargo binary's
     /// name. On macOS and Linux the command links to the running executable, whatever
-    /// `vpk --mainExe` named it; on Windows it is the console shim's file name without
-    /// `.exe`, and the shim sits beside the GUI executable in `current\`.
+    /// its name; on Windows it is the console shim's file name without `.exe`, and the
+    /// shim sits beside the GUI executable in the install directory.
     pub command: &'static str,
 }
 

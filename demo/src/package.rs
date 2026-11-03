@@ -1,14 +1,16 @@
-//! The demo as a Velopack package (corundum-framework#51), on corundum-framework-package:
+//! The demo as a cargo-packager package (corundum-framework#103), on corundum-framework-package:
 //! [`PACKAGE`] is what `main` hands to `package::start`, the updater [`start_updates`]
 //! makes for a GUI start feeds the About page's update row and the status bar's badge, and
 //! the command line goes on `PATH` as `corundum-demo`.
 //!
 //! The demo's daemon (`corundum-demo daemon`, [`crate::service`]) is the package's service:
 //! an update stops it if it runs, and the next start starts it again. What each step did is
-//! written to [`log_path`], which the Settings › Velopack page shows.
+//! written to [`log_path`], which the Settings › Package page shows.
 //!
-//! Only with the `velopack` feature, which the release workflow (`demo-release.yml`) turns
-//! on; `cargo run` builds the demo without it.
+//! Only with the `package` feature, which the release workflow (`demo-release.yml`) turns
+//! on; `cargo run` builds the demo without it. The updates' public key is read when the demo
+//! is built, from `CORUNDUM_DEMO_UPDATE_PUBKEY` (the release workflow sets it): without one,
+//! no update verifies, and none is installed.
 
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -30,6 +32,11 @@ const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 /// The demo's package: its hooks write to the log, and its daemon is its one service.
 pub static PACKAGE: PackageSpec = PackageSpec {
     app_name: crate::APP_NAME,
+    version: env!("CARGO_PKG_VERSION"),
+    update_pubkey: match option_env!("CORUNDUM_DEMO_UPDATE_PUBKEY") {
+        Some(key) => key,
+        None => "",
+    },
     on_installed: Some(on_installed),
     on_uninstalling: Some(on_uninstalling),
     before_apply: Some(before_apply),
@@ -94,7 +101,7 @@ pub(crate) fn updater() -> Option<Updater> {
 /// an update nor an uninstall touches.
 pub fn log_path() -> Option<PathBuf> {
     corundum_framework::platform::dirs::AppDirs::new(crate::APP_NAME)
-        .map(|dirs| dirs.data().join("velopack.log"))
+        .map(|dirs| dirs.data().join("package.log"))
 }
 
 /// Append `line` to the log, with the time and the process id. Failing to write is ignored:
@@ -117,16 +124,16 @@ pub fn log(line: &str) {
     }
 }
 
-/// Settings › Velopack: the log of what the package did.
+/// Settings › Package: the log of what the package did.
 pub(crate) struct Page;
 
 impl SettingsSection for Page {
     fn label(&self, ctx: &egui::Context) -> String {
-        tr!(ctx, "demo-settings-velopack")
+        tr!(ctx, "demo-settings-package")
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
-        ui.heading(tr!(ui, "demo-settings-velopack"));
+        ui.heading(tr!(ui, "demo-settings-package"));
         ui.separator();
         log_ui(ui);
     }

@@ -62,9 +62,9 @@ pub enum InstallMethod {
     /// A store's own package (Flatpak, Snap, MSIX, Mac App Store): the store updates it, and
     /// replacing a file inside it would fail or be undone.
     Store(StoreKind),
-    /// A Velopack package (an installed Windows app, a macOS bundle, an AppImage): the app
-    /// updates itself from its own settings, not by replacing the file.
-    Velopack,
+    /// A package (corundum-framework-package's: an installed Windows app, a macOS bundle, an
+    /// AppImage): the app updates itself from its own settings, not by replacing the file.
+    Package,
 }
 
 /// The store an app was installed from.
@@ -170,7 +170,7 @@ pub(crate) fn install_method_with(
     }
     if corundum_framework_platform::package::current_with(exe, probe.appimage.as_deref()).is_some()
     {
-        return InstallMethod::Velopack;
+        return InstallMethod::Package;
     }
     if let Some(home) = cargo_home
         && exe.starts_with(home.join("bin"))
@@ -406,7 +406,7 @@ pub fn advice(source: &ReleaseSource, release: &Release, method: &InstallMethod)
                 StoreKind::MacAppStore => "the Mac App Store",
             }
         ),
-        InstallMethod::Velopack => "Updated by the app itself.".to_owned(),
+        InstallMethod::Package => "Updated by the app itself.".to_owned(),
         InstallMethod::Release => format!("download it from {}", release.url),
     }
 }
@@ -513,15 +513,13 @@ mod tests {
     }
 
     #[test]
-    fn a_velopack_package_is_the_package_s_to_update() {
+    fn a_package_is_the_package_s_to_update() {
         let tmp = tempfile::tempdir().unwrap();
-        let current = tmp.path().join("current");
-        std::fs::create_dir(&current).unwrap();
-        std::fs::write(tmp.path().join("Update.exe"), "").unwrap();
-        let exe = current.join("app.exe");
+        std::fs::write(tmp.path().join("uninstall.exe"), "").unwrap();
+        let exe = tmp.path().join("app.exe");
         let empty = tempfile::tempdir().unwrap();
         let method = install_method_with(&exe, None, &probe(empty.path()));
-        assert_eq!(method, InstallMethod::Velopack);
+        assert_eq!(method, InstallMethod::Package);
         let source = ReleaseSource::github("o", "r");
         assert_eq!(advice_command(&source, &method), None);
     }

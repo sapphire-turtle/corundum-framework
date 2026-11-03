@@ -283,7 +283,7 @@ mod tests {
             InstallMethod::Cargo,
             git,
             InstallMethod::Store(StoreKind::Flatpak),
-            InstallMethod::Velopack,
+            InstallMethod::Package,
         ] {
             let r = release("1.1.0");
             let want = advice(&source(), &r, &method);
