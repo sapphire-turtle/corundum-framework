@@ -8,9 +8,7 @@
 //! written to [`log_path`], which the Settings › Package page shows.
 //!
 //! Only with the `package` feature, which the release workflow (`demo-release.yml`) turns
-//! on; `cargo run` builds the demo without it. The updates' public key is read when the demo
-//! is built, from `CORUNDUM_DEMO_UPDATE_PUBKEY` (the release workflow sets it): without one,
-//! no update verifies, and none is installed.
+//! on; `cargo run` builds the demo without it.
 
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -26,6 +24,10 @@ use corundum_framework::package::{PackageSpec, Services, Source, Start, Updater}
 /// The repository the demo's packages are released in, as `demo-v<version>` pre-releases.
 const REPO: &str = "https://github.com/sapphire-turtle/corundum-framework";
 
+/// sapphire-turtle's minisign public key (`cargo packager signer generate`), which the
+/// release workflow signs the packages for: an update signed otherwise is not installed.
+const UPDATE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4OEU0RkFENkI2M0UyQTYKUldTbTRtTnJyVStPT0pxNm82T2FZODg3M1FWNGJyQTZ3Nzd6Mjg4L2t0VURGR091dHp0Z1d6N0EK";
+
 /// How often a running demo looks for an update.
 const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -33,10 +35,7 @@ const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 pub static PACKAGE: PackageSpec = PackageSpec {
     app_name: crate::APP_NAME,
     version: env!("CARGO_PKG_VERSION"),
-    update_pubkey: match option_env!("CORUNDUM_DEMO_UPDATE_PUBKEY") {
-        Some(key) => key,
-        None => "",
-    },
+    update_pubkey: UPDATE_PUBKEY,
     on_installed: Some(on_installed),
     on_uninstalling: Some(on_uninstalling),
     before_apply: Some(before_apply),

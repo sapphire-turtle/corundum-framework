@@ -6,9 +6,9 @@ name: Demo release
 # release-packager.yml), from which an installed demo updates itself
 # (corundum-framework-package, through demo/src/package.rs).
 #
-# Secrets: PACKAGER_SIGN_PRIVATE_KEY and its password sign the packages; the macOS package
-# is signed and notarized with MACOS_CERTIFICATE and APPLE_API_KEY. The variable
-# CORUNDUM_DEMO_UPDATE_PUBKEY, the public key, is built into the demo.
+# Secrets: PACKAGER_SIGN_PRIVATE_KEY and its password (the organization's) sign the
+# packages, for the public key in demo/src/package.rs; the macOS package is signed and
+# notarized with MACOS_CERTIFICATE and APPLE_API_KEY.
 on:
   push:
     tags: ['demo-v*']
