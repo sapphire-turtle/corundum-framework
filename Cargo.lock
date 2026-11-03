@@ -1173,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-demo"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "corundum-framework",
  "corundum-framework-build",

@@ -1,228 +1,60 @@
-name: Demo release (Velopack)
+name: Demo release
 
-# The Velopack spike (corundum-framework#51): packages the demo with Velopack on Linux,
-# macOS and Windows and puts the packages on the tag's pre-release, from which an installed
-# demo updates itself (corundum-framework-package, through demo/src/velopack.rs).
+# The demo as a cargo-packager package (corundum-framework#103): pushing a tag
+# `demo-v<version>`, where <version> is the demo's in demo/Cargo.toml, makes a pre-release
+# and puts the demo's packages and its update feed on it (sapphire-turtle/.github's
+# release-packager.yml), from which an installed demo updates itself
+# (corundum-framework-package, through demo/src/package.rs).
 #
-# Started by pushing a tag `demo-v<x.y.z>`; push a second, higher one to try an update. A
-# tag rather than a manual run, so that the workflow runs from a branch before it is on main.
-# The macOS package is signed with a Developer ID and notarized when the repository has the
-# MACOS_CERTIFICATE and APPLE_API_KEY secrets (see "Set up signing (macOS)"). The others are
-# not signed yet: Windows SmartScreen warns before the installer runs.
+# Secrets: PACKAGER_SIGN_PRIVATE_KEY and its password sign the packages; the macOS package
+# is signed and notarized with MACOS_CERTIFICATE and APPLE_API_KEY. The variable
+# CORUNDUM_DEMO_UPDATE_PUBKEY, the public key, is built into the demo.
 on:
   push:
     tags: ['demo-v*']
 
-defaults:
-  run:
-    shell: bash
-
-env:
-  # vpk and the velopack crate (crates/corundum-framework-package/Cargo.toml) are released
-  # together; keep them the same.
-  VPK_VERSION: 1.2.161
-  # Not the data directory's name (`corundum-framework-demo`): on Windows the package is
-  # installed in %LocalAppData%\<package id>, which its uninstall deletes.
-  PACK_ID: corundum-framework-demo-desktop
-
 jobs:
-  pack:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # The oldest runner, so the AppImage runs on older glibc too.
-          - os: ubuntu-22.04
-            channel: linux
-            exe: ''
-            # The name the executable has in the package (`--mainExe`): the command's name, as
-            # the cargo binary's differs (cargo#6313), apart from Windows, where the GUI keeps
-            # its cargo name and the console shim has the command's.
-            main: corundum-demo
-            icon: icon.png
-            extra: --categories Development
-          - os: macos-latest
-            channel: osx
-            exe: ''
-            main: corundum-demo
-            icon: icon.icns
-            # The launcher writes the same bundle id; it steps aside inside a package (#51), so the
-            # one in ~/Applications and this one do not clash.
-            extra: --bundleId org.sapphire-turtle.corundum-demo
-          - os: windows-latest
-            channel: win
-            exe: '.exe'
-            main: corundum-framework-demo.exe
-            icon: icon.ico
-            extra: ''
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: The version from the tag
-        run: echo "VERSION=${GITHUB_REF_NAME#demo-v}" >> "$GITHUB_ENV"
-
-      # rustup installs the rust-toolchain.toml toolchain on first use.
-      - name: Install the pinned toolchain
-        run: cargo --version
-
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwayland-dev libxkbcommon-dev
-
-      - uses: Swatinem/rust-cache@v2
-
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Install vpk
-        run: dotnet tool install -g vpk --version "$VPK_VERSION"
-
-      - name: Build
-        run: cargo build --release --locked -p corundum-framework-demo --features velopack --bins
-
-      - name: Render the icon
-        run: cargo run --release --locked -p corundum-framework-demo --example icons -- icons
-
-      # A keychain of its own with the Developer ID Application and Installer certificates and
-      # the notary profile, for vpk to sign and notarize the app and its .pkg. Without the
-      # secrets (a fork, say) the package is made unsigned, as before.
-      - name: Set up signing (macOS)
-        if: runner.os == 'macOS'
-        env:
-          # The .p12 of both certificates, base64.
-          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          # An App Store Connect team key: the .p8's text, its key ID and its issuer ID.
-          API_KEY: ${{ secrets.APPLE_API_KEY }}
-          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-        run: |
-          if [ -z "$CERTIFICATE" ]; then
-            echo "::warning::No MACOS_CERTIFICATE secret: the macOS package is not signed"
-            exit 0
-          fi
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          password=$(openssl rand -base64 24)
-          security create-keychain -p "$password" "$keychain"
-          # Notarizing takes minutes; the keychain must not lock meanwhile.
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/productsign
-          rm "$RUNNER_TEMP/certificate.p12"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
-          # vpk passes --keychain to codesign and notarytool but not to productbuild, which
-          # signs the .pkg and finds its identity only in the search list.
-          # Unquoted on purpose: the list is one keychain per line.
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-
-          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/api-key.p8"
-          xcrun notarytool store-credentials notary --keychain "$keychain" \
-            --key "$RUNNER_TEMP/api-key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
-          rm "$RUNNER_TEMP/api-key.p8"
-
-          # The identities by their kind, so the workflow names no team.
-          identity() {
-            security find-identity -v "$keychain" | sed -n "s/.*\"\($1: .*\)\"$/\1/p" | head -n 1
-          }
-          app=$(identity "Developer ID Application")
-          install=$(identity "Developer ID Installer")
-          if [ -z "$app" ] || [ -z "$install" ]; then
-            echo "MACOS_CERTIFICATE lacks a Developer ID Application or Installer identity"
-            security find-identity -v "$keychain"
-            exit 1
-          fi
-          {
-            echo "SIGN_KEYCHAIN=$keychain"
-            echo "SIGN_APP_IDENTITY=$app"
-            echo "SIGN_INSTALL_IDENTITY=$install"
-          } >> "$GITHUB_ENV"
-
-      - name: Pack
-        env:
-          EXE: ${{ matrix.exe }}
-          MAIN: ${{ matrix.main }}
-          CHANNEL: ${{ matrix.channel }}
-          ICON: icons/${{ matrix.icon }}
-          EXTRA: ${{ matrix.extra }}
-        run: |
-          mkdir pack
-          # One binary: the daemon is its `daemon` subcommand.
-          cp "target/release/corundum-framework-demo$EXE" "pack/$MAIN"
-          # The console shim, under the command's name, for the install hook to put on `Path`.
-          if [ "$RUNNER_OS" = Windows ]; then
-            cp target/release/corundum-framework-demo-console.exe pack/corundum-demo.exe
-          fi
-          # Set by "Set up signing (macOS)"; an array, as the identities have spaces.
-          sign=()
-          if [ -n "${SIGN_APP_IDENTITY:-}" ]; then
-            sign=(
-              --signAppIdentity "$SIGN_APP_IDENTITY"
-              --signInstallIdentity "$SIGN_INSTALL_IDENTITY"
-              --notaryProfile notary
-              --keychain "$SIGN_KEYCHAIN"
-            )
-          fi
-          # Unquoted on purpose: EXTRA is a list of arguments.
-          vpk pack \
-            --packId "$PACK_ID" \
-            --packVersion "$VERSION" \
-            --packDir pack \
-            --mainExe "$MAIN" \
-            --packTitle "Corundum Demo" \
-            --packAuthors "sapphire-turtle" \
-            --icon "$ICON" \
-            --channel "$CHANNEL" \
-            --delta None \
-            --outputDir releases \
-            $EXTRA \
-            ${sign[@]+"${sign[@]}"}
-          ls -la releases
-
-      - name: Remove the signing keychain (macOS)
-        if: always() && env.SIGN_KEYCHAIN != ''
-        run: security delete-keychain "$SIGN_KEYCHAIN"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: releases-${{ matrix.channel }}
-          path: releases/
-
   release:
-    needs: pack
-    # A platform that failed to pack still leaves the others' packages to try.
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: releases-*
-          path: releases
-      - name: Publish the pre-release
+      - uses: actions/checkout@v7
+
+      # The version the demo reports and the feed's must agree, or an installed demo would
+      # update for ever.
+      - name: Check the tag against the demo's version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("demo/Cargo.toml", "rb"))["package"]["version"])')
+          if [ "$GITHUB_REF_NAME" != "demo-v$version" ]; then
+            echo "::error::The tag $GITHUB_REF_NAME is not demo-v$version, the demo's version"
+            exit 1
+          fi
+
+      - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ls -laR releases
-          # Every platform's files side by side; their names carry the channel, so none
-          # overwrites another (the job fails below if two collide).
-          mkdir all
-          for file in releases/*/*; do
-            name=$(basename "$file")
-            if [ -e "all/$name" ]; then
-              echo "two platforms made $name"
-              exit 1
-            fi
-            cp "$file" "all/$name"
-          done
-          gh release create "$GITHUB_REF_NAME" all/* \
+          gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
             --prerelease \
-            --title "corundum demo ${GITHUB_REF_NAME#demo-v} (Velopack spike)" \
-            --notes "The demo packaged with Velopack, for corundum-framework#51. Not signed on Linux or Windows. Not for use."
+            --title "corundum demo ${GITHUB_REF_NAME#demo-v}" \
+            --notes "The demo packaged with cargo-packager, for corundum-framework#103. Not signed on Linux or Windows. Not for use."
+
+  package:
+    needs: release
+    permissions:
+      contents: write
+    uses: sapphire-turtle/.github/.github/workflows/release-packager.yml@v1
+    # The signing key, and the macOS signing secrets.
+    secrets: inherit
+    with:
+      tag: ${{ github.ref_name }}
+      package: corundum-framework-demo
+      app-name: corundum-framework-demo
+      features: package
+      console-bin: corundum-framework-demo-console
+      command: corundum-demo
+      # The icons [package.metadata.packager] names, rendered from the demo's SVG.
+      pre-package: cargo run --release --locked -p corundum-framework-demo --example icons -- "$CRATE_DIR/icons"

@@ -13,7 +13,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-gui`](crates/corundum-framework-gui) | 見た目：シェル、テーマ、フォント、アイコン、翻訳、ウィンドウ | 未リリース |
 | [`corundum-framework-platform`](crates/corundum-framework-platform) | egui に依存しない部分：アプリのディレクトリ（モバイルを含む）、システムの言語、JNI／Objective-C との橋渡し | 未リリース |
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
-| [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで Velopack パッケージとしてのアプリ：起動時の処理と、インストール・アンインストールのフック | 未リリース |
+| [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで cargo-packager パッケージとしてのアプリ：起動時の処理、インストール・アンインストールのフック、署名つきの更新 | 未リリース |
 | [`corundum-framework-image`](crates/corundum-framework-image) | egui に依存しない部分：画像を sRGB・RGBA8 のサムネイルにデコードする。サイズの上限はヘッダーの段階で確かめる。`raw`（カメラの RAW。LGPL-2.1）と `webp`（WebP への非可逆エンコード。デコードには要らない）は既定では無効 | 未リリース |
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | egui に依存しない部分：音声ファイル（FLAC、MP3、AAC、ALAC、Vorbis、WAV、Ogg Opus）をデコードしてリサンプリングし、キューから再生する。`cpal`（実際のサウンドデバイス）は既定では無効 | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
