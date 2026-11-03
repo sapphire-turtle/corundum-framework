@@ -8,6 +8,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.7.0...v0.8.0) - 2026-11-03
+
+### Added
+
+- audio and audio-preview in the facade; CI and docs
+- *(audio)* the cpal device; CI and docs
+- image and image-preview in the facade; CI and docs
+- *(gui)* ImagePreview, a picture in the detail pane (image-preview)
+- *(platform)* [**breaking**] tell a cargo-packager package from its layout ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
+- *(package)* [**breaking**] packages and signed updates with cargo-packager ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
+- *(gui)* AudioPreview, a picked audio file played in the detail pane (audio-preview)
+
+### Fixed
+
+- *(audio)* read ID3/APE tags; 5 s arrow-key seek; disabled seek bar shows empty; public FailedFeed
+- *(gui)* the audio preview's time follows the player, its length falls back to the tags, and keys on the seek bar seek
+- *(gui)* the image preview bounds pictures at 64 MP and survives a panic
+- *(gui)* the image preview never stats the file on the UI thread
+- *(package)* the Win32_Security feature the job object needs; CI on the package feature
+
+### Other
+
+- *(demo)* release the demo with release-packager.yml ([#103](https://github.com/sapphire-turtle/corundum-framework/pull/103))
+- docs, ci: image-webp is WebP encoding; the image crate builds no egui
+- why the detail pane previews files the app was not made for
+- *(gui)* the audio preview's tests wait as long for play as for the probe
+
 ## [0.7.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.6.0...v0.7.0) - 2026-11-01
 
 ### Breaking
