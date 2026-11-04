@@ -1168,6 +1168,7 @@ name = "corundum-framework-build"
 version = "0.9.1"
 dependencies = [
  "corundum-framework-platform",
+ "png 0.18.1",
  "winresource",
 ]
 
