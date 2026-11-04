@@ -8,6 +8,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.9.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.9.0...v0.9.1) - 2026-11-04
+
+### Fixed
+
+- *(package)* a Windows update installs and restarts the app, not only closes it
+
 ## [0.9.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.8.0...v0.9.0) - 2026-11-03
 
 ### Breaking
