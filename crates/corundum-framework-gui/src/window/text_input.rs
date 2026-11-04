@@ -4,13 +4,14 @@
 //! sending keys, and winit 0.30 drops the events that report it. So the host reads the
 //! buffer before every frame and hands egui the difference from the last read: characters
 //! that went away as Backspaces, characters that arrived as [`egui::Event::Text`] (or an IME
-//! commit, when they end a composition), and the part the keyboard is still composing — a
+//! commit, when they end a composition), new lines as Enter presses (a text field takes a new
+//! line only from Enter, never from text), and the part the keyboard is still composing — a
 //! Japanese reading before conversion, say — as an IME preedit.
 //!
 //! The buffer is never rewritten while the keyboard types into it: a rewrite races the
 //! keyboard, and what it typed in between is lost. It is cleared only when focus moves to
 //! another field ([`TextInputBridge::refocus`]), when nobody is typing. Keys the keyboard
-//! sends as keys (Backspace on an empty buffer, Enter) still arrive through winit.
+//! sends as keys (Backspace on an empty buffer) still arrive through winit.
 
 /// The keyboard's buffer as the platform reports it. Spans are in UTF-16 code units, as
 /// Java's strings count; a span that does not fall on characters is ignored.
@@ -75,11 +76,20 @@ impl TextInputBridge {
         }
         let added = &settled[common..];
         let was_composing = !self.composing.is_empty();
-        if !added.is_empty() {
-            events.push(if was_composing {
-                egui::Event::Ime(egui::ImeEvent::Commit(added.to_owned()))
+        for (i, line) in added.split('\n').enumerate() {
+            if i > 0 {
+                events.push(enter(true));
+                events.push(enter(false));
+            }
+            let line = line.strip_suffix('\r').unwrap_or(line);
+            if line.is_empty() {
+                continue;
+            }
+            // Only the text right after the composition is what it committed.
+            events.push(if was_composing && i == 0 {
+                egui::Event::Ime(egui::ImeEvent::Commit(line.to_owned()))
             } else {
-                egui::Event::Text(added.to_owned())
+                egui::Event::Text(line.to_owned())
             });
         }
         if composing != self.composing {
@@ -125,8 +135,16 @@ impl TextInputBridge {
 }
 
 fn backspace(pressed: bool) -> egui::Event {
+    key(egui::Key::Backspace, pressed)
+}
+
+fn enter(pressed: bool) -> egui::Event {
+    key(egui::Key::Enter, pressed)
+}
+
+fn key(key: egui::Key, pressed: bool) -> egui::Event {
     egui::Event::Key {
-        key: egui::Key::Backspace,
+        key,
         physical_key: None,
         pressed,
         repeat: false,
@@ -215,6 +233,44 @@ mod tests {
         assert_eq!(
             bridge.translate(&buf(&ticket, None)),
             vec![text(&ticket[150..])]
+        );
+    }
+
+    #[test]
+    fn new_lines_are_enter_presses() {
+        let mut bridge = TextInputBridge::default();
+        bridge.translate(&buf("- a", None));
+        assert_eq!(
+            bridge.translate(&buf("- a\n", None)),
+            vec![enter(true), enter(false)]
+        );
+        // A paste of lines: text and Enters in order, an empty line a second Enter.
+        assert_eq!(
+            bridge.translate(&buf("- a\nb\r\n\nc", None)),
+            vec![
+                text("b"),
+                enter(true),
+                enter(false),
+                enter(true),
+                enter(false),
+                text("c")
+            ]
+        );
+        // Taking a new line back is one Backspace, as for any character.
+        bridge.translate(&buf("x\n", None));
+        assert_eq!(
+            bridge.translate(&buf("x", None)),
+            vec![backspace(true), backspace(false)]
+        );
+    }
+
+    #[test]
+    fn a_new_line_after_a_composition_commits_it_first() {
+        let mut bridge = TextInputBridge::default();
+        bridge.translate(&buf("か", Some((0, 1))));
+        assert_eq!(
+            bridge.translate(&buf("か\n", None)),
+            vec![commit("か"), enter(true), enter(false)]
         );
     }
 

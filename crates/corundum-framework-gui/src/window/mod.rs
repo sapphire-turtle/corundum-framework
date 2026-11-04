@@ -54,6 +54,9 @@ mod marked_text;
 // Used by the Android window; kept platform-free so its tests run on a desktop.
 #[cfg_attr(not(all(target_os = "android", feature = "android")), allow(dead_code))]
 mod text_input;
+// Used by the Android window; kept platform-free so its tests run on a desktop.
+#[cfg_attr(not(all(target_os = "android", feature = "android")), allow(dead_code))]
+mod soft_keyboard;
 
 #[cfg(all(target_os = "android", feature = "android"))]
 pub use android::{AndroidApp, run_android};
