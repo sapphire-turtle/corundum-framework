@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The demo's icon from Android 8 on: corundum's mark (demo/assets/app-icon-foreground.svg,
+     rendered by build.rs) on the tile's colour; the mark alone where the launcher tints the
+     icons (Android 13). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

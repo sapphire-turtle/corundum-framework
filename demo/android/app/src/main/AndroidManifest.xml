@@ -3,6 +3,7 @@
 
     <application
         android:label="Corundum Demo"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 
         <!-- Google Play installs the code scanner's module (`qr-scan`) with the app, rather

@@ -38,5 +38,9 @@ target
 /demo/android/build
 /demo/android/app/src/main/jniLibs
 
+# The demo's app icon for the phones, rendered from demo/assets by its build.rs.
+/demo/ios/Assets.xcassets/AppIcon.appiconset/*.png
+/demo/android/app/src/main/res/mipmap-*/*.png
+
 # The demo's icons, rendered for its package (demo-release.yml).
 /demo/icons/

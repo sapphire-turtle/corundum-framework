@@ -161,6 +161,23 @@ A debug build runs because the workspace's `Cargo.toml` builds android-activity 
 debug assertions (`[profile.dev.package.android-activity]`): android-activity 0.6 makes a
 slice of the keyboard's text from a null pointer before there is any, and the check aborts.
 
+## The icon
+
+corundum's mark in the faceted brand blue, drawn in [`assets/`](assets) and only there:
+
+- `app-icon.svg`: the mark as it is, for the desktops (the window's, the Windows
+  executable's through `build.rs`, and the packages') and Android 7;
+- `app-icon-square.svg`: iOS's, the mark on a light grey tile, full-bleed, as iOS rounds the
+  corners itself;
+- `app-icon-foreground.svg`: the foreground of Android's adaptive icon, from Android 8 on,
+  on the tile's colour (`res/values/ic_launcher_background.xml`).
+
+The phones take PNGs, which `build.rs` renders when cargo builds the demo for one
+(`corundum_framework_build::ios_app_icon` and `android_app_icons`): into
+`ios/Assets.xcassets/AppIcon.appiconset` and `android/app/src/main/res/mipmap-*`, where git
+ignores them. `build-rust.sh` runs that build on both, so a change to an SVG shows on the
+next build.
+
 ## CI
 
 CI builds and tests the demo on the desktops. Mobile CI runs clippy on it for iOS and
