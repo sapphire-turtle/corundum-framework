@@ -308,8 +308,6 @@ fn install(
     args: &[OsString],
     _spec: &PackageSpec,
 ) -> Result<(), Error> {
-    use std::os::windows::process::CommandExt;
-
     if kept.format != "nsis" {
         return Err(Error::Update(format!(
             "cannot install a {} update",
@@ -320,8 +318,20 @@ fn install(
     let setup = file.with_extension("exe");
     fs::rename(file, &setup)?;
     let script = windows_script(std::process::id(), &setup, exe, restart, args);
+    spawn_windows_script(&script)?;
+    Ok(())
+}
+
+/// Starts a hidden PowerShell running `script`, one that outlives this process.
+///
+/// `CREATE_NO_WINDOW` alone: the PowerShell gets a console of its own that is never shown.
+/// Not `DETACHED_PROCESS`: a PowerShell without any console exits at once without running
+/// its script, so the app closed for an update that never installed and never restarted.
+#[cfg(windows)]
+fn spawn_windows_script(script: &str) -> std::io::Result<std::process::Child> {
+    use std::os::windows::process::CommandExt;
+
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
     let system_root = std::env::var("SYSTEMROOT").unwrap_or_else(|_| r"C:\Windows".into());
     std::process::Command::new(format!(
         r"{system_root}\System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -335,9 +345,8 @@ fn install(
     ])
     .arg(script)
     .env(RESTART, "1")
-    .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
-    .spawn()?;
-    Ok(())
+    .creation_flags(CREATE_NO_WINDOW)
+    .spawn()
 }
 
 /// The PowerShell that waits for `pid` to exit, runs `setup` silently and, for a restart,
@@ -518,6 +527,37 @@ mod tests {
         assert!(started.elapsed() >= std::time::Duration::from_millis(800));
         reaper.join().unwrap();
         assert_eq!(fs::read_to_string(&out).unwrap().trim(), "ran");
+    }
+
+    /// The script is run, not only started: a PowerShell without a console
+    /// (`DETACHED_PROCESS`) exits without running it, and the update never installed.
+    #[cfg(windows)]
+    #[test]
+    fn the_windows_script_runs_and_waits_for_the_process_to_exit() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("out");
+        let mut sleeper = std::process::Command::new("ping")
+            .args(["-n", "2", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let started = std::time::Instant::now();
+        let script = format!(
+            "Wait-Process -Id {} -ErrorAction SilentlyContinue; \
+             Set-Content -LiteralPath '{}' -Value $env:{RESTART}",
+            sleeper.id(),
+            out.display()
+        );
+        let status = spawn_windows_script(&script).unwrap().wait().unwrap();
+        sleeper.wait().unwrap();
+        assert!(status.success(), "{status}");
+        // Not before the process it waited for had ended.
+        assert!(started.elapsed() >= std::time::Duration::from_millis(800));
+        assert_eq!(
+            fs::read_to_string(&out).expect("the script ran").trim(),
+            "1",
+            "with the restart marker set"
+        );
     }
 
     #[test]
