@@ -12,7 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- *(package)* a Windows update installs and restarts the app, not only closes it
+- *(corundum-framework-package)* A Windows update installs and starts the app again; the app only closed, and the update never installed. The PowerShell that runs the installer once the app has exited was started without a console (`DETACHED_PROCESS`), and such a PowerShell exits without running its script. An app built on an earlier version still closes without updating when it applies an update: install the next release by hand once ([#109](https://github.com/sapphire-turtle/corundum-framework/pull/109))
 
 ## [0.9.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.8.0...v0.9.0) - 2026-11-03
 
