@@ -33,13 +33,14 @@ use std::path::Path;
 /// On a case-insensitive filesystem (macOS's and Windows's by default), `from` and `to`
 /// that differ only in case (`photo.JPG` to `photo.jpg`) name the same file:
 ///
-/// - **Windows** (NTFS): the file is renamed to the new case, as in Explorer.
-/// - **macOS and iOS** (APFS, HFS+): it fails with [`io::ErrorKind::AlreadyExists`], as
-///   `to` is there. A caller renames through a temporary name (`photo.JPG` to a name of
-///   its own, then that to `photo.jpg`), or with [`std::fs::rename`], which renames to the
-///   new case since the file at `to` is `from` itself.
+/// - **Windows** (NTFS) and **macOS and iOS** (APFS): the file is renamed to the new
+///   case, as in Explorer or the Finder: `to` is `from` itself, which the call does not
+///   count as being there.
 /// - **Linux** with a case-insensitive directory (ext4's or f2fs's casefold): it fails with
-///   [`io::ErrorKind::AlreadyExists`], as on macOS.
+///   [`io::ErrorKind::AlreadyExists`], as the kernel checks `RENAME_NOREPLACE` against the
+///   name `to` finds before it looks at which file that is. (From the kernel's code; not
+///   tried by the tests, which run on no casefold directory.) A caller renames through a
+///   temporary name (`photo.JPG` to a name of its own, then that to `photo.jpg`).
 ///
 /// On a case-sensitive filesystem the two are different names, and the rename is an
 /// ordinary one.
@@ -351,8 +352,9 @@ mod tests {
                 .map(|entry| entry.unwrap().file_name().into_string().unwrap())
                 .collect::<Vec<_>>()
         };
-        // Windows renames to the new case; a case-sensitive filesystem has two names.
-        if !case_insensitive || cfg!(windows) {
+        // Windows and macOS rename to the new case; a case-sensitive filesystem has two
+        // names. Linux's casefold refuses.
+        if !case_insensitive || !cfg!(any(target_os = "linux", target_os = "android")) {
             result.unwrap();
             assert_eq!(names(), ["photo.jpg"]);
         } else {
