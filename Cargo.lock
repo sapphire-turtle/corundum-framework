@@ -225,6 +225,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "alumina-datetime"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "756ffe51d04f5b1dc0e85484c68198f3502012e4cd6c2262d957eb6e275781bb"
+dependencies = [
+ "chrono",
+ "egui",
+]
+
+[[package]]
 name = "alumina-markdown"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1210,6 +1220,7 @@ name = "corundum-framework-gui"
 version = "0.9.1"
 dependencies = [
  "alumina-code",
+ "alumina-datetime",
  "alumina-markdown",
  "android-activity",
  "android_log-sys",

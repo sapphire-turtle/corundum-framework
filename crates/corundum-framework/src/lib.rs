@@ -36,6 +36,7 @@
 //! | `code-editor` | `gui::code` | alumina-code's `CodeEditor`, whose colours follow the visuals; the app brings its own `Highlighter` (brings `gui`) |
 //! | `text-preview` | `gui::preview::TextPreview` | a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread (brings `gui` and `code-editor`) |
 //! | `markdown-editor` | `gui::markdown` | alumina-markdown's `MarkdownEditor`, with `markdown::toolbar` in corundum's Lucide icons and words (brings `gui`) |
+//! | `datetime` | `gui::datetime` | alumina-datetime's date, period, time and timestamp pickers, with `datetime::config` in corundum's Lucide icons and words, weeks from Monday (brings `gui`) |
 //! | `markdown-preview` | `gui::preview::MarkdownPreview` | a Markdown file the app hands in, formatted and read-only in the detail pane; a link clicked is reported in `PreviewResponse::link` (brings `gui`, `markdown-editor` and `text-preview`) |
 //! | `gui-keys` | `gui::keys` | the API keys page in Settings, over a store on this machine or the app's own backend; each key is added with one of the app's profiles (brings `gui` and `keys`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
