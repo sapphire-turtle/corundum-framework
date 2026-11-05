@@ -1,0 +1,128 @@
+//! The default preview of one file: its picture or its player, and its details.
+
+#[cfg(feature = "audio-preview")]
+use std::sync::Arc;
+
+#[cfg(feature = "audio-preview")]
+use corundum_framework_audio::Player;
+
+#[cfg(feature = "audio-preview")]
+use super::AudioPreview;
+#[cfg(feature = "audio-preview")]
+use super::Content;
+#[cfg(feature = "image-preview")]
+use super::ImagePreview;
+#[cfg(any(feature = "image-preview", feature = "audio-preview"))]
+use super::Kind;
+use super::{FileInfo, InfoCard, PreviewResponse, State, kind_of};
+
+/// The default for one file: its picture or its player at the top, its details under
+/// them; the info card for a file with neither.
+///
+/// Make one and keep it across frames: it holds the parts' threads and what they decoded.
+#[derive(Default)]
+pub struct FilePreview {
+    #[cfg(feature = "image-preview")]
+    image: ImagePreview,
+    #[cfg(feature = "audio-preview")]
+    audio: AudioPreview,
+    #[cfg(feature = "audio-preview")]
+    player: Option<Arc<Player<Content>>>,
+}
+
+impl FilePreview {
+    /// A preview with no player: sounds get the info card.
+    pub fn new() -> FilePreview {
+        FilePreview::default()
+    }
+
+    /// This preview with `player` to play sounds with.
+    #[cfg(feature = "audio-preview")]
+    pub fn with_player(self, player: Arc<Player<Content>>) -> FilePreview {
+        FilePreview {
+            player: Some(player),
+            ..self
+        }
+    }
+
+    /// Whether this preview draws `name`'s content. When it is false, the app need not
+    /// fetch the content: the info card needs none.
+    pub fn wants_content(&self, name: &str) -> bool {
+        match kind_of(name) {
+            #[cfg(feature = "image-preview")]
+            Kind::Image => true,
+            #[cfg(feature = "audio-preview")]
+            Kind::Audio => self.player.is_some(),
+            _ => false,
+        }
+    }
+
+    /// Draw `file`, with its content as `state`. `open_button` is passed to the card.
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        file: &FileInfo,
+        state: State<'_>,
+        open_button: bool,
+    ) -> PreviewResponse {
+        if !self.wants_content(&file.name) {
+            return InfoCard::new(file).open_button(open_button).ui(ui);
+        }
+        let part = self.part(ui, file, state);
+        part.merge(
+            InfoCard::new(file)
+                .icon(false)
+                .open_button(open_button)
+                .ui(ui),
+        )
+    }
+
+    /// Draw the picture or the player of `file`, at the top of `ui`.
+    #[cfg_attr(
+        not(any(feature = "image-preview", feature = "audio-preview")),
+        allow(unused_variables)
+    )]
+    fn part(&mut self, ui: &mut egui::Ui, file: &FileInfo, state: State<'_>) -> PreviewResponse {
+        #[allow(unused_mut)]
+        let mut response = PreviewResponse::default();
+        #[cfg(any(feature = "image-preview", feature = "audio-preview"))]
+        {
+            let width = ui.available_width();
+            let bounded = width.min(ui.available_height() * 0.6);
+            let origin = ui.available_rect_before_wrap().min;
+            let draw = |ui: &mut egui::Ui, height: f32| {
+                let rect = egui::Rect::from_min_size(origin, egui::vec2(width, height));
+                let child = ui.new_child(
+                    egui::UiBuilder::new()
+                        .max_rect(rect)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                );
+                (child, rect)
+            };
+            match kind_of(&file.name) {
+                #[cfg(feature = "image-preview")]
+                Kind::Image => {
+                    let (mut child, rect) = draw(ui, bounded);
+                    response = self.image.ui(&mut child, state);
+                    ui.allocate_rect(rect, egui::Sense::hover());
+                }
+                #[cfg(feature = "audio-preview")]
+                Kind::Audio => {
+                    if let Some(player) = &self.player {
+                        // A sound is as tall as it is; Loading and Failed need room to centre in.
+                        let height = match state {
+                            State::Ready(_) => ui.available_height(),
+                            _ => bounded,
+                        };
+                        let (mut child, _) = draw(ui, height);
+                        response = self.audio.ui(&mut child, state, player);
+                        let used = child.min_rect();
+                        ui.allocate_rect(used, egui::Sense::hover());
+                    }
+                }
+                _ => {}
+            }
+        }
+        response
+    }
+}

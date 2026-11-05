@@ -2,7 +2,7 @@
 
 use std::time::{Duration, SystemTime};
 
-use super::{FileInfo, InfoCard, Kind, PreviewResponse, kind_of};
+use super::{FileInfo, FilePreview, InfoCard, Kind, PreviewResponse, State, kind_of};
 use crate::explorer::Entry;
 
 /// What a frame drew.
@@ -10,6 +10,10 @@ use crate::explorer::Entry;
 struct Drawn {
     texts: Vec<(String, egui::Rect)>,
     image: bool,
+    /// Where each textured rect was drawn.
+    images: Vec<egui::Rect>,
+    /// Whether a stroked path (the spinner) was drawn.
+    path: bool,
 }
 
 fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
@@ -18,8 +22,15 @@ fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
         egui::Shape::Text(text) => drawn
             .texts
             .push((text.galley.text().to_owned(), text.visual_bounding_rect())),
-        egui::Shape::Mesh(_) => drawn.image = true,
-        egui::Shape::Rect(rect) if rect.brush.is_some() => drawn.image = true,
+        egui::Shape::Mesh(mesh) => {
+            drawn.image = true;
+            drawn.images.push(mesh.calc_bounds());
+        }
+        egui::Shape::Rect(rect) if rect.brush.is_some() => {
+            drawn.image = true;
+            drawn.images.push(rect.visual_bounding_rect());
+        }
+        egui::Shape::Path(_) => drawn.path = true,
         _ => {}
     }
 }
@@ -223,4 +234,235 @@ fn the_card_strings_exist_in_both_languages() {
     for (en, ja) in all[0].iter().zip(&all[1]) {
         assert_ne!(en, ja);
     }
+}
+
+impl Drawn {
+    fn rect(&self, text: &str) -> Option<egui::Rect> {
+        self.texts.iter().find(|(t, _)| t == text).map(|(_, r)| *r)
+    }
+}
+
+/// One frame of whatever `add` draws, on a 400 x 300 screen with `events`.
+fn frame_ui(
+    ctx: &egui::Context,
+    events: Vec<egui::Event>,
+    mut add: impl FnMut(&mut egui::Ui),
+) -> Drawn {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(400.0, 300.0),
+        )),
+        events,
+        ..Default::default()
+    };
+    let mut output = ctx.run_ui(input, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| add(ui));
+    });
+    output.textures_delta.clear();
+    let mut drawn = Drawn::default();
+    for clipped in &output.shapes {
+        collect(&clipped.shape, &mut drawn);
+    }
+    drawn
+}
+
+#[test]
+fn an_unknown_file_needs_no_content() {
+    let ctx = egui::Context::default();
+    let file = leaked(FileInfo::new("a.zip"));
+    let mut preview = FilePreview::new();
+    assert!(!preview.wants_content("a.zip"));
+    let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+        let _ = preview.ui(ui, file, State::Loading, false);
+    });
+    assert!(drawn.has("a.zip"), "{drawn:?}");
+    assert!(!drawn.path, "a spinner: {drawn:?}");
+}
+
+#[cfg(feature = "image-preview")]
+fn png_content() -> super::Content {
+    let mut bytes = Vec::new();
+    ::image::RgbaImage::from_pixel(64, 32, ::image::Rgba([200, 40, 40, 255]))
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            ::image::ImageFormat::Png,
+        )
+        .expect("encode the PNG");
+    super::Content::bytes("k", "a.png", bytes)
+}
+
+#[cfg(feature = "image-preview")]
+#[test]
+fn an_image_shows_its_picture_and_details_under_it() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let content = png_content();
+    let file = leaked(FileInfo {
+        size: Some(10),
+        ..FileInfo::new("a.png")
+    });
+    let mut preview = FilePreview::new();
+    assert!(preview.wants_content("a.png"));
+    let start = std::time::Instant::now();
+    loop {
+        let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            let _ = preview.ui(ui, file, State::Ready(&content), false);
+        });
+        if let Some(picture) = drawn.images.first() {
+            let size = drawn.rect("Size").expect("the Size label");
+            assert!(size.top() > picture.bottom(), "{drawn:?}");
+            assert!(drawn.has("a.png"), "{drawn:?}");
+            return;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "{drawn:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[cfg(feature = "image-preview")]
+#[test]
+fn a_failed_image_fetch_offers_retry() {
+    let ctx = egui::Context::default();
+    let file = leaked(FileInfo::new("a.png"));
+    let mut preview = FilePreview::new();
+    let mut response = PreviewResponse::default();
+    let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+        response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+    });
+    assert!(drawn.has("offline"), "{drawn:?}");
+    let at = drawn.rect("Retry").expect("a Retry button").center();
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    };
+    for events in [
+        vec![egui::Event::PointerMoved(at), button(true)],
+        vec![button(false)],
+    ] {
+        let _ = frame_ui(&ctx, events, |ui| {
+            response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+        });
+    }
+    assert!(response.retry);
+}
+
+#[cfg(feature = "audio-preview")]
+fn fake_player() -> std::sync::Arc<corundum_framework_audio::Player<super::Content>> {
+    std::sync::Arc::new(
+        corundum_framework_audio::Player::spawn(
+            Box::new(super::ContentOpener),
+            Box::new(corundum_framework_audio::fakes::FakeOutputs::default()),
+            || {},
+        )
+        .expect("spawn the player"),
+    )
+}
+
+#[cfg(feature = "audio-preview")]
+#[test]
+fn audio_without_a_player_is_an_info_card() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let content = super::Content::bytes("k", "a.wav", Vec::new());
+    let file = leaked(FileInfo::new("a.wav"));
+    let mut preview = FilePreview::new();
+    assert!(!preview.wants_content("a.wav"));
+    let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+        let _ = preview.ui(ui, file, State::Ready(&content), false);
+    });
+    assert!(drawn.has("a.wav"), "{drawn:?}");
+    assert!(drawn.has("Kind"), "{drawn:?}");
+    assert!(!drawn.has("Play"), "{drawn:?}");
+}
+
+#[cfg(feature = "audio-preview")]
+#[test]
+fn audio_with_a_player_shows_play() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let content = silent_wav();
+    let file = leaked(FileInfo::new("a.wav"));
+    let mut preview = FilePreview::new().with_player(fake_player());
+    assert!(preview.wants_content("a.wav"));
+    let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+        let _ = preview.ui(ui, file, State::Ready(&content), false);
+    });
+    assert!(drawn.has("Play"), "{drawn:?}");
+    assert!(drawn.has("Kind"), "{drawn:?}");
+}
+
+#[test]
+fn replace_is_the_app_s_view_and_the_footer() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let file = leaked(FileInfo {
+        size: Some(1536),
+        icon: Some(crate::icons::file()),
+        ..FileInfo::new("a.md")
+    });
+    let mut drawn = Drawn::default();
+    for _ in 0..5 {
+        drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            ui.label("NOTES");
+            let _ = InfoCard::new(file).footer().ui(ui);
+        });
+    }
+    let notes = drawn.rect("NOTES").expect("the app's view");
+    let size = drawn.rect("Size: 1.5 KB").expect("the footer");
+    assert!(notes.bottom() <= size.top(), "{drawn:?}");
+    assert!(!drawn.image, "{drawn:?}");
+}
+
+#[cfg(feature = "image-preview")]
+#[test]
+fn add_puts_the_app_s_section_above_the_default() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let content = png_content();
+    let file = leaked(FileInfo::new("a.png"));
+    let mut preview = FilePreview::new();
+    let start = std::time::Instant::now();
+    loop {
+        let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            ui.label("TAGS");
+            let _ = preview.ui(ui, file, State::Ready(&content), false);
+        });
+        if let Some(picture) = drawn.images.first() {
+            let tags = drawn.rect("TAGS").expect("the app's section");
+            assert!(tags.bottom() <= picture.top(), "{drawn:?}");
+            return;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "{drawn:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// A short silent 16-bit mono WAV.
+#[cfg(feature = "audio-preview")]
+fn silent_wav() -> super::Content {
+    let data_len = 8_000u32 * 2;
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&8_000u32.to_le_bytes());
+    bytes.extend_from_slice(&16_000u32.to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_len.to_le_bytes());
+    bytes.resize(bytes.len() + data_len as usize, 0);
+    super::Content::bytes("k", "a.wav", bytes)
 }

@@ -139,14 +139,20 @@ impl PreviewResponse {
 }
 
 /// The spinner's size, and the space above a failure's reason, in points.
-// The previews that draw the status come in later; until then only the tests do.
-#[allow(dead_code)]
+// Only the previews that ask for content draw the status; the feature-less build has none.
+#[cfg_attr(
+    not(any(feature = "image-preview", feature = "audio-preview")),
+    allow(dead_code)
+)]
 const SPINNER: f32 = 32.0;
 
 /// Draws a spinner for Loading, or the reason and a Retry button for Failed, centred in
 /// `ui`, and returns `None`. For Ready, draws nothing and returns the content. Sets
 /// `response.retry` when Retry is clicked.
-#[allow(dead_code)]
+#[cfg_attr(
+    not(any(feature = "image-preview", feature = "audio-preview")),
+    allow(dead_code)
+)]
 pub(crate) fn status_ui<'a>(
     ui: &mut egui::Ui,
     state: State<'a>,
