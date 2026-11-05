@@ -20,7 +20,7 @@
 //! chooses by the file's kind, and [`preview::InfoCard`] answers for any file, both without a
 //! feature. With the `image-preview` feature, it draws an image, decoded on a worker thread;
 //! with `audio-preview`, it plays a sound there, through a `Player<Content>` spawned with
-//! `preview::ContentOpener`.
+//! `preview::ContentOpener`. With the `code-editor` feature, [`code`] is alumina-code's editor.
 //!
 //! The components depend on egui alone, so they render inside any host's egui context, on
 //! the desktops and on phones. With the `eframe` feature (on by default), [`window::run`]
@@ -40,6 +40,8 @@ pub use egui;
 #[cfg(feature = "eframe")]
 pub use eframe;
 
+#[cfg(feature = "code-editor")]
+pub mod code;
 pub mod detail;
 pub mod explorer;
 #[cfg(feature = "serde")]

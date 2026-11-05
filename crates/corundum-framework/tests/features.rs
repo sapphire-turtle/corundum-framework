@@ -106,3 +106,10 @@ fn file_preview_needs_no_preview_feature() {
         corundum_framework::gui::preview::FilePreview::new;
     let _ = corundum_framework::gui::preview::Content::bytes("k", "a.bin", Vec::<u8>::new());
 }
+
+#[cfg(feature = "code-editor")]
+#[test]
+fn code_editor_is_alumina_s() {
+    let _ = corundum_framework::gui::code::CodeEditor::new;
+    let _ = corundum_framework::gui::code::Indent::default();
+}

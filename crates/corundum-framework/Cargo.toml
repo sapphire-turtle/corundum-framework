@@ -98,6 +98,9 @@ image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
 # `gui::preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags
 # read on a worker thread, through the app's `audio::Player<Content>` (brings `audio` and `audio-cpal`).
 audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-preview"]
+# `gui::code`: alumina-code's editor, its colours following the visuals; the app brings its
+# own highlighter.
+code-editor = ["gui", "corundum-framework-gui/code-editor"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,

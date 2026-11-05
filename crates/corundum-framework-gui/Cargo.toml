@@ -91,6 +91,9 @@ image-preview = ["dep:corundum-framework-image"]
 # on a worker thread and the sound made by a `Player<Content>` (spawned with
 # `preview::ContentOpener`) of corundum-framework-audio on the default device (cpal; ALSA's headers on Linux).
 audio-preview = ["dep:corundum-framework-audio", "corundum-framework-audio/cpal"]
+# `code`: alumina-code's editor (`code::CodeEditor`) re-exported, its colours following the
+# visuals. The app brings its own `code::Highlighter`; the editor knows no language.
+code-editor = ["dep:alumina-code"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -110,6 +113,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
 corundum-framework-image = { version = "0.9.1", path = "../corundum-framework-image", optional = true }
 # The audio previews' tags and playback (`audio-preview`).
 corundum-framework-audio = { version = "0.9.1", path = "../corundum-framework-audio", optional = true }
+# The code editor `code` re-exports (`code-editor`).
+alumina-code = { version = "0.1", optional = true }
 # The API keys page's store and types (`keys`).
 corundum-framework-keys = { version = "0.9.1", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.

@@ -43,7 +43,7 @@ jobs:
         for f in axum clap; do
           cargo clippy -p corundum-framework-keys --all-targets --features $f --locked -- -D warnings || exit 1
         done
-        for f in media-picker qr-scan qr-code keys image-preview audio-preview; do
+        for f in media-picker qr-scan qr-code keys image-preview audio-preview code-editor; do
           cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
         done
         # The image crate with no features (the common formats), and `raw` and `webp` each
