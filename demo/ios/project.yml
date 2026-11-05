@@ -85,6 +85,9 @@ targets:
       # session and the Media screen's silent player.
       - sdk: MediaPlayer.framework
       - sdk: AVFAudio.framework
+      # `audio-preview`: cpal plays through an Audio Unit.
+      - sdk: AudioToolbox.framework
+      - sdk: CoreAudio.framework
 schemes:
   CorundumDemo:
     build:
