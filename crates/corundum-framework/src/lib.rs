@@ -30,6 +30,7 @@
 //! | `image-raw` | `image` | camera RAW files too; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) |
 //! | `image-webp` | `image::encode_webp` | lossy WebP encoding, through libwebp; WebP decodes without it (brings `image`) |
 //! | `image-preview` | `gui::preview::ImagePreview` | an image the app hands in, drawn in the detail pane and decoded on a worker thread (brings `gui` and `image`) |
+//! | `pdf` | [`pdf`] | `corundum-framework-pdf`: a PDF's pages counted and one drawn to sRGB RGBA8, in pure Rust (hayro), without egui |
 //! | `audio` | [`audio`] | `corundum-framework-audio`: audio files (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus) decoded, resampled and played from a queue by `audio::Player`, without egui |
 //! | `audio-cpal` | `audio::CpalOutputs` | the real sound device, cpal's default output (brings `audio`) |
 //! | `audio-preview` | `gui::preview::AudioPreview` | a sound the app hands in, played in the detail pane through a `Player<Content>`, its tags read on a worker thread (brings `gui`, `audio` and `audio-cpal`) |
@@ -70,6 +71,9 @@ pub use corundum_framework_keys as keys;
 
 #[cfg(feature = "image")]
 pub use corundum_framework_image as image;
+
+#[cfg(feature = "pdf")]
+pub use corundum_framework_pdf as pdf;
 
 #[cfg(feature = "audio")]
 pub use corundum_framework_audio as audio;

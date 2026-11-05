@@ -19,6 +19,7 @@ desktops and on phones.
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
 | [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` (lossy WebP encoding; WebP decodes without it) are off by default | unreleased |
+| [`corundum-framework-pdf`](crates/corundum-framework-pdf) | Without egui, and in pure Rust (hayro): a PDF's pages counted and one drawn to sRGB RGBA8 within size limits; encrypted and broken files told apart; text in a CJK font the PDF does not embed needs the app's font file | unreleased |
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | Without egui: audio files decoded (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus), resampled and played from a queue; `cpal` (the real sound device) is off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
@@ -207,6 +208,7 @@ through to the gui crate.
 | `image-raw` | `image` with camera RAW files; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) | no |
 | `image-webp` | `image` with lossy WebP encoding (`encode_webp`, through libwebp); WebP decodes without it (brings `image`) | no |
 | `image-preview` | The gui crate's `image-preview`: `preview::ImagePreview`, an image the app hands in (brings `gui` and `image`) | no |
+| `pdf` | `pdf`: corundum-framework-pdf | no |
 | `audio` | `audio`: corundum-framework-audio | no |
 | `audio-cpal` | `audio` with `CpalOutputs`, the real sound device (cpal) (brings `audio`) | no |
 | `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview`, a sound the app hands in (brings `gui`, `audio` and `audio-cpal`) | no |

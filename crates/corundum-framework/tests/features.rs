@@ -141,3 +141,14 @@ fn datetime_is_alumina_s() {
     let _ = corundum_framework::gui::datetime::config;
     let _: Option<corundum_framework::gui::datetime::DatePickerButton> = None;
 }
+
+#[cfg(feature = "pdf")]
+#[test]
+fn pdf_is_the_pdf_crate() {
+    let _: fn(
+        std::sync::Arc<[u8]>,
+        Option<corundum_framework::pdf::FallbackFont>,
+    ) -> Result<corundum_framework::pdf::Document, corundum_framework::pdf::Error> =
+        corundum_framework::pdf::Document::open;
+    assert_eq!(corundum_framework::pdf::MAX_PAGES, 500);
+}

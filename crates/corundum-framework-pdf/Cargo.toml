@@ -1,0 +1,17 @@
+[package]
+name = "corundum-framework-pdf"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.9.1"
+edition.workspace = true
+description = "Count a PDF's pages and render one to RGBA8 without a GUI, in pure Rust (hayro): size limits, encrypted and broken files told apart, a hook for a CJK fallback font"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "render", "preview", "thumbnail"]
+categories = ["multimedia::images", "rendering"]
+
+[dependencies]
+# The default features: `embed-fonts` draws the standard 14 fonts (most generated PDFs embed
+# none of them) for about 270 KB, `embed-cmaps` reads the predefined CJK encodings.
+hayro = "0.9"
+thiserror.workspace = true
