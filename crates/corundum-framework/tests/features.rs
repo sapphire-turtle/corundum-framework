@@ -134,3 +134,10 @@ fn markdown_preview_is_the_gui_crate_s() {
     let _: fn() -> corundum_framework::gui::preview::MarkdownPreview =
         corundum_framework::gui::preview::MarkdownPreview::new;
 }
+
+#[cfg(feature = "datetime")]
+#[test]
+fn datetime_is_alumina_s() {
+    let _ = corundum_framework::gui::datetime::config;
+    let _: Option<corundum_framework::gui::datetime::DatePickerButton> = None;
+}

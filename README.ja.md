@@ -52,6 +52,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。UTF-8 と BOM 付き UTF-16 を読み、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
 | `markdown-editor` | `markdown`：alumina-markdown の `MarkdownEditor` の再エクスポートと、`markdown::toolbar`（corundum の Lucide アイコンと表示言語の書式ツールバー）。色は visuals に従う（alumina-markdown も有効になる） | 無効 |
 | `markdown-preview` | `preview::MarkdownPreview`：アプリが渡した Markdown ファイルを詳細ペインに整形して読み取り専用で表示する。テキストファイルと同じ方法でデコードし、クリックされたリンクは開かず `PreviewResponse::link` で返す。`preview::FilePreview` は `.md` と `.markdown` をこれで表示する（`markdown-editor` と `text-preview` も有効になる） | 無効 |
+| `datetime` | `datetime`：alumina-datetime の日付・期間・時刻・日時ピッカーの再エクスポートと、`datetime::config`（ボタンは corundum の Lucide アイコン、文言は表示言語、週は月曜始まり）（alumina-datetime も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
@@ -94,6 +95,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
 | `markdown-editor` | gui クレートの `markdown-editor`：`gui::markdown`、alumina-markdown のエディタと、corundum のアイコンと言語のツールバー `markdown::toolbar`（`gui` も有効になる） | いいえ |
 | `markdown-preview` | gui クレートの `markdown-preview`：`preview::MarkdownPreview`、アプリが渡した Markdown ファイル（`gui`、`markdown-editor`、`text-preview` も有効になる） | いいえ |
+| `datetime` | gui クレートの `datetime`：`gui::datetime`、alumina-datetime のピッカーと、corundum のアイコンと言語の `datetime::config`（`gui` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |

@@ -125,6 +125,7 @@ desktops and on phones.
 | `text-preview` | `preview::TextPreview`, a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread, and `preview::FilePreview` shows text files with it (brings `code-editor`) | no |
 | `markdown-editor` | `markdown`, alumina-markdown's `MarkdownEditor` re-exported, with `markdown::toolbar`: a formatting toolbar in corundum's Lucide icons and in the context's language, its colours following the visuals (brings alumina-markdown) | no |
 | `markdown-preview` | `preview::MarkdownPreview`, a Markdown file the app hands in, formatted and read-only in the detail pane, decoded like a text file; a link clicked is reported in `PreviewResponse::link`, not opened; `preview::FilePreview` shows `.md` and `.markdown` files with it (brings `markdown-editor` and `text-preview`) | no |
+| `datetime` | `datetime`, alumina-datetime's date, period, time and timestamp pickers re-exported, with `datetime::config`: its buttons in corundum's Lucide icons and every word in the context's language, weeks from Monday (brings alumina-datetime) | no |
 | `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
@@ -213,6 +214,7 @@ through to the gui crate.
 | `text-preview` | The gui crate's `text-preview`: `preview::TextPreview`, a text file the app hands in (brings `gui` and `code-editor`) | no |
 | `markdown-editor` | The gui crate's `markdown-editor`: `gui::markdown`, alumina-markdown's editor with a toolbar in corundum's icons and words (brings `gui`) | no |
 | `markdown-preview` | The gui crate's `markdown-preview`: `preview::MarkdownPreview`, a Markdown file the app hands in (brings `gui`, `markdown-editor` and `text-preview`) | no |
+| `datetime` | The gui crate's `datetime`: `gui::datetime`, alumina-datetime's pickers with `datetime::config` in corundum's icons and words (brings `gui`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |
 | `gui-self-update` | The gui crate's `self-update` (brings `gui-update` and `self-update`) | no |

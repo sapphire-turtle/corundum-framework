@@ -5,6 +5,7 @@ use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{ThemeSettings, Tint};
 use corundum_framework::gui::{Side, egui};
 
+mod dates;
 mod detail;
 mod editors;
 mod files;
@@ -40,13 +41,15 @@ pub enum Screen {
     Media,
     /// Alumina's Markdown editor under corundum's toolbar, and its code editor.
     Editors,
+    /// Alumina's calendar and date, period and time pickers, in corundum's look.
+    Dates,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 11] = [
+    pub const ALL: [Screen; 12] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
@@ -57,6 +60,7 @@ impl Screen {
         Screen::Platform,
         Screen::Media,
         Screen::Editors,
+        Screen::Dates,
         Screen::Settings,
     ];
 }
@@ -85,6 +89,7 @@ pub(crate) struct State {
     platform: platform::State,
     pub(crate) media: media::State,
     editors: editors::State,
+    dates: dates::State,
 }
 
 impl State {
@@ -105,6 +110,7 @@ impl State {
             platform: platform::State::read(),
             media: media::State::new(),
             editors: editors::State::default(),
+            dates: dates::State::default(),
         }
     }
 }
@@ -138,6 +144,7 @@ pub(crate) fn ui(
                 Screen::Platform => platform::ui(ui, &mut state.platform),
                 Screen::Media => media::ui(ui, &mut state.media),
                 Screen::Editors => editors::ui(ui, &mut state.editors, &mut state.log),
+                Screen::Dates => dates::ui(ui, &mut state.dates),
                 Screen::Settings | Screen::Detail | Screen::Files => {
                     unreachable!("drawn above")
                 }

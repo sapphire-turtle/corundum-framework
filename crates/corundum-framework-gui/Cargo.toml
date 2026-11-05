@@ -99,6 +99,9 @@ code-editor = ["dep:alumina-code"]
 # `markdown`: alumina-markdown's editor (`markdown::MarkdownEditor`) re-exported, with a toolbar
 # (`markdown::toolbar`) in corundum's icons and words.
 markdown-editor = ["dep:alumina-markdown"]
+# `datetime`: alumina-datetime's pickers (`datetime::DatePickerButton`, `Calendar`, ...) re-exported,
+# with `datetime::config` in corundum's icons and words.
+datetime = ["dep:alumina-datetime"]
 # `preview::TextPreview`: a text file's first 256 KiB shown read-only in the code editor, its
 # UTF-8 or UTF-16 with a BOM, decoded on a worker thread. Pure Rust, so on the phones too.
 text-preview = ["code-editor"]
@@ -128,6 +131,8 @@ corundum-framework-audio = { version = "0.9.1", path = "../corundum-framework-au
 alumina-code = { version = "0.1", optional = true }
 # The Markdown editor `markdown` re-exports (`markdown-editor`).
 alumina-markdown = { version = "0.2", optional = true }
+# The date and time pickers `datetime` re-exports (`datetime`).
+alumina-datetime = { version = "0.2", optional = true }
 # The API keys page's store and types (`keys`).
 corundum-framework-keys = { version = "0.9.1", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.

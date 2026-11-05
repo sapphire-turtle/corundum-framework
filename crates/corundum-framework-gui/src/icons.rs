@@ -136,6 +136,11 @@ pub fn chevron_right() -> egui::ImageSource<'static> {
     icon!("chevron-right")
 }
 
+/// Back: the previous month, or a way further out.
+pub fn chevron_left() -> egui::ImageSource<'static> {
+    icon!("chevron-left")
+}
+
 /// An expanded row, or a menu to open.
 pub fn chevron_down() -> egui::ImageSource<'static> {
     icon!("chevron-down")
@@ -346,13 +351,23 @@ pub fn square_code() -> egui::ImageSource<'static> {
     icon!("square-code")
 }
 
+/// A day, or going to today.
+pub fn calendar_check() -> egui::ImageSource<'static> {
+    icon!("calendar-check")
+}
+
+/// The time now.
+pub fn clock() -> egui::ImageSource<'static> {
+    icon!("clock")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     type Icon = fn() -> egui::ImageSource<'static>;
 
-    const ALL: [(&str, Icon); 53] = [
+    const ALL: [(&str, Icon); 56] = [
         ("settings", settings),
         ("arrow_left", arrow_left),
         ("x", x),
@@ -406,6 +421,9 @@ mod tests {
         ("list_todo", list_todo),
         ("text_quote", text_quote),
         ("square_code", square_code),
+        ("chevron_left", chevron_left),
+        ("calendar_check", calendar_check),
+        ("clock", clock),
     ];
 
     #[test]

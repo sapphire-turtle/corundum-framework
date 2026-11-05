@@ -14,6 +14,7 @@ demo-screen-files = Files
 demo-screen-platform = Platform
 demo-screen-media = Media
 demo-screen-editors = Editors
+demo-screen-dates = Dates
 demo-screen-settings = Settings
 # The rail's action: a new note, written in the side pane beside whatever screen is open.
 demo-action-new = New note
@@ -204,3 +205,12 @@ demo-editors-intro = Alumina's editors, in corundum's theme. The toolbar has cor
 demo-editors-markdown = Markdown
 demo-editors-code = Code
 demo-editors-code-note = A JSON sample, with no highlighter: the editor keeps the indentation and nothing else.
+
+demo-dates-intro = Alumina's calendar and pickers, in corundum's words and icons. Weeks start on Monday, so the week numbers are ISO.
+demo-dates-calendar = Calendar
+demo-dates-buttons = Picker buttons
+demo-dates-date = Date
+demo-dates-period = Period
+demo-dates-time = Time
+demo-dates-datetime = Date and time
+demo-dates-none = (none)

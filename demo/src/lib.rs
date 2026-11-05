@@ -108,6 +108,7 @@ impl Demo {
             .into(),
             Destination::new(Screen::Media, icons::music(), "demo-screen-media").into(),
             Destination::new(Screen::Editors, icons::pencil_line(), "demo-screen-editors").into(),
+            Destination::new(Screen::Dates, icons::calendar_check(), "demo-screen-dates").into(),
         ])
         .with_footer(vec![Destination::new(
             Screen::Settings,
