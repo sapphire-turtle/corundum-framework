@@ -517,3 +517,10 @@ fn a_text_file_shows_its_text_and_details() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
 }
+
+#[cfg(feature = "text-preview")]
+#[test]
+fn a_ts_file_is_a_video_not_text() {
+    // MPEG-TS recordings are multi-GB videos; they must not be fetched as text.
+    assert!(!FilePreview::new().wants_content("rec.ts"));
+}

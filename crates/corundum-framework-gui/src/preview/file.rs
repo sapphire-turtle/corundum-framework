@@ -162,7 +162,7 @@ fn decodable_image(name: &str) -> bool {
 #[cfg(feature = "text-preview")]
 const TEXT_EXTENSIONS_SHOWN: &[&str] = &[
     "txt", "text", "md", "markdown", "cue", "log", "m3u", "m3u8", "json", "toml", "yaml", "yml",
-    "csv", "tsv", "ini", "cfg", "conf", "xml", "srt", "vtt", "nfo", "rs", "py", "js", "ts", "sh",
+    "csv", "tsv", "ini", "cfg", "conf", "xml", "srt", "vtt", "nfo", "rs", "py", "js", "sh",
 ];
 
 /// Whether `FilePreview` shows the file called `name` as text, by its extension.
