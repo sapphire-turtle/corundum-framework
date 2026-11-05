@@ -11,12 +11,16 @@ use super::{Content, PreviewResponse, State};
 const DEADLINE: Duration = Duration::from_secs(10);
 
 /// What a frame drew.
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct Drawn {
     /// The text of every label and galley.
     texts: Vec<String>,
     /// Whether a stroked path (the spinner) was drawn.
     path: bool,
+    /// Where each text was drawn.
+    rects: Vec<(String, egui::Rect)>,
+    /// The space the preview took.
+    used: egui::Rect,
 }
 
 impl Drawn {
@@ -28,7 +32,12 @@ impl Drawn {
 fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
     match shape {
         egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, drawn)),
-        egui::Shape::Text(text) => drawn.texts.push(text.galley.text().to_owned()),
+        egui::Shape::Text(text) => {
+            drawn.texts.push(text.galley.text().to_owned());
+            drawn
+                .rects
+                .push((text.galley.text().to_owned(), text.visual_bounding_rect()));
+        }
         egui::Shape::Path(_) => drawn.path = true,
         _ => {}
     }
@@ -56,6 +65,7 @@ impl Screen {
         events: Vec<egui::Event>,
     ) -> (Drawn, PreviewResponse) {
         let mut response = PreviewResponse::default();
+        let mut used = egui::Rect::ZERO;
         let input = egui::RawInput {
             events,
             screen_rect: Some(egui::Rect::from_min_size(
@@ -67,11 +77,17 @@ impl Screen {
         let mut output = self.ctx.run_ui(input, |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
                 response = preview.ui(ui, state);
+                used = ui.min_rect();
             });
         });
         // Unapplied texture deltas panic on drop; there is no renderer here.
         output.textures_delta.clear();
-        let mut drawn = Drawn::default();
+        let mut drawn = Drawn {
+            used,
+            texts: Vec::new(),
+            path: false,
+            rects: Vec::new(),
+        };
         for clipped in &output.shapes {
             collect(&clipped.shape, &mut drawn);
         }
@@ -168,22 +184,49 @@ fn a_reader_that_failed_offers_retry() {
     let mut preview = TextPreview::new();
 
     screen.until(&mut preview, &content, |_, d| d.has("Retry"));
-    // Find the button: it is drawn below the middle; click along the centre line.
-    let mut retried = false;
-    for y in (100..300).step_by(4) {
-        let (_, response) = screen.frame_events(
-            &mut preview,
-            State::Ready(&content),
-            click(egui::pos2(200.0, y as f32)),
-        );
-        if response.retry {
-            retried = true;
-            break;
-        }
-    }
-    assert!(retried, "Retry did not report");
+    let drawn = screen.frame(&mut preview, State::Ready(&content));
+    let rect = drawn
+        .rects
+        .iter()
+        .find(|(t, _)| t == "Retry")
+        .unwrap_or_else(|| panic!("no Retry: {drawn:?}"))
+        .1;
+    let (_, response) =
+        screen.frame_events(&mut preview, State::Ready(&content), click(rect.center()));
+    assert!(response.retry, "Retry did not report");
     screen.until(&mut preview, &content, |_, d| d.has("hello"));
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn the_text_wraps_inside_the_space_given() {
+    let screen = Screen::new();
+    let short = Content::bytes("s", "a.txt", b"hello".to_vec());
+    let long = Content::bytes("l", "b.txt", vec![b'x'; 200 * 1024]);
+    let mut preview = TextPreview::new();
+    let one_row = screen.until(&mut preview, &short, |_, d| d.has("hello"));
+    let row = one_row.rects.iter().find(|(t, _)| t == "hello").unwrap().1;
+    let mut preview = TextPreview::new();
+    let many = screen.until(&mut preview, &long, |_, d| d.has("xxxx"));
+    for drawn in [&one_row, &many] {
+        let used = drawn.used;
+        assert!(
+            used.width().is_finite() && used.width() <= 400.0,
+            "{used:?}"
+        );
+        assert!(used.height() <= 300.0, "{used:?}");
+        for (t, r) in &drawn.rects {
+            assert!(r.right() <= 400.5, "{t:.20}: {r:?}");
+        }
+    }
+    // The long line wraps: its text is taller than one row.
+    let rect = many
+        .rects
+        .iter()
+        .find(|(t, _)| t.starts_with("xxxx"))
+        .unwrap()
+        .1;
+    assert!(rect.height() > row.height() * 1.5, "{rect:?} vs {row:?}");
 }
 
 #[test]

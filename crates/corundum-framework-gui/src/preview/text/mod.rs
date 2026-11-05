@@ -157,7 +157,7 @@ impl TextPreview {
         let (key, outcome) = self.kept.last_mut().expect("just pushed");
         let message = match outcome {
             Outcome::Text { text, cut } => {
-                egui::ScrollArea::both()
+                egui::ScrollArea::vertical()
                     .id_salt(("corundum-preview-text", key.as_str()))
                     .auto_shrink(false)
                     .show(ui, |ui| {
