@@ -92,4 +92,17 @@ fn audio_cpal_brings_the_device() {
 fn audio_preview_is_the_gui_crate_s() {
     let _: fn() -> corundum_framework::gui::preview::AudioPreview =
         corundum_framework::gui::preview::AudioPreview::new;
+    fn is_opener<
+        O: corundum_framework::audio::Opener<corundum_framework::gui::preview::Content>,
+    >() {
+    }
+    is_opener::<corundum_framework::gui::preview::ContentOpener>();
+}
+
+#[cfg(feature = "gui")]
+#[test]
+fn file_preview_needs_no_preview_feature() {
+    let _: fn() -> corundum_framework::gui::preview::FilePreview =
+        corundum_framework::gui::preview::FilePreview::new;
+    let _ = corundum_framework::gui::preview::Content::bytes("k", "a.bin", Vec::<u8>::new());
 }

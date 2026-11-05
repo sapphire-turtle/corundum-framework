@@ -1,16 +1,87 @@
-//! [`AudioPreview`]: a sound file's tags, read off the UI thread, with a play button and a
-//! seek bar over the app's [`Player`].
+//! [`AudioPreview`]: a sound the app hands in, its tags read off the UI thread, with a play
+//! button and a seek bar over the app's [`Player`] of [`Content`]; and [`ContentOpener`],
+//! which that player plays it with.
 
+use std::io::{Read, Seek, SeekFrom};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
-use corundum_framework_audio::decode::{Info, probe};
-use corundum_framework_audio::{Command, Player, PlayerError, PlayerState, Status};
+use corundum_framework_audio::decode::{Info, Source, probe};
+use corundum_framework_audio::feed::{FailedFeed, spawn_feed};
+use corundum_framework_audio::{
+    Command, Feed, Opener, OutputConfig, Player, PlayerError, PlayerState, QueueItem, Status,
+    TrackError,
+};
 
+use super::content::{Content, PreviewResponse, Reader, State, status_ui};
 use crate::{icons, tr};
+
+impl QueueItem for Content {
+    fn title(&self) -> String {
+        self.name.clone()
+    }
+}
+
+/// A reader as something to decode from; its length is found once, when it is made.
+struct AsSource {
+    reader: Box<dyn Reader>,
+    len: Option<u64>,
+}
+
+impl AsSource {
+    fn new(mut reader: Box<dyn Reader>) -> AsSource {
+        let len = reader.seek(SeekFrom::End(0)).ok();
+        if reader.seek(SeekFrom::Start(0)).is_err() {
+            return AsSource { reader, len: None };
+        }
+        AsSource { reader, len }
+    }
+}
+
+impl Read for AsSource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.reader.read(buf)
+    }
+}
+
+impl Seek for AsSource {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.reader.seek(pos)
+    }
+}
+
+impl Source for AsSource {
+    fn byte_len(&self) -> Option<u64> {
+        self.len
+    }
+}
+
+/// Plays [`Content`]: bytes from memory, a reader from its opener; the extension is the
+/// format hint. Spawn the preview's [`Player`] with it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ContentOpener;
+
+impl Opener<Content> for ContentOpener {
+    fn open(&mut self, content: &Content, at_ms: u64, target: OutputConfig) -> Box<dyn Feed> {
+        // This runs on the player's thread, not the UI's.
+        match content.open() {
+            Ok(reader) => spawn_feed(
+                Box::new(AsSource::new(reader)),
+                None,
+                content.ext(),
+                at_ms,
+                target,
+            ),
+            Err(e) => Box::new(FailedFeed(TrackError::Unplayable(e.to_string()))),
+        }
+    }
+
+    fn preload(&mut self, _next: Option<&Content>) {}
+
+    fn clear(&mut self) {}
+}
 
 /// How many probed files are kept.
 const KEPT: usize = 8;
@@ -26,21 +97,21 @@ const SEEK_WIDTH: f32 = 320.0;
 /// How far an arrow key on the seek bar moves, in ms.
 const SEEK_KEY_STEP_MS: f64 = 5_000.0;
 
-/// What the worker made of a file.
+/// What the worker made of a content.
 enum Probed {
     /// Audio, with what its tags and container say.
     Audio(Info),
-    /// The file could not be opened (gone, or not ours to read): nothing is known, and the
+    /// The content could not be opened (gone, or not ours to read): nothing is known, and the
     /// player says why when it is played.
     Unread,
     /// Opened, and not audio the decoder knows.
     NotAudio,
 }
 
-/// The worker thread's end: paths out, answers in.
+/// The worker thread's end: contents out, answers in.
 struct Worker {
-    requests: Sender<PathBuf>,
-    answers: Receiver<(PathBuf, Probed)>,
+    requests: Sender<Content>,
+    answers: Receiver<(String, Probed)>,
     /// Requests sent and not yet answered or passed over. The thread holds a clone for as
     /// long as it runs, which is how the tests see that it ended, and when it is idle.
     pending: Arc<AtomicUsize>,
@@ -50,21 +121,21 @@ impl Worker {
     /// Start the thread. It takes the newest request it has, passing over older ones, and
     /// ends when the [`AudioPreview`] is dropped.
     fn spawn(ctx: egui::Context) -> Worker {
-        let (requests, inbox) = channel::<PathBuf>();
+        let (requests, inbox) = channel::<Content>();
         let (outbox, answers) = channel();
         let pending = Arc::new(AtomicUsize::new(0));
         let count = pending.clone();
         std::thread::Builder::new()
             .name("corundum-audio-probe".into())
             .spawn(move || {
-                while let Ok(mut path) = inbox.recv() {
+                while let Ok(mut content) = inbox.recv() {
                     let mut taken = 1;
                     while let Ok(newer) = inbox.try_recv() {
-                        path = newer;
+                        content = newer;
                         taken += 1;
                     }
-                    let probed = answer(&path);
-                    let sent = outbox.send((path, probed));
+                    let probed = answer(&content);
+                    let sent = outbox.send((content.key, probed));
                     count.fetch_sub(taken, Ordering::SeqCst);
                     if sent.is_err() {
                         break;
@@ -81,54 +152,56 @@ impl Worker {
     }
 }
 
-/// Read the tags and the length of the file at `path`.
-fn answer(path: &Path) -> Probed {
-    let file = match std::fs::File::open(path) {
-        Ok(file) => file,
+/// Read the tags and the length of `content`.
+fn answer(content: &Content) -> Probed {
+    let reader = match content.open() {
+        Ok(reader) => reader,
         Err(error) => {
-            tracing::debug!(
-                "the audio preview could not open {}: {error}",
-                path.display()
-            );
+            tracing::debug!("the audio preview could not open {}: {error}", content.name);
             return Probed::Unread;
         }
     };
-    let ext = path.extension().and_then(|e| e.to_str());
+    let ext = content.ext();
     // A panic in the demuxer would end the thread, and the next frame would start another to
-    // probe the file again: it is not audio instead, once.
-    match catch_unwind(AssertUnwindSafe(|| probe(Box::new(file), ext))) {
+    // probe the content again: it is not audio instead, once.
+    let probed = catch_unwind(AssertUnwindSafe(|| {
+        probe(Box::new(AsSource::new(reader)), ext.as_deref())
+    }));
+    match probed {
         Ok(Ok(info)) => Probed::Audio(info),
         Ok(Err(error)) => {
-            tracing::debug!("{} is not audio: {error}", path.display());
+            tracing::debug!("{} is not audio: {error}", content.name);
             Probed::NotAudio
         }
         Err(_) => Probed::NotAudio,
     }
 }
 
-/// A sound file in the detail pane: the music icon, its title (else its file name) and its
-/// artist and album when the tags have them, a play button, a seek bar and the time, and
-/// why it did not play, if it did not.
+/// A sound in the detail pane: the music icon, its title (else its name) and its artist and
+/// album when the tags have them, a play button, a seek bar and the time, and why it did not
+/// play, if it did not.
 ///
-/// The tags are read on a worker thread (the newest file picked wins, the last eight are
-/// kept), with a spinner meanwhile; the UI thread never touches the file. Nothing plays on
-/// its own: Play replaces what `player` has with this file, and the file that played before
-/// keeps playing while another is only shown. A file the decoder does not know says so and
-/// offers no play.
+/// What it draws is the [`Content`] the app hands in with a [`State`]; the app's key names
+/// the sound. The tags are read on a worker thread (the newest content shown wins, the last
+/// eight are kept by key), with a spinner meanwhile; the UI thread never opens or reads the
+/// content. Nothing plays on its own: Play replaces what `player` has with this content, and
+/// the sound that played before keeps playing while another is only shown. A sound the
+/// decoder does not know says so and offers no play.
 ///
 /// Make one and keep it across frames; the thread it starts ends when it is dropped. The
-/// player is the app's, spawned with a repaint of its window, so the time moves.
+/// player is the app's, a `Player<Content>` spawned with [`ContentOpener`] and a repaint of
+/// its window, so the time moves.
 #[derive(Default)]
 pub struct AudioPreview {
     /// Started on the first frame that needs it.
     worker: Option<Worker>,
-    /// The last path asked for, until it is answered, so a frame asks again only for
-    /// something new.
-    asked: Option<PathBuf>,
-    /// The probed files, one per path, the most recently shown last.
-    kept: Vec<(PathBuf, Probed)>,
-    /// Where the seek bar is held, in ms, for the path it is held on, until it is let go.
-    held: Option<(PathBuf, f64)>,
+    /// The key of the last content asked for, until it is answered, so a frame asks again
+    /// only for something new.
+    asked: Option<String>,
+    /// The probed contents, one per key, the most recently shown last.
+    kept: Vec<(String, Probed)>,
+    /// Where the seek bar is held, in ms, for the key it is held on, until it is let go.
+    held: Option<(String, f64)>,
     /// Whether the last frame's seek bar was on, `None` when it drew none.
     #[cfg(test)]
     seek_enabled: Option<bool>,
@@ -142,14 +215,25 @@ impl AudioPreview {
         AudioPreview::default()
     }
 
-    /// Draw `path`, played by `player`, in the space `ui` has left.
-    pub fn ui(&mut self, ui: &mut egui::Ui, path: &Path, player: &Player<PathBuf>) {
+    /// Draw the sound of `state`, played by `player`, in the space `ui` has left. For
+    /// Loading and Failed it draws the spinner, or the reason and a Retry button, and sets
+    /// `retry` in the response when that is pressed.
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        state: State<'_>,
+        player: &Player<Content>,
+    ) -> PreviewResponse {
+        let mut response = PreviewResponse::default();
         self.receive();
         #[cfg(test)]
         {
             self.seek_enabled = None;
         }
-        let info = match self.kept.iter().position(|(p, _)| p == path) {
+        let Some(content) = status_ui(ui, state, &mut response) else {
+            return response;
+        };
+        let info = match self.kept.iter().position(|(k, _)| *k == content.key) {
             Some(at) => {
                 let kept = self.kept.remove(at);
                 self.kept.push(kept);
@@ -158,12 +242,12 @@ impl AudioPreview {
                     Probed::Unread => Some(None),
                     Probed::NotAudio => {
                         not_audio(ui);
-                        return;
+                        return response;
                     }
                 }
             }
             None => {
-                self.ask(ui.ctx(), path);
+                self.ask(ui.ctx(), content);
                 None
             }
         };
@@ -171,14 +255,14 @@ impl AudioPreview {
         let probing = info.is_none();
         let info = info.flatten();
         let state = player.state();
-        let here = plays(&state, path);
+        let here = plays(&state, content);
 
         ui.vertical_centered(|ui| {
             ui.add(icons::image(ui, icons::music(), ICON));
             let title = info
                 .as_ref()
                 .and_then(|i| i.title.clone())
-                .unwrap_or_else(|| file_name(path));
+                .unwrap_or_else(|| content.name.clone());
             ui.add(egui::Label::new(egui::RichText::new(title).strong()).wrap());
             // The same height whatever it holds, so the button does not move under a finger
             // when the tags come.
@@ -190,11 +274,11 @@ impl AudioPreview {
                 ui.add_sized(row, egui::Label::new(byline).truncate());
             }
 
-            self.button(ui, path, player, &state, here);
+            self.button(ui, content, player, &state, here);
 
             let probed = info.as_ref().and_then(|i| i.duration_ms);
             let length = shown_length(here, state.duration_ms, probed);
-            let position = self.seek_bar(ui, path, player, &state, here, length);
+            let position = self.seek_bar(ui, content, player, &state, here, length);
             let time = format!(
                 "{} / {}",
                 clock(position),
@@ -206,15 +290,16 @@ impl AudioPreview {
                 ui.add(egui::Label::new(error_text(ui, error)).wrap());
             }
         });
+        response
     }
 
     /// The play / pause button.
     fn button(
         &self,
         ui: &mut egui::Ui,
-        path: &Path,
-        player: &Player<PathBuf>,
-        state: &PlayerState<PathBuf>,
+        content: &Content,
+        player: &Player<Content>,
+        state: &PlayerState<Content>,
         here: bool,
     ) {
         let active = here
@@ -233,7 +318,7 @@ impl AudioPreview {
                 player.send(Command::Toggle);
             } else {
                 player.send(Command::Replace {
-                    items: vec![path.to_owned()],
+                    items: vec![content.clone()],
                     start: 0,
                 });
             }
@@ -246,9 +331,9 @@ impl AudioPreview {
     fn seek_bar(
         &mut self,
         ui: &mut egui::Ui,
-        path: &Path,
-        player: &Player<PathBuf>,
-        state: &PlayerState<PathBuf>,
+        content: &Content,
+        player: &Player<Content>,
+        state: &PlayerState<Content>,
         here: bool,
         length: Option<u64>,
     ) -> u64 {
@@ -259,7 +344,7 @@ impl AudioPreview {
         let held = self
             .held
             .as_ref()
-            .filter(|(p, _)| p == path)
+            .filter(|(k, _)| *k == content.key)
             .map(|(_, ms)| *ms);
         let position = shown_position(here, held, state.position_ms);
         let end = length.filter(|_| enabled).unwrap_or(0).max(1) as f64;
@@ -288,29 +373,29 @@ impl AudioPreview {
             response.changed(),
             response.drag_stopped(),
         );
-        self.held = held.map(|ms| (path.to_owned(), ms));
+        self.held = held.map(|ms| (content.key.clone(), ms));
         if let Some(ms) = seek {
             player.send(Command::Seek(ms));
         }
         held.map_or(position, |ms| ms.max(0.0) as u64)
     }
 
-    /// Send the worker `path`, unless it is the one still unanswered.
-    fn ask(&mut self, ctx: &egui::Context, path: &Path) {
-        if self.asked.as_deref() == Some(path) {
+    /// Send the worker `content`, unless it is the one still unanswered.
+    fn ask(&mut self, ctx: &egui::Context, content: &Content) {
+        if self.asked.as_deref() == Some(content.key.as_str()) {
             return;
         }
         let worker = self
             .worker
             .get_or_insert_with(|| Worker::spawn(ctx.clone()));
         worker.pending.fetch_add(1, Ordering::SeqCst);
-        if worker.requests.send(path.to_owned()).is_err() {
+        if worker.requests.send(content.clone()).is_err() {
             // The thread is gone: start another on the next frame.
             self.worker = None;
             self.asked = None;
             return;
         }
-        self.asked = Some(path.to_owned());
+        self.asked = Some(content.key.clone());
     }
 
     /// Keep what the worker has finished; whether it is shown is the frame's to decide.
@@ -320,12 +405,12 @@ impl AudioPreview {
         };
         loop {
             match worker.answers.try_recv() {
-                Ok((path, probed)) => {
-                    if self.asked.as_ref() == Some(&path) {
+                Ok((key, probed)) => {
+                    if self.asked.as_ref() == Some(&key) {
                         self.asked = None;
                     }
-                    self.kept.retain(|(p, _)| *p != path);
-                    self.kept.push((path, probed));
+                    self.kept.retain(|(k, _)| *k != key);
+                    self.kept.push((key, probed));
                     if self.kept.len() > KEPT {
                         self.kept.remove(0);
                     }
@@ -367,24 +452,18 @@ impl AudioPreview {
     }
 }
 
-/// Whether `state` plays `path`, alone, as this preview's play leaves it.
-fn plays(state: &PlayerState<PathBuf>, path: &Path) -> bool {
-    state.queue.len() == 1 && state.queue[0] == path && state.current == Some(0)
+/// Whether `state` plays `content`, alone, as this preview's play leaves it. Contents are
+/// the same when their keys are.
+fn plays(state: &PlayerState<Content>, content: &Content) -> bool {
+    state.queue.len() == 1 && state.queue[0] == *content && state.current == Some(0)
 }
 
-/// A file the decoder does not know: the music icon and why there is nothing to play.
+/// A sound the decoder does not know: the music icon and why there is nothing to play.
 fn not_audio(ui: &mut egui::Ui) {
     ui.vertical_centered(|ui| {
         ui.add(icons::image(ui, icons::music(), ICON));
         ui.add(egui::Label::new(tr!(ui, "corundum-preview-unsupported")).wrap());
     });
-}
-
-/// The file name of `path`, for a file without a title.
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
 }
 
 /// "artist · album", or whichever of them is known.
@@ -420,7 +499,7 @@ fn clock(ms: u64) -> String {
     format!("{}:{:02}", secs / 60, secs % 60)
 }
 
-/// The length to show: while this file plays, the player's, else the probe's (the player
+/// The length to show: while this content plays, the player's, else the probe's (the player
 /// learns it only once the decoder has opened the file); otherwise the probe's.
 pub(super) fn shown_length(here: bool, player: Option<u64>, probed: Option<u64>) -> Option<u64> {
     if here { player.or(probed) } else { probed }

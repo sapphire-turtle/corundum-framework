@@ -182,3 +182,6 @@ demo-files-pick = フォルダーを開く…
 demo-files-back = サンプルに戻る
 demo-files-copy = 名前をコピー
 demo-files-show = ファイルマネージャーで表示
+
+demo-files-none = ファイルを 1 つ選ぶと、ここに表示されます。
+demo-files-album = サンプルのアルバムの中

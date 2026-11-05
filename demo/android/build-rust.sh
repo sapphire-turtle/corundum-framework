@@ -12,5 +12,6 @@ for abi in ${ABIS:-arm64-v8a x86_64}; do
   targets+=(-t "$abi")
 done
 
-cargo ndk "${targets[@]}" -o "$here/app/src/main/jniLibs" \
+# API 26: cpal (`audio-preview`) links AAudio, which older platforms do not have.
+cargo ndk "${targets[@]}" --platform 26 -o "$here/app/src/main/jniLibs" \
   build --manifest-path "$workspace/Cargo.toml" -p corundum-framework-demo --lib "$@"

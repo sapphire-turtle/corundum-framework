@@ -369,6 +369,18 @@ pub fn open_in_file_manager(path: &Path) {
     }
 }
 
+/// Can [`open_with_system`] open a file here (a desktop)?
+pub fn open_with_system_available() -> bool {
+    DESKTOP
+}
+
+/// Open `path` in the app the system gives its kind. Failures are ignored: it is a
+/// convenience.
+pub fn open_with_system(path: &Path) {
+    // The same programs as `open_in_file_manager`: given a file, they open it.
+    open_in_file_manager(path);
+}
+
 // Off Android only: on a phone these read the real clipboard and insets.
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {

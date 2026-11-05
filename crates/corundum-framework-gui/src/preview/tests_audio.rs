@@ -1,12 +1,12 @@
 //! [`AudioPreview`] drawn without a window, playing on a fake device.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use corundum_framework_audio::fakes::FakeOutputs;
-use corundum_framework_audio::{FileOpener, Player, Status};
+use corundum_framework_audio::{Player, Status};
 
-use super::AudioPreview;
+use super::{AudioPreview, Content, ContentOpener, State};
 
 /// How long a test waits for the probe before it fails.
 const DEADLINE: Duration = Duration::from_secs(10);
@@ -50,15 +50,20 @@ impl Screen {
         Screen { ctx }
     }
 
-    fn frame(&self, preview: &mut AudioPreview, path: &Path, player: &Player<PathBuf>) -> Drawn {
-        self.frame_with(preview, path, player, Vec::new())
+    fn frame(
+        &self,
+        preview: &mut AudioPreview,
+        content: &Content,
+        player: &Player<Content>,
+    ) -> Drawn {
+        self.frame_with(preview, State::Ready(content), player, Vec::new())
     }
 
     fn frame_with(
         &self,
         preview: &mut AudioPreview,
-        path: &Path,
-        player: &Player<PathBuf>,
+        state: State<'_>,
+        player: &Player<Content>,
         events: Vec<egui::Event>,
     ) -> Drawn {
         let input = egui::RawInput {
@@ -70,7 +75,9 @@ impl Screen {
             ..Default::default()
         };
         let mut output = self.ctx.run_ui(input, |ui| {
-            egui::CentralPanel::default().show(ui, |ui| preview.ui(ui, path, player));
+            egui::CentralPanel::default().show(ui, |ui| {
+                let _ = preview.ui(ui, state, player);
+            });
         });
         // Unapplied texture deltas panic on drop; there is no renderer here.
         output.textures_delta.clear();
@@ -85,14 +92,14 @@ impl Screen {
     fn until(
         &self,
         preview: &mut AudioPreview,
-        path: &Path,
-        player: &Player<PathBuf>,
+        content: &Content,
+        player: &Player<Content>,
         within: Duration,
         mut done: impl FnMut(&AudioPreview, &Drawn) -> bool,
     ) -> Drawn {
         let start = Instant::now();
         loop {
-            let drawn = self.frame(preview, path, player);
+            let drawn = self.frame(preview, content, player);
             if done(preview, &drawn) {
                 return drawn;
             }
@@ -102,12 +109,19 @@ impl Screen {
     }
 
     /// A click on the label `text`: pressed in one frame, released in the next.
-    fn click(&self, preview: &mut AudioPreview, path: &Path, player: &Player<PathBuf>, text: &str) {
-        let drawn = self.frame(preview, path, player);
+    fn click(
+        &self,
+        preview: &mut AudioPreview,
+        content: &Content,
+        player: &Player<Content>,
+        text: &str,
+    ) {
+        let drawn = self.frame(preview, content, player);
         let at = drawn
             .rect(text)
             .unwrap_or_else(|| panic!("no {text:?} to click: {drawn:?}"))
             .center();
+        let state = State::Ready(content);
         let button = |pressed| egui::Event::PointerButton {
             pos: at,
             button: egui::PointerButton::Primary,
@@ -116,11 +130,11 @@ impl Screen {
         };
         self.frame_with(
             preview,
-            path,
+            state,
             player,
             vec![egui::Event::PointerMoved(at), button(true)],
         );
-        self.frame_with(preview, path, player, vec![button(false)]);
+        self.frame_with(preview, state, player, vec![button(false)]);
     }
 }
 
@@ -139,13 +153,13 @@ fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
     }
 }
 
-/// A player of files on a fake device.
-fn player(outputs: FakeOutputs) -> Player<PathBuf> {
-    Player::spawn(Box::new(FileOpener::new()), Box::new(outputs), || {}).expect("spawn the player")
+/// A player of contents on a fake device.
+fn player(outputs: FakeOutputs) -> Player<Content> {
+    Player::spawn(Box::new(ContentOpener), Box::new(outputs), || {}).expect("spawn the player")
 }
 
 /// A 16-bit PCM WAV of a 440 Hz tone, with the 44-byte header written by hand and no tags.
-fn wav(dir: &Path, name: &str, secs: f32, rate: u32, channels: u16) -> PathBuf {
+fn wav_data(secs: f32, rate: u32, channels: u16) -> Vec<u8> {
     let frames = (secs * rate as f32) as u32;
     let data_len = frames * u32::from(channels) * 2;
     let mut bytes = Vec::with_capacity(44 + data_len as usize);
@@ -168,17 +182,27 @@ fn wav(dir: &Path, name: &str, secs: f32, rate: u32, channels: u16) -> PathBuf {
             bytes.extend_from_slice(&v.to_le_bytes());
         }
     }
-    let path = dir.join(name);
-    std::fs::write(&path, bytes).unwrap();
-    path
+    bytes
 }
 
-/// Wait, within [`PLAYS_WITHIN`], for the player to play `path` alone.
-fn wait_playing(player: &Player<PathBuf>, path: &Path) {
+/// A tone written to `dir`, as a file content keyed by its path.
+fn wav(dir: &Path, name: &str, secs: f32, rate: u32, channels: u16) -> Content {
+    let path = dir.join(name);
+    std::fs::write(&path, wav_data(secs, rate, channels)).unwrap();
+    Content::file(path.to_string_lossy().into_owned(), path)
+}
+
+/// A tone in memory.
+fn wav_bytes(key: &str, name: &str, secs: f32, rate: u32, channels: u16) -> Content {
+    Content::bytes(key, name, wav_data(secs, rate, channels))
+}
+
+/// Wait, within [`PLAYS_WITHIN`], for the player to play `content` alone.
+fn wait_playing(player: &Player<Content>, content: &Content) {
     let start = Instant::now();
     loop {
         let state = player.state();
-        if state.queue == [path.to_owned()]
+        if state.queue == [content.clone()]
             && state.current == Some(0)
             && state.status == Status::Playing
         {
@@ -271,12 +295,13 @@ fn the_seek_bar_is_off_for_a_file_not_playing() {
 #[test]
 fn a_file_that_is_not_audio_offers_no_play() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("x.mp3");
+    let file = dir.path().join("x.mp3");
     let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
     png.extend_from_slice(&[0, 0, 0, 13]);
     png.extend_from_slice(b"IHDR");
     png.extend_from_slice(&[0; 17]);
-    std::fs::write(&path, png).unwrap();
+    std::fs::write(&file, png).unwrap();
+    let path = Content::file("x", file);
     let player = player(FakeOutputs::new());
     let screen = Screen::new();
     let mut preview = AudioPreview::new();
@@ -291,7 +316,7 @@ fn a_file_that_is_not_audio_offers_no_play() {
 #[test]
 fn a_missing_file_shows_the_error_after_play() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("gone.flac");
+    let path = Content::file("gone", dir.path().join("gone.flac"));
     let player = player(FakeOutputs::new());
     let screen = Screen::new();
     let mut preview = AudioPreview::new();
@@ -459,7 +484,7 @@ fn an_arrow_key_on_the_focused_seek_bar_seeks() {
         repeat: false,
         modifiers: egui::Modifiers::default(),
     };
-    screen.frame_with(&mut preview, &path, &player, vec![right]);
+    screen.frame_with(&mut preview, State::Ready(&path), &player, vec![right]);
     let start = Instant::now();
     while player.state().position_ms == 0 {
         assert!(
@@ -472,4 +497,88 @@ fn an_arrow_key_on_the_focused_seek_bar_seeks() {
     // One press moves about five seconds, not a point of the bar.
     let ms = player.state().position_ms;
     assert!((4_000..=6_000).contains(&ms), "one press moved {ms} ms");
+}
+
+#[test]
+fn bytes_play_like_a_file() {
+    let content = wav_bytes("k", "tone.wav", 3.0, 8_000, 1);
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    screen.click(&mut preview, &content, &player, "Play");
+    wait_playing(&player, &content);
+    assert_eq!(player.state().queue, std::slice::from_ref(&content));
+    screen.until(&mut preview, &content, &player, DEADLINE, |_, d| {
+        d.has("Pause")
+    });
+}
+
+#[test]
+fn a_newer_file_wins() {
+    let a = wav_bytes("a", "a.wav", 3.0, 8_000, 1);
+    let b = wav_bytes("b", "b.wav", 3.0, 8_000, 1);
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    screen.frame(&mut preview, &a, &player);
+    screen.frame(&mut preview, &b, &player);
+    let start = Instant::now();
+    loop {
+        let drawn = screen.frame(&mut preview, &b, &player);
+        assert!(!drawn.has("a.wav"), "a's name came back: {drawn:?}");
+        if preview.idle() && !drawn.path {
+            assert!(drawn.has("b.wav"), "{drawn:?}");
+            break;
+        }
+        assert!(start.elapsed() < DEADLINE, "gave up waiting: {drawn:?}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn same_name_other_key_is_another_track() {
+    let one = wav_bytes("1", "x.wav", 3.0, 8_000, 1);
+    let two = wav_bytes("2", "x.wav", 3.0, 8_000, 1);
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    screen.click(&mut preview, &one, &player, "Play");
+    wait_playing(&player, &one);
+    screen.until(&mut preview, &two, &player, DEADLINE, |p, _| p.idle());
+    let drawn = screen.frame(&mut preview, &two, &player);
+    assert!(drawn.has("Play"), "{drawn:?}");
+    assert!(!drawn.has("Pause"), "{drawn:?}");
+}
+
+#[test]
+fn a_reader_that_fails_shows_the_error_after_play() {
+    let content = Content::reader("bad", "x.wav", || {
+        Err(std::io::Error::other("no such luck"))
+    });
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    screen.until(&mut preview, &content, &player, DEADLINE, |p, _| p.idle());
+    let drawn = screen.frame(&mut preview, &content, &player);
+    assert!(drawn.has("Play"), "{drawn:?}");
+    assert!(!drawn.starts("Couldn't"), "{drawn:?}");
+    screen.click(&mut preview, &content, &player, "Play");
+    screen.until(&mut preview, &content, &player, PLAYS_WITHIN, |_, d| {
+        d.starts("Couldn't read this file:")
+    });
+}
+
+#[test]
+fn loading_state_shows_the_spinner_and_no_play() {
+    let player = player(FakeOutputs::new());
+    let screen = Screen::new();
+    let mut preview = AudioPreview::new();
+
+    let drawn = screen.frame_with(&mut preview, State::Loading, &player, Vec::new());
+    assert!(drawn.path, "{drawn:?}");
+    assert!(!drawn.has("Play"), "{drawn:?}");
 }
