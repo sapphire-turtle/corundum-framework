@@ -508,54 +508,24 @@ fn is_velopack_install(dir: &Path) -> io::Result<bool> {
 }
 
 /// Rename `from` to `to`, failing with [`io::ErrorKind::AlreadyExists`] rather than
-/// replace what is at `to`. On Windows this is `MoveFileExW` without
-/// `MOVEFILE_REPLACE_EXISTING` (nor `MOVEFILE_COPY_ALLOWED`: across volumes it fails).
+/// replace what is at `to`: [`crate::fs::rename_no_replace`], which on Windows, the one OS
+/// that migrates, is always there. The tests run elsewhere too, where a filesystem without
+/// the call is checked just before instead.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn rename_no_replace(from: &Path, to: &Path) -> io::Result<()> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-
-        use windows::Win32::Storage::FileSystem::{MOVE_FILE_FLAGS, MoveFileExW};
-        use windows::core::PCWSTR;
-
-        let wide = |path: &Path| {
-            path.as_os_str()
-                .encode_wide()
-                .chain(Some(0))
-                .collect::<Vec<u16>>()
-        };
-        let (from, to) = (wide(from), wide(to));
-        // SAFETY: both are NUL-terminated UTF-16 strings that outlive the call.
-        unsafe {
-            MoveFileExW(
-                PCWSTR(from.as_ptr()),
-                PCWSTR(to.as_ptr()),
-                MOVE_FILE_FLAGS(0),
-            )
-        }
-        .map_err(|err| {
-            // An HRESULT from a Win32 error code (facility 7) carries the code in its
-            // low word, which std maps to its kinds.
-            let code = err.code().0 as u32;
-            if code & 0xFFFF_0000 == 0x8007_0000 {
-                io::Error::from_raw_os_error((code & 0xFFFF) as i32)
-            } else {
-                io::Error::other(err)
+    match crate::fs::rename_no_replace(from, to) {
+        Err(err) if !cfg!(windows) && err.kind() == io::ErrorKind::Unsupported => {
+            // The rename of a directory onto an empty one would replace it, and of a file
+            // onto a file always does.
+            if is_there(to)? {
+                return Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    format!("{} is there already", to.display()),
+                ));
             }
-        })
-    }
-    #[cfg(not(windows))]
-    {
-        // Checked just before: the rename of a directory onto an empty one would replace
-        // it, and of a file onto a file always does.
-        if is_there(to)? {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("{} is there already", to.display()),
-            ));
+            std::fs::rename(from, to)
         }
-        std::fs::rename(from, to)
+        result => result,
     }
 }
 

@@ -6,7 +6,8 @@
 //! [`insets`] are what a window needs and its toolkit cannot give it on a phone. On
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
 //! activity a window draws in. [`package`] tells whether the running executable is a
-//! Velopack package.
+//! Velopack package. [`fs`] has the file calls std has no portable form of: a rename that
+//! never replaces its destination.
 //!
 //! The `icon` and `launcher` features, on by default, are the desktop's extras: `icon`
 //! renders an app's SVG to PNG, icns and ico, and `launcher` puts a desktop app in the OS's
@@ -36,6 +37,7 @@ pub mod clipboard;
 #[cfg(feature = "console")]
 pub mod console;
 pub mod dirs;
+pub mod fs;
 #[cfg(all(feature = "icon", not(any(target_os = "ios", target_os = "android"))))]
 pub mod icon;
 pub mod insets;

@@ -1323,6 +1323,7 @@ dependencies = [
  "objc2-ui-kit 0.3.2",
  "raw-window-handle",
  "resvg 0.49.0",
+ "rustix 1.1.6",
  "sys-locale",
  "tempfile",
  "tracing",

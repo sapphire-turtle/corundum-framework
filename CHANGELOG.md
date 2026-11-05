@@ -16,6 +16,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Added
 
 - *(corundum-framework-update)* `ReleaseSource::pubkey`: with a minisign public key (the base64 of the `.pub` file, as `PackageSpec::update_pubkey` takes it), `download_asset` — and so the `update` command and the GUI's update panel — downloads `<file>.sig` beside the release file and returns the file only when it is that key's signature of it, made for that file name. `verify_signature` checks one file. Signatures are cargo-packager's (`cargo packager signer sign`), so one key signs both the packages and the bare binaries (sapphire-turtle/sapphire-framework#402)
+- *(corundum-framework-platform)* `fs::rename_no_replace`: an atomic rename that fails with `AlreadyExists` rather than replace what is at the destination (a dangling symlink included), and with `CrossesDevices` rather than copy. `renameat2(RENAME_NOREPLACE)` on Linux and Android, `renameatx_np(RENAME_EXCL)` on macOS and iOS, `MoveFileExW` on Windows; `Unsupported` where the OS or filesystem has none, so the caller can fall back. Its docs say how a rename that changes only the case goes on each OS ([#116](https://github.com/sapphire-turtle/corundum-framework/issues/116))
 
 ## [0.9.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.9.0...v0.9.1) - 2026-11-04
 
