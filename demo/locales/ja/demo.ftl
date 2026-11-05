@@ -200,4 +200,4 @@ demo-dates-date = 日付
 demo-dates-period = 期間
 demo-dates-time = 時刻
 demo-dates-datetime = 日時
-demo-dates-none = (なし)
+demo-dates-none = （なし）

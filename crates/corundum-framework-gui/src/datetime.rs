@@ -11,11 +11,16 @@
 //! weeks, and alumina shows the column only then. Weeks starting on Sunday wait for
 //! [alumina#36].
 //!
+//! In Japanese the calendar's heading reads month then year, and a 12-hour time shows "PM"
+//! before the hour, until [alumina#37]. corundum's config leaves alumina's default of 24-hour
+//! time alone, so the AM / PM order only shows for an app that turns `hour12` on.
+//!
 //! Timestamps are [`chrono::NaiveDateTime`], local wall time: the app converts to and from a
 //! time zone.
 //!
 //! [alumina-datetime]: https://crates.io/crates/alumina-datetime
 //! [alumina#36]: https://github.com/sapphire-turtle/alumina/issues/36
+//! [alumina#37]: https://github.com/sapphire-turtle/alumina/issues/37
 
 pub use alumina_datetime::*;
 
@@ -75,7 +80,8 @@ pub fn labels(ctx: &egui::Context) -> Labels {
 
 /// corundum's look for the pickers: its icons and words, weeks from Monday (ISO numbers).
 ///
-/// Build it each frame or when the language changes; it is cheap.
+/// Each call looks up every word, so build it once per frame (or when the language changes)
+/// and `.clone()` it into each widget: the clone shares the labels.
 pub fn config(ctx: &egui::Context) -> CalendarConfig {
     CalendarConfig::default()
         .labels(labels(ctx))
@@ -152,6 +158,7 @@ mod tests {
         let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
             Calendar::new("t", &mut state).config(cfg.clone()).show(ui);
         });
+        // No renderer takes the texture deltas; dropping them unapplied panics.
         first.textures_delta.clear();
         out.textures_delta.clear();
         for clipped in &out.shapes {

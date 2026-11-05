@@ -234,7 +234,7 @@ corundum-markdown-task-list-name = タスクリスト
 corundum-markdown-quote-name = 引用
 corundum-markdown-code-block-name = コードブロック
 
-# alumina-datetime's pickers (the `datetime` feature)
+# 日付と時刻のピッカー（gui::datetime）：alumina-datetime の文言。
 corundum-datetime-month-1 = 1月
 corundum-datetime-month-2 = 2月
 corundum-datetime-month-3 = 3月
@@ -271,14 +271,14 @@ corundum-datetime-day = 日
 corundum-datetime-week = 週
 corundum-datetime-month = 月
 corundum-datetime-year = 年
-corundum-datetime-range = 期間
+corundum-datetime-range = 範囲
 corundum-datetime-today = 今日
-corundum-datetime-now = 現在
+corundum-datetime-now = 現在時刻
 corundum-datetime-clear = クリア
 corundum-datetime-previous = 前へ
 corundum-datetime-next = 次へ
-corundum-datetime-choose-month = 月を選ぶ
-corundum-datetime-choose-year = 年を選ぶ
+corundum-datetime-choose-month = 月を選択
+corundum-datetime-choose-year = 年を選択
 corundum-datetime-am = 午前
 corundum-datetime-pm = 午後
 corundum-datetime-none = —
