@@ -72,13 +72,15 @@ impl<'a> InfoCard<'a> {
         self
     }
 
-    /// Whether to draw the large icon and name above the details. On by default.
+    /// Whether to draw the large icon above the name and details. On by default; the name is
+    /// drawn either way.
     pub fn icon(mut self, on: bool) -> Self {
         self.icon = on;
         self
     }
 
-    /// Compact: a separator, then the details as small weak lines, with no icon or name.
+    /// Compact, for under a preview: a separator, then the name and the details as small weak
+    /// lines, with no icon.
     pub fn footer(mut self) -> Self {
         self.compact = true;
         self
@@ -102,24 +104,25 @@ impl<'a> InfoCard<'a> {
 
         if self.compact {
             ui.separator();
+            ui.label(egui::RichText::new(&file.name).small().weak());
             for (label, value) in rows {
-                ui.label(egui::RichText::new(format!("{label}: ")).small().weak());
-                ui.label(egui::RichText::new(value).small().weak());
+                ui.label(
+                    egui::RichText::new(format!("{label}: {value}"))
+                        .small()
+                        .weak(),
+                );
             }
         } else {
-            if self.icon {
-                ui.vertical_centered(|ui| {
-                    if let Some(icon) = &file.icon {
-                        ui.add(
-                            egui::Image::new(icon.clone())
-                                .fit_to_exact_size(egui::Vec2::splat(ICON)),
-                        );
-                    }
-                    ui.add(egui::Label::new(egui::RichText::new(&file.name).heading()).wrap());
-                });
-                ui.add_space(8.0);
-            }
-            egui::Grid::new("preview_info_card")
+            ui.vertical_centered(|ui| {
+                if let (true, Some(icon)) = (self.icon, &file.icon) {
+                    ui.add(
+                        egui::Image::new(icon.clone()).fit_to_exact_size(egui::Vec2::splat(ICON)),
+                    );
+                }
+                ui.add(egui::Label::new(egui::RichText::new(&file.name).heading()).wrap());
+            });
+            ui.add_space(8.0);
+            egui::Grid::new(ui.id().with("info_card"))
                 .num_columns(2)
                 .show(ui, |ui| {
                     for (label, value) in rows {

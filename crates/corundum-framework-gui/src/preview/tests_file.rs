@@ -19,6 +19,7 @@ fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
             .texts
             .push((text.galley.text().to_owned(), text.visual_bounding_rect())),
         egui::Shape::Mesh(_) => drawn.image = true,
+        egui::Shape::Rect(rect) if rect.brush.is_some() => drawn.image = true,
         _ => {}
     }
 }
@@ -138,21 +139,42 @@ fn the_open_button_is_the_app_s_choice() {
 #[test]
 fn the_footer_has_no_icon() {
     let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
     let file = leaked(FileInfo {
         size: Some(1536),
         icon: Some(crate::icons::file()),
         ..FileInfo::new("a.zip")
     });
     let mut response = PreviewResponse::default();
-    let drawn = frame(
-        &ctx,
-        || InfoCard::new(file).footer(),
-        Vec::new(),
-        &mut response,
-    );
+    // The icon loads over a frame or two: draw the full card until it shows.
+    let mut full = Drawn::default();
+    for _ in 0..5 {
+        full = frame(&ctx, || InfoCard::new(file), Vec::new(), &mut response);
+    }
+    assert!(full.image, "positive control: {full:?}");
+    let mut bare = Drawn::default();
+    for _ in 0..5 {
+        bare = frame(
+            &ctx,
+            || InfoCard::new(file).icon(false),
+            Vec::new(),
+            &mut response,
+        );
+    }
+    assert!(!bare.image && bare.has("a.zip"), "{bare:?}");
+    let mut drawn = Drawn::default();
+    for _ in 0..5 {
+        drawn = frame(
+            &ctx,
+            || InfoCard::new(file).footer(),
+            Vec::new(),
+            &mut response,
+        );
+    }
     assert!(!drawn.image, "{drawn:?}");
-    assert!(!drawn.has("a.zip"), "{drawn:?}");
-    assert!(drawn.has("1.5 KB"), "{drawn:?}");
+    assert!(drawn.has("a.zip"), "{drawn:?}");
+    // A row is one line: its label and value are one text.
+    assert!(drawn.has("Size: 1.5 KB"), "{drawn:?}");
 }
 
 #[test]
