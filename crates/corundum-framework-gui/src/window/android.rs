@@ -4,8 +4,9 @@
 use std::time::{Duration, Instant};
 
 pub use android_activity::AndroidApp;
-use android_activity::input::{TextInputState, TextSpan};
+use android_activity::input::{ImeOptions, InputType, TextInputAction, TextInputState, TextSpan};
 
+use super::soft_keyboard::{self, KeyboardCall, SoftKeyboard};
 use super::text_input::{Buffer, TextInputBridge};
 use super::{WindowOptions, open};
 use crate::gpu;
@@ -59,19 +60,54 @@ struct PhoneWindow {
     text: TextInputBridge,
     /// The field the keyboard types into, as egui last reported it.
     focused: Option<egui::Id>,
+    /// Raises and lowers the keyboard in egui-winit's place.
+    keyboard: SoftKeyboard,
     insets: [i32; 4],
     insets_read: Option<Instant>,
 }
 
 impl PhoneWindow {
     fn new(app: Box<dyn eframe::App>, android: AndroidApp) -> PhoneWindow {
+        // GameActivity's keyboard is for one line until told otherwise: its Enter key is
+        // a Done that closes the keyboard and types nothing, and its buffer drops new lines.
+        // Ask for a keyboard whose Enter starts a new line; a one-line field takes the Enter
+        // as egui's own (it gives up the focus), as with a hardware keyboard.
+        android.set_ime_editor_info(
+            InputType::TYPE_CLASS_TEXT | InputType::TYPE_TEXT_FLAG_MULTI_LINE,
+            TextInputAction::None,
+            ImeOptions::IME_FLAG_NO_FULLSCREEN | ImeOptions::IME_FLAG_NO_ENTER_ACTION,
+        );
         PhoneWindow {
             app,
             android,
             text: TextInputBridge::default(),
             focused: None,
+            keyboard: SoftKeyboard::default(),
             insets: [0; 4],
             insets_read: None,
+        }
+    }
+
+    /// Raise or lower the keyboard as the app's fields ask, in egui-winit's place: the
+    /// request is taken out of egui's output, so egui-winit never sees one and leaves the
+    /// keyboard alone (see [`soft_keyboard`] for why).
+    fn follow_keyboard(&mut self, ctx: &egui::Context) {
+        let wanted = ctx.output_mut(|o| o.ime.take()).is_some();
+        let (tapped, pointer_down) = ctx.input(|i| (i.pointer.any_click(), i.pointer.any_down()));
+        let call = self.keyboard.update(soft_keyboard::Frame {
+            wanted,
+            tapped,
+            pointer_down,
+            now: Instant::now(),
+        });
+        // As winit 0.30 does for `set_ime_allowed`.
+        match call {
+            Some(KeyboardCall::Raise) => self.android.show_soft_input(true),
+            Some(KeyboardCall::Lower) => self.android.hide_soft_input(true),
+            None => {}
+        }
+        if self.keyboard.lowering(wanted) {
+            ctx.request_repaint_after(soft_keyboard::LOWER_AFTER);
         }
     }
 
@@ -144,6 +180,7 @@ impl eframe::App for PhoneWindow {
         ui.scope_builder(egui::UiBuilder::new().max_rect(inner), |ui| {
             self.app.ui(ui, frame);
         });
+        self.follow_keyboard(ui.ctx());
         // The insets change without an event winit reports while the keyboard animates.
         ui.ctx().request_repaint_after(INSETS_EVERY);
     }
