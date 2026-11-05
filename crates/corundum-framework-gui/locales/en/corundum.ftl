@@ -217,3 +217,6 @@ corundum-preview-kind-video = { $ext } video
 corundum-preview-kind-text = { $ext } document
 corundum-preview-kind-other = { $ext } file
 corundum-preview-kind-unknown = File
+
+# The text preview (`preview::TextPreview`): the note on a file shown only in part.
+corundum-preview-text-cut = Showing the first { $size }.

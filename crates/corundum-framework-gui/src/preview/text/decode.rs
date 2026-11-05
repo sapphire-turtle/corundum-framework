@@ -4,13 +4,10 @@
 use encoding_rs::{Decoder, DecoderResult, Encoding, UTF_8, UTF_16BE, UTF_16LE};
 
 /// The most bytes of a file that are shown.
-// Dead until `TextPreview` calls it (the next commit).
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) const TEXT_LIMIT: usize = 256 * 1024;
 
 /// A file's text, as far as it was read.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct Text {
     pub text: String,
     /// Whether the file goes on past what was decoded.
@@ -21,7 +18,6 @@ pub(crate) struct Text {
 
 /// What a file that is not text is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) enum NotText {
     Binary,
 }
@@ -32,7 +28,6 @@ pub(crate) enum NotText {
 /// A BOM decides the encoding; without one a NUL byte means a binary file, valid UTF-8 means
 /// UTF-8, and anything else is guessed by chardetng. When cut, a character cut in two at the
 /// end is dropped rather than shown as U+FFFD.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn decode_text(bytes: &[u8]) -> Result<Text, NotText> {
     let cut = bytes.len() > TEXT_LIMIT;
     let bytes = &bytes[..bytes.len().min(TEXT_LIMIT)];
