@@ -10,17 +10,19 @@ readme.workspace = true
 keywords = ["update", "self-update", "release", "github"]
 categories = ["command-line-utilities"]
 
-# `self-update` (default) is everything that downloads and replaces: without it the crate only
-# looks up releases and words advice, and `self-replace` is not linked. `cli` is the `update`
+# `self-update` (default) is everything that downloads, verifies and replaces: without it the
+# crate only looks up releases and words advice, and `self-replace` is not linked. `cli` is the `update`
 # subcommand (`UpdateArgs`, `run`), for a binary that has a command line.
 [features]
 default = ["self-update"]
-self-update = ["dep:self-replace", "dep:tempfile"]
+self-update = ["dep:self-replace", "dep:tempfile", "dep:minisign-verify", "dep:base64"]
 cli = ["dep:clap"]
 
 [dependencies]
+base64 = { version = "0.22", optional = true }
 clap = { workspace = true, optional = true }
 corundum-framework-platform = { version = "0.9.1", path = "../corundum-framework-platform", default-features = false }
+minisign-verify = { version = "0.2", optional = true }
 reqwest.workspace = true
 self-replace = { version = "1.5", optional = true }
 semver = { version = "1", features = ["serde"] }
@@ -31,6 +33,7 @@ thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+minisign = "0.7"
 tempfile = "3"
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util"] }
 

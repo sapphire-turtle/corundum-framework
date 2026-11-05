@@ -331,9 +331,14 @@ async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
 /// Download `release`'s file for this machine, the one `source` names with
 /// [`ReleaseSource::asset`].
 ///
+/// With a key ([`ReleaseSource::pubkey`]) the file's signature, `<file>.sig` in the same
+/// release, is downloaded too, and the file is returned only when it is that key's signature
+/// of this file ([`verify_signature`](crate::verify_signature)).
+///
 /// [`Error::NotConfigured`] when `source` names none, [`Error::NoAsset`] when the release has
-/// no file for this platform, and [`Error::Http`] when the download fails, is empty or is
-/// larger than [`MAX_DOWNLOAD`].
+/// no file for this platform, [`Error::Signature`] when the file is not signed or the signature
+/// does not match, and [`Error::Http`] when the download fails, is empty or is larger than
+/// [`MAX_DOWNLOAD`].
 #[cfg(feature = "self-update")]
 pub async fn download_asset(
     client: &reqwest::Client,
@@ -361,6 +366,24 @@ pub async fn download_asset(
     let bytes = download(client, &binary.download_url).await?;
     if bytes.is_empty() {
         return Err(Error::Http(format!("{name} downloaded empty")));
+    }
+    if let Some(pubkey) = source.update_pubkey() {
+        let sig_name = format!("{name}.sig");
+        let sig = release
+            .assets
+            .iter()
+            .find(|a| a.name == sig_name)
+            .ok_or_else(|| {
+                Error::Signature(format!(
+                    "{} {} has {name} but no signature {sig_name}",
+                    source.repository(),
+                    release.version
+                ))
+            })?;
+        let signature = download(client, &sig.download_url).await?;
+        let signature = String::from_utf8(signature)
+            .map_err(|_| Error::Signature(format!("{sig_name} is not text")))?;
+        crate::verify_signature(&bytes, &signature, pubkey, &name)?;
     }
     Ok(bytes)
 }
@@ -797,6 +820,72 @@ mod tests {
             assert_eq!(release.version, v("0.20.0"));
             let bytes = download_asset(&client, &source, &release).await.unwrap();
             assert_eq!(bytes, b"new binary");
+        }
+
+        /// A repository with release 0.20.0 of `app`: its file for this machine, and that
+        /// file's signature `sig` when there is one.
+        async fn signed_repository(binary: &[u8], sig: Option<String>) -> String {
+            let name = asset_name("app");
+            let binary = binary.to_vec();
+            serve(move |root| {
+                let sig_asset = match sig {
+                    Some(_) => format!(
+                        r#",{{"name":"{name}.sig","browser_download_url":"{root}/dl/{name}.sig"}}"#
+                    ),
+                    None => String::new(),
+                };
+                let releases = format!(
+                    r#"[{{"tag_name":"v0.20.0","html_url":"{root}/r/v0.20.0","assets":[
+                        {{"name":"{name}","browser_download_url":"{root}/dl/{name}"}}{sig_asset}]}}]"#
+                );
+                let mut routes = vec![
+                    (RELEASES.to_owned(), releases.into_bytes()),
+                    (format!("/dl/{name}"), binary),
+                ];
+                if let Some(sig) = sig {
+                    routes.push((format!("/dl/{name}.sig"), sig.into_bytes()));
+                }
+                routes
+            })
+            .await
+        }
+
+        async fn fetch_signed(root: &str, pubkey: &str) -> Result<Vec<u8>> {
+            let source = ReleaseSource::github("o", "r")
+                .api_base(root)
+                .asset("app")
+                .pubkey(pubkey);
+            let client = crate::client("test/0.0.0").unwrap();
+            let release = latest_release(&client, &source).await.unwrap();
+            download_asset(&client, &source, &release).await
+        }
+
+        #[tokio::test]
+        async fn a_signed_release_is_fetched_when_its_signature_matches() {
+            let key = crate::verify::tests::Key::new();
+            let sig = key.sign(b"new binary", &asset_name("app"));
+            let root = signed_repository(b"new binary", Some(sig)).await;
+            assert_eq!(
+                fetch_signed(&root, &key.public).await.unwrap(),
+                b"new binary"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_release_whose_file_is_not_the_signed_one_is_refused() {
+            let key = crate::verify::tests::Key::new();
+            let sig = key.sign(b"new binary", &asset_name("app"));
+            let root = signed_repository(b"swapped binary", Some(sig)).await;
+            let err = fetch_signed(&root, &key.public).await.unwrap_err();
+            assert!(matches!(err, Error::Signature(_)), "{err}");
+        }
+
+        #[tokio::test]
+        async fn an_unsigned_release_is_refused_when_a_key_is_named() {
+            let key = crate::verify::tests::Key::new();
+            let root = signed_repository(b"new binary", None).await;
+            let err = fetch_signed(&root, &key.public).await.unwrap_err();
+            assert!(matches!(err, Error::Signature(_)), "{err}");
         }
 
         #[tokio::test]

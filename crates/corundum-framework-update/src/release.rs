@@ -11,7 +11,8 @@ use crate::{Error, Result};
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Where a binary's releases are published: a GitHub repository whose releases are tagged
-/// `<prefix><version>`, and — for the `update` command — the file in them.
+/// `<prefix><version>`, and — for the `update` command — the file in them and the key it is
+/// signed with.
 #[derive(Clone, Debug)]
 pub struct ReleaseSource {
     owner: String,
@@ -20,6 +21,7 @@ pub struct ReleaseSource {
     api_base: String,
     asset: Option<String>,
     cargo_crate: Option<String>,
+    pubkey: Option<String>,
 }
 
 impl ReleaseSource {
@@ -32,6 +34,7 @@ impl ReleaseSource {
             api_base: "https://api.github.com".to_owned(),
             asset: None,
             cargo_crate: None,
+            pubkey: None,
         }
     }
 
@@ -60,6 +63,21 @@ impl ReleaseSource {
     pub fn cargo_crate(mut self, name: impl Into<String>) -> ReleaseSource {
         self.cargo_crate = Some(name.into());
         self
+    }
+
+    /// The release file is signed with minisign, and `key` is the public key: the base64 of the
+    /// `.pub` file, as `cargo packager signer generate` writes it and corundum-framework-package's
+    /// `PackageSpec::update_pubkey` takes it. The release then carries `<file>.sig` beside the
+    /// file, as `cargo packager signer sign` writes it, and a file whose signature is missing or
+    /// does not match is not installed. Without a key the file is installed unchecked.
+    pub fn pubkey(mut self, key: impl Into<String>) -> ReleaseSource {
+        self.pubkey = Some(key.into());
+        self
+    }
+
+    /// The public key the release file is signed with ([`pubkey`](Self::pubkey)), if any.
+    pub fn update_pubkey(&self) -> Option<&str> {
+        self.pubkey.as_deref()
     }
 
     /// `<owner>/<repo>`.

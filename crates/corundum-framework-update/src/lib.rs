@@ -7,11 +7,14 @@
 //!
 //! - with a newer version: never a downgrade;
 //! - with the asset for this platform, `<asset>-<os>-<arch>[.exe]`, downloaded over HTTPS
-//!   from the repository's own release: GitHub is the authority on what was released;
+//!   from the repository's own release;
+//! - when the source names a minisign key ([`ReleaseSource::pubkey`]), only with a file whose
+//!   signature, `<file>.sig` beside it in the release, is that key's and names the file: then
+//!   the key, not GitHub, is the authority on what was released;
 //! - when the executable was placed by hand, not by `cargo install`, `cargo binstall` or a
 //!   package manager, whose own bookkeeping a replaced file would contradict ([`InstallMethod`]).
 //!
-//! Downloading and replacing are behind the `self-update` feature (on by default), the
+//! Downloading, verifying and replacing are behind the `self-update` feature (on by default), the
 //! command line (`UpdateArgs`, `run`) behind `cli`; without `self-update` the crate only looks
 //! releases up and words [`advice`].
 //!
@@ -25,6 +28,8 @@ mod package;
 mod release;
 #[cfg(feature = "self-update")]
 mod replace;
+#[cfg(feature = "self-update")]
+mod verify;
 
 #[cfg(feature = "cli")]
 pub use install::UpdateArgs;
@@ -40,6 +45,8 @@ pub use package::{PackageState, PackageStatus};
 pub use release::{Asset, Release, ReleaseSource, client, latest_release};
 #[cfg(feature = "self-update")]
 pub use replace::replace_file;
+#[cfg(feature = "self-update")]
+pub use verify::verify_signature;
 
 /// Errors from finding, fetching or installing a release.
 #[derive(Debug, thiserror::Error)]
@@ -53,6 +60,10 @@ pub enum Error {
     /// The release has no file for this platform.
     #[error("{0}")]
     NoAsset(String),
+    /// The release file's signature is missing, unreadable, made with another key, or made
+    /// for another file.
+    #[error("{0}")]
+    Signature(String),
     /// The binary does not say where its releases are, or its own version is unusable.
     #[error("{0}")]
     NotConfigured(String),
