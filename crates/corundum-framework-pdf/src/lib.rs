@@ -14,6 +14,11 @@
 //! A [`Document`] is deliberately neither `Send` nor `Sync`: it stays on the thread that
 //! opened it, so a future hayro that is not `Send` is not a breaking change. Open and render
 //! on a worker thread, and send the finished [`Page`] (plain bytes) back.
+//!
+//! [`MAX_INPUT`] bounds the input and [`MAX_SIDE`] the output, not hayro's memory in between:
+//! it decodes a compressed stream or an image whole, whatever its size. A file built to
+//! exhaust memory aborts the process, which `catch_unwind` cannot stop (nor can any panic
+//! under `panic = "abort"`). Render files you do not trust in a process of their own.
 
 mod error;
 mod render;

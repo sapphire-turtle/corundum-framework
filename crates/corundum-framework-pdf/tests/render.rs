@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use corundum_framework_pdf::{Document, Error, FallbackFont, MAX_INPUT, Page};
@@ -164,10 +165,7 @@ fn system_cjk() -> Option<FallbackFont> {
     ];
     candidates.iter().find_map(|path| {
         let data = std::fs::read(path).ok()?;
-        Some(FallbackFont {
-            data: Arc::new(data),
-            index: 0,
-        })
+        Some(FallbackFont::new(Arc::new(data), 0))
     })
 }
 
@@ -191,6 +189,29 @@ fn not_embedded_japanese_uses_the_fallback() {
         all_ink(&with),
         all_ink(&without)
     );
+}
+
+#[test]
+fn a_lazy_fallback_loads_only_when_needed() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let counted = calls.clone();
+    let font = FallbackFont::lazy(move || {
+        counted.fetch_add(1, Ordering::SeqCst);
+        None
+    });
+
+    // Latin text never asks for the CJK font.
+    let doc = Document::open(fixture("two-pages.pdf").into(), Some(font.clone())).unwrap();
+    doc.render(0, 256).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    // Japanese text it does not embed asks, and the answer is kept: once, however often.
+    let doc = Document::open(fixture("ja-not-embedded.pdf").into(), Some(font.clone())).unwrap();
+    doc.render(0, 256).unwrap();
+    doc.render(0, 512).unwrap();
+    let again = Document::open(fixture("ja-not-embedded.pdf").into(), Some(font)).unwrap();
+    again.render(0, 256).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]

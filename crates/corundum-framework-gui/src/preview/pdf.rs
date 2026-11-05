@@ -3,9 +3,9 @@
 
 use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::{Arc, LazyLock};
 
 use corundum_framework_pdf::{Document, Error, FallbackFont, MAX_INPUT, MAX_PAGES};
 
@@ -45,14 +45,14 @@ struct Answer {
     key: String,
     page: usize,
     longest: u32,
+    /// How many pages the file has, if it was opened, whatever became of this page.
+    count: Option<usize>,
     rendered: Rendered,
 }
 
 /// A render's result, made ready for the UI thread to upload.
 enum Rendered {
     Page {
-        /// How many pages the file has.
-        count: usize,
         pixels: egui::ColorImage,
     },
     Encrypted,
@@ -176,8 +176,17 @@ impl Worker {
 struct Opened {
     /// The document of the last content, under its key.
     document: Option<(String, Document)>,
-    /// The system's CJK font, looked up on the first open: `Some(None)` if there is none.
-    cjk: Option<Option<FallbackFont>>,
+}
+
+/// The system's CJK font, for the PDFs that use one without embedding it. One for the
+/// process: it is looked up (a scan of the system's fonts) the first time any PDF needs it.
+fn system_cjk() -> &'static FallbackFont {
+    static FONT: LazyLock<FallbackFont> = LazyLock::new(|| {
+        FallbackFont::lazy(|| {
+            crate::fonts::system_cjk_font().map(|font| (Arc::new(font.data), font.index))
+        })
+    });
+    &FONT
 }
 
 /// The worker's answer to `request`: the page rendered.
@@ -189,22 +198,31 @@ fn answer(request: Request, state: &mut Opened) -> Answer {
     } = request;
     // The renderer guards itself, but a panic elsewhere would end the thread, and the next
     // frame would start another to render the page again: it fails instead, once.
-    let rendered = catch_unwind(AssertUnwindSafe(|| render(&content, page, longest, state)))
-        .unwrap_or_else(|_| {
-            state.document = None;
-            Rendered::Failed("the PDF preview panicked".into())
-        });
+    let (count, rendered) =
+        catch_unwind(AssertUnwindSafe(|| render(&content, page, longest, state))).unwrap_or_else(
+            |_| {
+                state.document = None;
+                (None, Rendered::Failed("the PDF preview panicked".into()))
+            },
+        );
     Answer {
         key: content.key,
         page,
         longest,
+        count,
         rendered,
     }
 }
 
 /// Render page `page` of the PDF in `content` to `longest` pixels on its longest side,
-/// opening it first unless it is the one the worker holds.
-fn render(content: &Content, page: usize, longest: u32, state: &mut Opened) -> Rendered {
+/// opening it first unless it is the one the worker holds. With the result, how many pages
+/// the file has, if it was opened.
+fn render(
+    content: &Content,
+    page: usize,
+    longest: u32,
+    state: &mut Opened,
+) -> (Option<usize>, Rendered) {
     if state
         .document
         .as_ref()
@@ -213,25 +231,24 @@ fn render(content: &Content, page: usize, longest: u32, state: &mut Opened) -> R
         state.document = None;
         let bytes = match read(content) {
             Ok(bytes) => bytes,
-            Err(rendered) => return rendered,
+            Err(rendered) => return (None, rendered),
         };
-        let cjk = state.cjk.get_or_insert_with(system_cjk).clone();
         // A file that does not open is not kept: Retry opens it again.
-        match Document::open(bytes, cjk) {
+        match Document::open(bytes, Some(system_cjk().clone())) {
             Ok(document) => state.document = Some((content.key.clone(), document)),
-            Err(error) => return Rendered::of_error(error),
+            Err(error) => return (None, Rendered::of_error(error)),
         }
     }
     let Some((_, document)) = &state.document else {
-        return Rendered::Failed("the PDF preview lost its document".into());
+        let lost = Rendered::Failed("the PDF preview lost its document".into());
+        return (None, lost);
     };
     let count = document.page_count();
     let page = page.min(count.min(MAX_PAGES).saturating_sub(1));
-    match document.render(page, longest) {
+    let rendered = match document.render(page, longest) {
         Ok(rendered) => {
             let size = [rendered.width as usize, rendered.height as usize];
             Rendered::Page {
-                count,
                 pixels: egui::ColorImage::from_rgba_unmultiplied(size, &rendered.rgba),
             }
         }
@@ -242,7 +259,8 @@ fn render(content: &Content, page: usize, longest: u32, state: &mut Opened) -> R
             }
             Rendered::of_error(error)
         }
-    }
+    };
+    (Some(count), rendered)
 }
 
 /// The file's bytes: the content's own, or a reader's read whole, at most [`MAX_INPUT`] of
@@ -264,14 +282,6 @@ fn read(content: &Content) -> Result<Arc<[u8]>, Rendered> {
     }
 }
 
-/// The system's CJK font, for the PDFs that use one without embedding it.
-fn system_cjk() -> Option<FallbackFont> {
-    crate::fonts::system_cjk_font().map(|font| FallbackFont {
-        data: Arc::new(font.data),
-        index: font.index,
-    })
-}
-
 /// A PDF in the detail pane: its pages rendered on a worker thread, one at a time, fitted in
 /// the space given (the page's aspect kept, never drawn larger than its pixels), with a
 /// button either side of the page number to page through them.
@@ -285,7 +295,15 @@ fn system_cjk() -> Option<FallbackFont> {
 ///
 /// A password-protected, damaged, or too large file says so, and a damaged one offers
 /// Retry. Text in a CJK font a PDF does not embed is drawn in the system's, where there is
-/// one.
+/// one, looked up once per process the first time a PDF needs it; other missing fonts are
+/// drawn in the renderer's standard 14.
+///
+/// The worker keeps the last document opened (up to 64 MiB) until another PDF opens or the
+/// preview is dropped, and a render in progress cannot be cancelled. The limits bound the
+/// input and the output, not the renderer's memory in between: it decodes a compressed
+/// stream or an image whole, so a file built to exhaust memory aborts the process, which no
+/// `catch_unwind` stops. Do not preview files you do not trust in a process that must
+/// survive them.
 ///
 /// Make one and keep it across frames; the thread it starts ends when it is dropped.
 #[derive(Default)]
@@ -536,8 +554,12 @@ impl PdfPreview {
                     key,
                     page,
                     longest,
+                    count,
                     rendered,
                 }) => {
+                    if let Some(place) = self.places.iter_mut().find(|p| p.key == key) {
+                        place.count = count.or(place.count);
+                    }
                     if self
                         .asked
                         .as_ref()
@@ -546,16 +568,11 @@ impl PdfPreview {
                         self.asked = None;
                     }
                     let outcome = match rendered {
-                        Rendered::Page { count, pixels } => {
-                            if let Some(place) = self.places.iter_mut().find(|p| p.key == key) {
-                                place.count = Some(count);
-                            }
-                            Outcome::Page(ctx.load_texture(
-                                format!("corundum-preview {key} {page}"),
-                                pixels,
-                                egui::TextureOptions::LINEAR,
-                            ))
-                        }
+                        Rendered::Page { pixels } => Outcome::Page(ctx.load_texture(
+                            format!("corundum-preview {key} {page}"),
+                            pixels,
+                            egui::TextureOptions::LINEAR,
+                        )),
                         Rendered::Encrypted => Outcome::Encrypted,
                         Rendered::TooLarge => Outcome::TooLarge,
                         Rendered::Unsupported => Outcome::Unsupported,
@@ -608,6 +625,34 @@ fn page_label(ctx: &egui::Context, page: usize, shown: usize, count: usize) -> S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_page_that_fails_still_gives_the_count() {
+        let (requests, _inbox) = channel::<Request>();
+        let (outbox, answers) = channel::<Answer>();
+        let mut preview = PdfPreview {
+            worker: Some(Worker {
+                requests,
+                answers,
+                pending: Arc::new(AtomicUsize::new(0)),
+            }),
+            ..PdfPreview::default()
+        };
+        let place = preview.place("k");
+        assert_eq!(preview.places[place].shown(), None);
+        outbox
+            .send(Answer {
+                key: "k".into(),
+                page: 0,
+                longest: 256,
+                count: Some(3),
+                rendered: Rendered::Unsupported,
+            })
+            .unwrap();
+        preview.receive(&egui::Context::default());
+        assert_eq!(preview.places[place].shown(), Some(3));
+        assert!(matches!(preview.kept[0].outcome, Outcome::Unsupported));
+    }
 
     #[test]
     fn past_500_pages_the_label_says_how_many_there_are() {

@@ -20,7 +20,14 @@ The standard 14 fonts (Helvetica, Times and the like), which most generated PDFs
 embedding them, are drawn from fonts built into hayro (about 270 KB). Text in a CJK font the
 PDF does not embed is blank unless the app passes a `FallbackFont`: any font file it has, a
 system font or its own, serving the Adobe-Japan1, GB1, CNS1 and Korea1 collections. This
-crate ships no CJK font.
+crate ships no CJK font. `FallbackFont::lazy` finds the font only when a PDF needs it, once.
+The one font serves all four collections, so Korean or Chinese text gets whichever CJK font
+the system offers, which may lack its characters (Yu Gothic has no Hangul).
+
+`MAX_INPUT` bounds the input and `MAX_SIDE` the output, not hayro's memory in between: it
+decodes a compressed stream or an image whole, whatever its size. A file built to exhaust
+memory aborts the process, which `catch_unwind` cannot stop (nor can any panic under
+`panic = "abort"`). Render files you do not trust in a process of their own.
 
 ```rust,no_run
 use corundum_framework_pdf::Document;

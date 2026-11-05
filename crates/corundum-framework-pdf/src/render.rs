@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_interpret::font::FontQuery;
@@ -16,14 +16,48 @@ const PANICKED: &str = "the PDF renderer panicked";
 
 /// A font for text the PDF does not embed: the app's answer to "a CJK font, please".
 ///
-/// It serves the Adobe-Japan1, GB1, CNS1 and Korea1 character collections. The standard 14
-/// fonts (Helvetica and the like) are drawn from the fonts built into hayro.
+/// It serves the Adobe-Japan1, GB1, CNS1 and Korea1 character collections, all with the one
+/// font it holds. The standard 14 fonts (Helvetica and the like) are drawn from the fonts
+/// built into hayro. Clones share the font once it is loaded.
 #[derive(Clone)]
 pub struct FallbackFont {
-    /// The font file (TrueType, OpenType or a collection).
-    pub data: Arc<Vec<u8>>,
-    /// The face inside a collection (`.ttc`); 0 for a single font.
-    pub index: u32,
+    source: Arc<Source>,
+}
+
+type FontData = Arc<dyn AsRef<[u8]> + Send + Sync>;
+type Loaded = Option<(Arc<Vec<u8>>, u32)>;
+
+struct Source {
+    loaded: OnceLock<Loaded>,
+    load: Box<dyn Fn() -> Loaded + Send + Sync>,
+}
+
+impl FallbackFont {
+    /// A font in hand: `data` is the font file (TrueType, OpenType or a collection), `index`
+    /// the face inside a collection (`.ttc`), 0 for a single font.
+    pub fn new(data: Arc<Vec<u8>>, index: u32) -> FallbackFont {
+        FallbackFont::lazy(move || Some((data.clone(), index)))
+    }
+
+    /// A font found when it is first needed: `load` runs at most once, and only when a PDF
+    /// has text in a CJK font it does not embed. If it returns `None`, that text is blank.
+    pub fn lazy(load: impl Fn() -> Option<(Arc<Vec<u8>>, u32)> + Send + Sync + 'static) -> Self {
+        FallbackFont {
+            source: Arc::new(Source {
+                loaded: OnceLock::new(),
+                load: Box::new(load),
+            }),
+        }
+    }
+
+    fn get(&self) -> Option<(FontData, u32)> {
+        let (data, index) = self
+            .source
+            .loaded
+            .get_or_init(|| (self.source.load)())
+            .clone()?;
+        Some((data, index))
+    }
 }
 
 /// One page rendered: sRGB RGBA8, opaque (it is drawn on white), row-major.
@@ -73,15 +107,13 @@ fn settings(cjk: Option<FallbackFont>) -> InterpreterSettings {
         settings.font_resolver = Arc::new(move |query| match query {
             FontQuery::Standard(font) => Some(font.get_font_data()),
             FontQuery::Fallback(query) => {
-                if query
+                let wanted = query
                     .character_collection
                     .as_ref()
-                    .is_some_and(|c| is_cjk(&c.family))
-                {
-                    let data: Arc<dyn AsRef<[u8]> + Send + Sync> = cjk.data.clone();
-                    Some((data, cjk.index))
-                } else {
-                    Some(query.pick_standard_font().get_font_data())
+                    .is_some_and(|c| is_cjk(&c.family));
+                match wanted.then(|| cjk.get()).flatten() {
+                    Some(font) => Some(font),
+                    None => Some(query.pick_standard_font().get_font_data()),
                 }
             }
         });
