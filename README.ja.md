@@ -49,7 +49,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `image-preview` | `preview::ImagePreview`：アプリが渡した画像（バイト列またはリーダー）を詳細ペインに描く。デコードはワーカースレッドで行う（`preview::FilePreview` と `InfoCard` は機能なしで使える。corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
 | `audio-preview` | `preview::AudioPreview`：アプリが渡した音声を詳細ペインで、`ContentOpener` で起動したアプリの `Player<Content>` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
 | `code-editor` | `code`：alumina-code の `CodeEditor` の再エクスポート。インデントを保つ egui 用のエディタで、色は visuals に従う。ハイライターはアプリが用意する（alumina-code も有効になる） | 無効 |
-| `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。文字コードは推定し、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
+| `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。UTF-8 と BOM 付き UTF-16 を読み、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 

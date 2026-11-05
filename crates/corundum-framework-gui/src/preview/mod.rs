@@ -14,8 +14,8 @@
 //! - [`AudioPreview`] (the `audio-preview` feature): shows a sound file's tags, read on a
 //!   worker thread, with a play button and a seek bar over the app's
 //!   corundum-framework-audio `Player`.
-//! - [`TextPreview`] (the `text-preview` feature): shows a text file read-only, its encoding
-//!   guessed and decoded on a worker thread; [`FilePreview`] uses it for the text extensions.
+//! - [`TextPreview`] (the `text-preview` feature): shows a text file read-only, as UTF-8 or
+//!   UTF-16 with a BOM, decoded on a worker thread; [`FilePreview`] uses it for the text extensions.
 //! - [`InfoCard`]: says what is known of a file ([`FileInfo`]) that no preview draws.
 //! - [`kind_of`]: tells what a file is by its name.
 //!

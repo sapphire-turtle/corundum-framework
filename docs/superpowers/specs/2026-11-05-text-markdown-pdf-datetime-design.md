@@ -68,14 +68,14 @@ features, Mobile CI's feature loop, and the demo.
 ## 1. #99: text (`code-editor`, `text-preview`)
 
 - **`code-editor`** brings alumina-code and re-exports it as `gui::code`.
-- **`text-preview`** includes `code-editor` and brings chardetng and encoding_rs. Both are
-  pure Rust, under MIT or Apache-2.0.
+- **`text-preview`** includes `code-editor` and brings no new dependency: text is UTF only, decided by the person (a cross-platform app grows no code for legacy encodings),
+  so chardetng and encoding_rs are not used.
 - **An egui-free function** turns bytes into text, or into a reason there is none. It is
   tested on its own.
   - **Limit:** only the first 256 KiB are read, and the result says whether it was cut.
   - **Encodings:** UTF-8 with or without a BOM, and UTF-16 LE or BE with a BOM. Anything
-    else is guessed by chardetng and decoded by encoding_rs, so Shift_JIS and EUC-JP cue
-    sheets are covered.
+    else is read as UTF-8, and bytes that are not UTF-8 (a Shift_JIS or EUC-JP file) are
+    shown lossily as U+FFFD.
   - **Binary:** a NUL in the first bytes read, with no UTF-16 BOM, means binary.
 - **`TextPreview`** reads and decodes on its worker. It shows the text in a read-only,
   monospace, scrollable `CodeEditor`, where text can be selected and copied. If the text

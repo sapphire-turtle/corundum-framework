@@ -102,7 +102,7 @@ audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-pre
 # own highlighter.
 code-editor = ["gui", "corundum-framework-gui/code-editor"]
 # `gui::preview::TextPreview`: a text file the app hands in, read-only in the detail pane, its
-# encoding guessed and decoded on a worker thread (brings `code-editor`).
+# read as UTF-8 or UTF-16 and decoded on a worker thread (brings `code-editor`).
 text-preview = ["gui", "code-editor", "corundum-framework-gui/text-preview"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────

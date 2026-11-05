@@ -111,7 +111,7 @@ fn read(content: &Content) -> Outcome {
 ///
 /// What it draws is the [`Content`] the app hands in with a [`State`]; the app's key names
 /// the file. At most the first 256 KiB are read, and a note says when the file is longer.
-/// The encoding is guessed. The last texts shown are kept by key, so going back to one is
+/// Only Unicode is read: UTF-8, or UTF-16 with a BOM; other bytes show as U+FFFD. The last texts shown are kept by key, so going back to one is
 /// instant, and its scroll position stays. The UI thread never reads the content: the worker
 /// does. A file that is not text (it has NUL bytes and no BOM) shows the file icon and says
 /// it can't be previewed; one that can't be read says why, with Retry.

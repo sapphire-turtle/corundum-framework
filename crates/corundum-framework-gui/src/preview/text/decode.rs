@@ -1,8 +1,6 @@
 //! A text file's first bytes made into text, with no egui in it: the worker of `TextPreview`
 //! calls [`decode_text`].
 
-use encoding_rs::{Decoder, DecoderResult, Encoding, UTF_8, UTF_16BE, UTF_16LE};
-
 /// The most bytes of a file that are shown.
 pub(crate) const TEXT_LIMIT: usize = 256 * 1024;
 
@@ -12,7 +10,7 @@ pub(crate) struct Text {
     pub text: String,
     /// Whether the file goes on past what was decoded.
     pub cut: bool,
-    /// The encoding_rs name of what the bytes were read as, like "UTF-8" or "Shift_JIS".
+    /// What the bytes were read as: "UTF-8", "UTF-16LE" or "UTF-16BE".
     pub encoding: &'static str,
 }
 
@@ -25,65 +23,58 @@ pub(crate) enum NotText {
 /// `bytes` are the file's first bytes, at most `TEXT_LIMIT + 1` of them: more than
 /// `TEXT_LIMIT` means the file was cut, and only the first `TEXT_LIMIT` are decoded.
 ///
-/// A BOM decides the encoding; without one a NUL byte means a binary file, valid UTF-8 means
-/// UTF-8, and anything else is guessed by chardetng. When cut, a character cut in two at the
-/// end is dropped rather than shown as U+FFFD.
+/// Only Unicode is read. A UTF-8 or UTF-16 BOM decides the encoding; without one a NUL byte
+/// means a binary file, and anything else is UTF-8, where bytes that are not UTF-8 (a file in
+/// a legacy encoding) show as U+FFFD. When cut, a character cut in two at the end is dropped
+/// rather than shown as U+FFFD.
 pub(crate) fn decode_text(bytes: &[u8]) -> Result<Text, NotText> {
     let cut = bytes.len() > TEXT_LIMIT;
     let bytes = &bytes[..bytes.len().min(TEXT_LIMIT)];
 
-    let (encoding, body) = if let Some(rest) = bytes.strip_prefix(b"\xEF\xBB\xBF") {
-        (UTF_8, rest)
+    let (text, encoding) = if let Some(rest) = bytes.strip_prefix(b"\xEF\xBB\xBF") {
+        (utf8(rest, cut), "UTF-8")
     } else if let Some(rest) = bytes.strip_prefix(b"\xFF\xFE") {
-        (UTF_16LE, rest)
+        (utf16(rest, cut, u16::from_le_bytes), "UTF-16LE")
     } else if let Some(rest) = bytes.strip_prefix(b"\xFE\xFF") {
-        (UTF_16BE, rest)
+        (utf16(rest, cut, u16::from_be_bytes), "UTF-16BE")
     } else if bytes.contains(&0) {
         return Err(NotText::Binary);
-    } else if utf8_prefix_ok(bytes, cut) {
-        (UTF_8, bytes)
     } else {
-        let mut detector = chardetng::EncodingDetector::new(chardetng::Iso2022JpDetection::Allow);
-        detector.feed(bytes, !cut);
-        (detector.guess(None, chardetng::Utf8Detection::Allow), bytes)
+        (utf8(bytes, cut), "UTF-8")
     };
 
     Ok(Text {
-        text: decode(encoding, body, cut),
+        text,
         cut,
-        encoding: encoding.name(),
+        encoding,
     })
 }
 
-/// Whether `bytes` are UTF-8, but for an incomplete character at the end when `cut`.
-fn utf8_prefix_ok(bytes: &[u8], cut: bool) -> bool {
-    match std::str::from_utf8(bytes) {
-        Ok(_) => true,
-        Err(e) => cut && e.error_len().is_none(),
-    }
+/// `bytes` as UTF-8, invalid bytes replaced; with `cut`, an incomplete character at the end
+/// is dropped.
+fn utf8(bytes: &[u8], cut: bool) -> String {
+    let bytes = match std::str::from_utf8(bytes) {
+        Err(e) if cut && e.error_len().is_none() => &bytes[..e.valid_up_to()],
+        _ => bytes,
+    };
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Decode `bytes`. With `cut`, the decoder is not told the input has ended, so it holds back
-/// a trailing partial character instead of emitting U+FFFD; a malformed sequence elsewhere
-/// is replaced.
-fn decode(encoding: &'static Encoding, bytes: &[u8], cut: bool) -> String {
-    let mut decoder: Decoder = encoding.new_decoder_without_bom_handling();
-    let mut out = String::new();
-    out.reserve(
-        decoder
-            .max_utf8_buffer_length_without_replacement(bytes.len())
-            .unwrap_or(bytes.len() * 3),
-    );
-    let mut rest = bytes;
-    loop {
-        let (result, read) = decoder.decode_to_string_without_replacement(rest, &mut out, !cut);
-        rest = &rest[read..];
-        match result {
-            DecoderResult::InputEmpty => return out,
-            DecoderResult::OutputFull => out.reserve(rest.len().max(16) * 3),
-            DecoderResult::Malformed(..) => out.push('\u{FFFD}'),
-        }
+/// `bytes` as UTF-16; with `cut`, a trailing odd byte and an unpaired leading surrogate at
+/// the end are dropped.
+fn utf16(bytes: &[u8], cut: bool, unit: fn([u8; 2]) -> u16) -> String {
+    let mut units: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| unit(*pair))
+        .collect();
+    if cut && units.last().is_some_and(|u| (0xD800..0xDC00).contains(u)) {
+        units.pop();
     }
+    char::decode_utf16(units)
+        .map(|c| c.unwrap_or(char::REPLACEMENT_CHARACTER))
+        .collect()
 }
 
 #[cfg(test)]
@@ -118,21 +109,46 @@ mod tests {
     }
 
     #[test]
-    fn a_shift_jis_cue_sheet() {
-        let src = "TITLE \"夜の歌\"\r\nPERFORMER \"山田\"\r\n";
-        let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(src);
-        let t = ok(&bytes);
-        assert!(t.text.contains("夜の歌"), "{:?}", t.text);
-        assert_eq!(t.encoding, "Shift_JIS");
+    fn utf16_beyond_the_basic_plane() {
+        let mut bytes = vec![0xFF, 0xFE];
+        for u in "a😀".encode_utf16() {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        assert_eq!(ok(&bytes).text, "a😀");
     }
 
     #[test]
-    fn euc_jp_is_read() {
-        let src = "吾輩は猫である。名前はまだ無い。\nどこで生れたかとんと見当がつかぬ。\n何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。\n";
-        let (bytes, _, _) = encoding_rs::EUC_JP.encode(src);
-        let t = ok(&bytes);
-        assert_eq!(t.text, src);
-        assert_eq!(t.encoding, "EUC-JP");
+    fn a_utf16_cut_inside_a_code_unit_or_pair_drops_the_partial() {
+        let units: Vec<u16> = "a".repeat(TEXT_LIMIT / 2).encode_utf16().collect();
+        let mut bytes = vec![0xFF, 0xFE];
+        for u in &units {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        // 2 BOM bytes + units: cut after an odd number of body bytes.
+        let t = ok(&bytes[..TEXT_LIMIT + 1]);
+        assert!(t.cut);
+        assert!(!t.text.contains('\u{FFFD}'));
+        // Cut between the halves of a surrogate pair.
+        let mut bytes = vec![0xFF, 0xFE];
+        for u in "a".repeat(TEXT_LIMIT / 2 - 2).encode_utf16() {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        for u in "😀".encode_utf16() {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        assert_eq!(bytes.len(), TEXT_LIMIT + 2);
+        let t = ok(&bytes[..TEXT_LIMIT + 1]);
+        assert!(t.cut);
+        assert!(
+            !t.text.contains('\u{FFFD}'),
+            "{:?}",
+            &t.text[t.text.len() - 4..]
+        );
+    }
+
+    #[test]
+    fn invalid_utf8_is_shown_lossily() {
+        assert_eq!(ok(b"ok \xff ok").text, "ok \u{FFFD} ok");
     }
 
     #[test]
@@ -170,21 +186,6 @@ mod tests {
         let t = ok(&bytes[..TEXT_LIMIT + 1]);
         assert!(!t.text.contains('\u{FFFD}'));
         assert_eq!(t.text.len() % 3, 0);
-        assert!(t.cut);
-    }
-
-    #[test]
-    fn a_shift_jis_cut_inside_a_character_drops_it() {
-        let src = "あ".repeat(TEXT_LIMIT / 2 + 4);
-        let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(&src);
-        // TEXT_LIMIT is even, so the kept bytes end on a character; shift the cut by one.
-        let t = ok(&bytes[..TEXT_LIMIT + 1]);
-        assert!(!t.text.contains('\u{FFFD}'));
-        assert!(t.cut);
-        let mut odd = vec![b'x'];
-        odd.extend_from_slice(&bytes[..TEXT_LIMIT + 1]);
-        let t = ok(&odd);
-        assert!(!t.text.contains('\u{FFFD}'));
         assert!(t.cut);
     }
 }

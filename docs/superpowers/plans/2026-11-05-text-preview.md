@@ -26,11 +26,11 @@ sections "Shared decisions" and "1. #99"). This plan builds on #97
 
 - **Features:** every new piece sits behind a feature that is off by default.
   - `code-editor = ["dep:alumina-code"]`.
-  - `text-preview = ["code-editor", "dep:chardetng", "dep:encoding_rs"]`.
+  - `text-preview = ["code-editor"]` (revised: it was to bring chardetng and encoding_rs).
   - The default build gains no dependency.
-- **Dependency versions:** `alumina-code = "0.1"`, `chardetng = "0.1"`,
-  `encoding_rs = "0.8"`. Take the latest of each on crates.io that builds with egui 0.37.
-  All three are pure Rust under MIT or Apache-2.0. `cargo deny check` must pass
+- **Dependency versions (revised: no chardetng or encoding_rs; text is UTF only, see the spec):** `alumina-code = "0.1"`.
+  Take the latest on crates.io that builds with egui 0.37.
+  It is pure Rust under MIT or Apache-2.0. `cargo deny check` must pass
   (`deny.toml`).
 - **The part contract from #97:**
   - `TextPreview::ui(&mut self, ui, state: State<'_>) -> PreviewResponse`.
