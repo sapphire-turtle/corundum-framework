@@ -479,3 +479,41 @@ fn an_image_the_decoder_cannot_read_is_not_fetched() {
         assert!(preview.wants_content(name), "{name}");
     }
 }
+
+#[cfg(feature = "text-preview")]
+#[test]
+fn text_files_want_content() {
+    let preview = FilePreview::new();
+    assert!(preview.wants_content("a.cue"));
+    assert!(preview.wants_content("B.LOG"));
+    assert!(preview.wants_content("x.md"));
+    assert!(!preview.wants_content("a.docx"));
+    assert!(!preview.wants_content("a.pdf"));
+}
+
+#[cfg(feature = "text-preview")]
+#[test]
+fn a_text_file_shows_its_text_and_details() {
+    let ctx = egui::Context::default();
+    let content = super::Content::bytes("k", "notes.txt", b"hi".to_vec());
+    let file = leaked(FileInfo {
+        size: Some(2),
+        ..FileInfo::new("notes.txt")
+    });
+    let mut preview = FilePreview::new();
+    let start = std::time::Instant::now();
+    loop {
+        let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            let _ = preview.ui(ui, file, State::Ready(&content), false);
+        });
+        if let (Some(text), Some(size)) = (drawn.rect("hi"), drawn.rect("Size")) {
+            assert!(size.top() > text.bottom(), "{drawn:?}");
+            return;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "{drawn:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}

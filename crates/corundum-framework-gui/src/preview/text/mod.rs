@@ -158,7 +158,7 @@ impl TextPreview {
         let message = match outcome {
             Outcome::Text { text, cut } => {
                 egui::ScrollArea::vertical()
-                    .id_salt(("corundum-preview-text", key.as_str()))
+                    .id_salt(("text-preview-scroll", key.as_str()))
                     .auto_shrink(false)
                     .show(ui, |ui| {
                         if *cut {
@@ -174,10 +174,7 @@ impl TextPreview {
                         }
                         CodeEditor::new(text)
                             .read_only(true)
-                            .id(egui::Id::unique((
-                                "corundum-preview-text-editor",
-                                key.as_str(),
-                            )))
+                            .id(egui::Id::unique(("text-preview-editor", key.as_str())))
                             .show(ui);
                     });
                 return response;

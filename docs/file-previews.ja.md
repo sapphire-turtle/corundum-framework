@@ -27,3 +27,4 @@ corundum の上のアプリは、正本となる独自のデータベースを�
 
 - [画像と音声](superpowers/specs/2026-11-02-media-image-audio-design.md)：`corundum-framework-image`、`corundum-framework-audio`、ウィジェット `image-preview` / `audio-preview`
 - [アプリが渡す内容の詳細ペインプレビュー](superpowers/specs/2026-11-05-detail-pane-previews-design.md)：ファイルの場所に関わらず、アプリがバイト列またはリーダーを渡す。`FilePreview` と `InfoCard` は機能なしで使え、音声は `ContentOpener` で起動した `Player<Content>` で再生する
+- [テキスト、Markdown、PDF、日時](superpowers/specs/2026-11-05-text-markdown-pdf-datetime-design.md)：`text-preview` がテキストファイルを読み取り専用で表示する。文字コードは推定し、`FilePreview` はテキストの拡張子にこれを使う

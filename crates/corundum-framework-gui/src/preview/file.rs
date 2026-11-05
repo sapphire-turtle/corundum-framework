@@ -14,6 +14,8 @@ use super::Content;
 use super::ImagePreview;
 #[cfg(any(feature = "image-preview", feature = "audio-preview"))]
 use super::Kind;
+#[cfg(feature = "text-preview")]
+use super::TextPreview;
 use super::{FileInfo, InfoCard, PreviewResponse, State, kind_of};
 
 /// The default for one file: its picture or its player at the top, its details under
@@ -28,6 +30,8 @@ pub struct FilePreview {
     audio: AudioPreview,
     #[cfg(feature = "audio-preview")]
     player: Option<Arc<Player<Content>>>,
+    #[cfg(feature = "text-preview")]
+    text: TextPreview,
 }
 
 impl FilePreview {
@@ -55,7 +59,7 @@ impl FilePreview {
             Kind::Image => decodable_image(name),
             #[cfg(feature = "audio-preview")]
             Kind::Audio => self.player.is_some(),
-            _ => false,
+            _ => is_text(name),
         }
     }
 
@@ -81,13 +85,21 @@ impl FilePreview {
 
     /// Draw the picture or the player of `file`, at the top of `ui`.
     #[cfg_attr(
-        not(any(feature = "image-preview", feature = "audio-preview")),
+        not(any(
+            feature = "image-preview",
+            feature = "audio-preview",
+            feature = "text-preview"
+        )),
         allow(unused_variables)
     )]
     fn part(&mut self, ui: &mut egui::Ui, file: &FileInfo, state: State<'_>) -> PreviewResponse {
         #[allow(unused_mut)]
         let mut response = PreviewResponse::default();
-        #[cfg(any(feature = "image-preview", feature = "audio-preview"))]
+        #[cfg(any(
+            feature = "image-preview",
+            feature = "audio-preview",
+            feature = "text-preview"
+        ))]
         {
             let width = ui.available_width();
             let bounded = width.min(ui.available_height() * 0.6);
@@ -124,6 +136,12 @@ impl FilePreview {
                 }
                 _ => {}
             }
+            #[cfg(feature = "text-preview")]
+            if is_text(&file.name) {
+                let (mut child, rect) = draw(ui, bounded);
+                response = self.text.ui(&mut child, state);
+                ui.allocate_rect(rect, egui::Sense::hover());
+            }
         }
         response
     }
@@ -138,4 +156,26 @@ fn decodable_image(name: &str) -> bool {
             .iter()
             .any(|known| ext.eq_ignore_ascii_case(known))
     })
+}
+
+/// The extensions of the files `FilePreview` shows as text, matched without regard to case.
+#[cfg(feature = "text-preview")]
+const TEXT_EXTENSIONS_SHOWN: &[&str] = &[
+    "txt", "text", "md", "markdown", "cue", "log", "m3u", "m3u8", "json", "toml", "yaml", "yml",
+    "csv", "tsv", "ini", "cfg", "conf", "xml", "srt", "vtt", "nfo", "rs", "py", "js", "ts", "sh",
+];
+
+/// Whether `FilePreview` shows the file called `name` as text, by its extension.
+#[cfg(feature = "text-preview")]
+fn is_text(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, ext)| {
+        TEXT_EXTENSIONS_SHOWN
+            .iter()
+            .any(|known| ext.eq_ignore_ascii_case(known))
+    })
+}
+
+#[cfg(not(feature = "text-preview"))]
+fn is_text(_: &str) -> bool {
+    false
 }
