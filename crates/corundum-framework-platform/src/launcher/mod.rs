@@ -46,6 +46,14 @@ pub struct LauncherSpec {
     pub category: &'static str,
     /// The icon, as the bytes of an SVG file.
     pub icon_svg: &'static [u8],
+    /// The icon macOS shows, as the bytes of an SVG file, or `None` for [`icon_svg`].
+    ///
+    /// macOS shows an app icon as it is drawn, and sets one that does not fill its icon
+    /// grid (an 824-unit rounded square in a 1024 canvas) on a plate of the system's own.
+    /// An app whose mark has no tile of its own gives one here, drawn on that grid.
+    ///
+    /// [`icon_svg`]: LauncherSpec::icon_svg
+    pub macos_icon_svg: Option<&'static [u8]>,
     /// The prefix of the bundle's name where the OS has bundles.
     pub bundle_prefix: &'static str,
 }
@@ -401,6 +409,7 @@ mod tests {
             description: "A test app",
             category: "Utility",
             icon_svg: b"<svg/>",
+            macos_icon_svg: None,
             bundle_prefix: "net.example",
         };
         let root = Root {
@@ -469,6 +478,7 @@ mod tests {
             description: "A test app",
             category: "Utility",
             icon_svg: b"<svg/>",
+            macos_icon_svg: None,
             bundle_prefix: "net.example",
         };
         let root = Root {
@@ -490,6 +500,7 @@ mod tests {
             description: "A test app",
             category: "Utility",
             icon_svg: b"<svg/>",
+            macos_icon_svg: None,
             bundle_prefix: "net.example",
         };
         let root = || Root {
