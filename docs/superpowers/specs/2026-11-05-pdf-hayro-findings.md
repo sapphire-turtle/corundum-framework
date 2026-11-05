@@ -30,8 +30,12 @@ the resolver answers `FontQuery::Fallback` with a system Japanese font.
 - `scan.pdf` (JPEG only, DeviceGray DCTDecode): renders correctly, the image fills the page
   (1024 x 1449 px). The JPEG is coarse because it is compressed hard (15 KB), not because of
   the renderer.
-- `encrypted.pdf` (RC4 128-bit, empty user password): `Pdf::new(data)` succeeds and the page
+- `encrypted.pdf` (RC4 128-bit, empty user password): "encrypted but viewable", like viewers treat it. `Pdf::new(data)` succeeds and the page
   renders with its text decrypted. Nothing to ask the user. See "Encryption" below.
+- `password.pdf` (same handler, user password "secret"): the one that really cannot be opened.
+  `Pdf::new(data)` returns `Err(LoadPdfError::Decryption(DecryptionError::PasswordProtected))`;
+  `new_with_password(data, "secret")` opens it with 1 page. This is the fixture that maps to
+  the crate's `Error::Encrypted`.
 - `two-pages.pdf`: `pdf.pages().len() == 2`. Page 0 reports `render_dimensions() = (595.0,
   842.0)` and page 1 `(612.0, 792.0)`, so the sizes differ per page and come through. At
   1024 px wide they are 1024 x 1449 and 1024 x 1325 px. Helvetica (not embedded) renders
@@ -40,7 +44,7 @@ the resolver answers `FontQuery::Fallback` with a system Japanese font.
 ## Encryption
 
 - Empty user password: opens and renders (above). `Pdf::new` is `new_with_password(data, "")`.
-- A password that does not match: `Pdf::new_with_password(data, "x")` returns
+- A password that does not match (`password.pdf` with no password or with "x"): returns
   `Err(LoadPdfError::Decryption(DecryptionError::PasswordProtected))`. So a file that really
   needs a password gives `LoadPdfError::Decryption(PasswordProtected)` from `Pdf::new`.
 - `DecryptionError` has `MissingIDEntry`, `PasswordProtected`, `InvalidEncryption`,
