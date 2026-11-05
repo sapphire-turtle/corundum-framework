@@ -145,10 +145,20 @@ fn datetime_is_alumina_s() {
 #[cfg(feature = "pdf")]
 #[test]
 fn pdf_is_the_pdf_crate() {
+    #[allow(clippy::type_complexity)]
     let _: fn(
         std::sync::Arc<[u8]>,
         Option<corundum_framework::pdf::FallbackFont>,
-    ) -> Result<corundum_framework::pdf::Document, corundum_framework::pdf::Error> =
+    )
+        -> Result<corundum_framework::pdf::Document, corundum_framework::pdf::Error> =
         corundum_framework::pdf::Document::open;
     assert_eq!(corundum_framework::pdf::MAX_PAGES, 500);
+}
+
+#[cfg(feature = "pdf-preview")]
+#[test]
+fn pdf_preview_is_the_gui_crate_s() {
+    let _: fn() -> corundum_framework::gui::preview::PdfPreview =
+        corundum_framework::gui::preview::PdfPreview::new;
+    let _ = corundum_framework::pdf::Document::open;
 }

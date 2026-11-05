@@ -98,6 +98,9 @@ gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
 # `gui::preview::ImagePreview`: an image the app hands in drawn in the detail pane, decoded
 # on a worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
 image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
+# `gui::preview::PdfPreview`: a PDF the app hands in drawn a page at a time in the detail pane, rendered
+# on a worker thread in pure Rust (brings `pdf`).
+pdf-preview = ["gui", "pdf", "corundum-framework-gui/pdf-preview"]
 # `gui::preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags
 # read on a worker thread, through the app's `audio::Player<Content>` (brings `audio` and `audio-cpal`).
 audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-preview"]

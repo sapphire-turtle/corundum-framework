@@ -486,6 +486,10 @@ fn make_sample(root: &Path) -> std::io::Result<()> {
     }
     let sample_png = include_bytes!("../../assets/sample.png");
     file(root.join("Pictures/sample.png"), sample_png)?;
+    file(
+        root.join("Pictures/tickets.pdf"),
+        include_bytes!("../../../crates/corundum-framework-pdf/tests/fixtures/two-pages.pdf"),
+    )?;
     file(root.join("Music/First album/cover.png"), sample_png)?;
     file(root.join("Music/First album/00 Tone.wav"), &tone_wav())?;
     file(

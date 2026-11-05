@@ -505,7 +505,10 @@ fn text_files_want_content() {
     assert!(preview.wants_content("B.LOG"));
     assert!(preview.wants_content("x.md"));
     assert!(!preview.wants_content("a.docx"));
-    assert!(!preview.wants_content("a.pdf"));
+    assert_eq!(
+        preview.wants_content("a.pdf"),
+        cfg!(feature = "pdf-preview")
+    );
 }
 
 #[cfg(feature = "text-preview")]
@@ -580,4 +583,39 @@ fn markdown_files_go_to_the_markdown_preview() {
         (rows.first().unwrap() - rows.last().unwrap()).abs() < 0.5,
         "{rows:?}"
     );
+}
+
+#[cfg(feature = "pdf-preview")]
+#[test]
+fn a_pdf_wants_content_and_shows_a_page() {
+    let ctx = egui::Context::default();
+    crate::icons::install_loaders(&ctx);
+    let content = super::Content::bytes(
+        "k",
+        "tickets.pdf",
+        include_bytes!("../../../corundum-framework-pdf/tests/fixtures/two-pages.pdf").to_vec(),
+    );
+    let file = leaked(FileInfo {
+        size: Some(10),
+        ..FileInfo::new("tickets.pdf")
+    });
+    let mut preview = FilePreview::new();
+    assert!(preview.wants_content("a.PDF"));
+    let start = std::time::Instant::now();
+    loop {
+        let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            let _ = preview.ui(ui, file, State::Ready(&content), false);
+        });
+        if let (Some(page), Some(count)) = (drawn.images.first(), drawn.rect("1 / 2")) {
+            let size = drawn.rect("Size").expect("the Size label");
+            assert!(size.top() > page.bottom(), "{drawn:?}");
+            assert!(size.top() > count.bottom(), "{drawn:?}");
+            return;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(20),
+            "{drawn:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
 }
