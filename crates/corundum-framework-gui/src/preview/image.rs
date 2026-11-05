@@ -1,14 +1,15 @@
-//! [`ImagePreview`]: a picture file, decoded off the UI thread and fitted in the space given.
+//! [`ImagePreview`]: a picture the app hands in, decoded off the UI thread and fitted in the
+//! space given.
 
+use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
-use std::time::{Duration, Instant, SystemTime};
 
 use corundum_framework_image::{Error, Image, Limits, Source, thumbnail};
 
+use super::content::{Content, Data, PreviewResponse, State, status_ui};
 use crate::{icons, tr};
 
 /// The sizes a picture is decoded to, in pixels on its longest side: the space it is drawn
@@ -21,53 +22,27 @@ const KEPT: usize = 8;
 /// The most pixels a picture may have, by default: 64 megapixels, a large camera's photo.
 const MAX_PIXELS: u64 = 64_000_000;
 
-/// How often the shown file is looked at again for a change, by the worker.
-const RECHECK: Duration = Duration::from_secs(2);
+/// The most bytes of a file read whole to be decoded; a longer one is too large.
+const READ_MAX: u64 = 256 * 1024 * 1024;
 
 /// The icon's size above a message, in points.
 const ICON: f32 = 48.0;
 
-/// A file as the worker found it: a file changed on disk is another picture.
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct Key {
-    path: PathBuf,
-    modified: Option<SystemTime>,
-    size: u64,
-}
-
-impl Key {
-    /// Stat `path`: on the worker only, as a hung network mount would freeze the UI.
-    fn of(path: &Path) -> Key {
-        let meta = std::fs::metadata(path).ok();
-        Key {
-            path: path.to_owned(),
-            modified: meta.as_ref().and_then(|m| m.modified().ok()),
-            size: meta.map_or(0, |m| m.len()),
-        }
-    }
-}
-
 /// A request to the worker.
 struct Request {
-    path: PathBuf,
+    content: Content,
     /// The longest side to decode to.
     longest: u32,
     /// How big a picture may be.
     limits: Limits,
-    /// The file as it was when a decode at least this large was kept: if it still is, the
-    /// worker says so instead of decoding it again.
-    known: Option<Key>,
 }
 
 /// What the worker made of a [`Request`].
-enum Answer {
-    /// The file is as `known` said.
-    Unchanged { path: PathBuf, longest: u32 },
-    Decoded {
-        key: Key,
-        longest: u32,
-        decoded: Decoded,
-    },
+struct Answer {
+    /// The key of the content decoded.
+    key: String,
+    longest: u32,
+    decoded: Decoded,
 }
 
 /// A decode's result, made ready for the UI thread to upload.
@@ -100,14 +75,13 @@ enum Outcome {
     Failed(String),
 }
 
-/// A decoded file, kept.
+/// A decoded content, kept.
 struct Kept {
-    key: Key,
+    /// The app's key of the content.
+    key: String,
     /// The longest side it was asked to be decoded to.
     longest: u32,
     outcome: Outcome,
-    /// When the worker last found the file unchanged.
-    checked: Instant,
 }
 
 impl Kept {
@@ -167,40 +141,53 @@ impl Worker {
     }
 }
 
-/// The worker's answer to `request`: the file looked at, and decoded unless it is as known.
+/// The worker's answer to `request`: the content decoded.
 fn answer(request: Request) -> Answer {
     let Request {
-        path,
+        content,
         longest,
         limits,
-        known,
     } = request;
-    let key = Key::of(&path);
-    if known.as_ref() == Some(&key) {
-        return Answer::Unchanged { path, longest };
-    }
     // The decoder guards itself, but a panic elsewhere (the resizer, say) would end the
-    // thread, and the next frame would start another to decode the file again: it fails
+    // thread, and the next frame would start another to decode the content again: it fails
     // instead, once, like a broken file.
-    let decoded = catch_unwind(AssertUnwindSafe(|| {
-        Decoded::of(decode(&key.path, longest, &limits))
-    }))
-    .unwrap_or_else(|_| Decoded::Failed("the image preview panicked".into()));
-    Answer::Decoded {
-        key,
+    let decoded = catch_unwind(AssertUnwindSafe(|| decode(&content, longest, &limits)))
+        .unwrap_or_else(|_| Decoded::Failed("the image preview panicked".into()));
+    Answer {
+        key: content.key,
         longest,
         decoded,
     }
 }
 
-/// Decode the picture at `path` to `longest` pixels on its longest side.
-fn decode(path: &Path, longest: u32, limits: &Limits) -> Result<Image, Error> {
+/// Decode the picture in `content` to `longest` pixels on its longest side. A reader is
+/// read whole first, up to [`READ_MAX`] bytes.
+fn decode(content: &Content, longest: u32, limits: &Limits) -> Decoded {
     #[cfg(test)]
-    if path.file_name() == Some(std::ffi::OsStr::new(PANIC_NAME)) {
+    if content.name == PANIC_NAME {
         PANICS.fetch_add(1, Ordering::SeqCst);
         panic!("a test's panic in the image preview's worker");
     }
-    thumbnail(Source::Path(path), longest, limits)
+    let ext = content.ext();
+    let ext = ext.as_deref();
+    match &content.data {
+        Data::Bytes(bytes) => Decoded::of(thumbnail(Source::Bytes { bytes, ext }, longest, limits)),
+        Data::Reader(_) => {
+            let mut bytes = Vec::new();
+            let read = content
+                .open()
+                .and_then(|reader| reader.take(READ_MAX + 1).read_to_end(&mut bytes));
+            match read {
+                Err(e) => Decoded::Failed(e.to_string()),
+                Ok(_) if bytes.len() as u64 > READ_MAX => Decoded::TooLarge,
+                Ok(_) => Decoded::of(thumbnail(
+                    Source::Bytes { bytes: &bytes, ext },
+                    longest,
+                    limits,
+                )),
+            }
+        }
+    }
 }
 
 /// A file name the worker panics on, past the decoder's own guard, for a test.
@@ -217,15 +204,15 @@ pub(super) fn panics() -> usize {
     PANICS.load(Ordering::SeqCst)
 }
 
-/// A picture file in the detail pane: decoded on a worker thread to the size it is drawn
-/// at (2048 pixels at most on its longest side), with a spinner meanwhile, and fitted in
-/// the space given, its aspect kept and never drawn larger than its pixels.
+/// A picture in the detail pane: decoded on a worker thread to the size it is drawn at
+/// (2048 pixels at most on its longest side), with a spinner meanwhile, and fitted in the
+/// space given, its aspect kept and never drawn larger than its pixels.
 ///
-/// The last pictures shown are kept, by path, modified time and size, so going back to
-/// one is instant. The UI thread never touches the file: the worker looks at it when it is
-/// picked again, and every couple of seconds while it is shown, and decodes it again if it
-/// changed. A file the decoder does not know (HEIC, say) shows the file icon and says so;
-/// one too large or broken says why.
+/// What it draws is the [`Content`] the app hands in with a [`State`]; the app's key names
+/// the picture. The last pictures shown are kept by key, so going back to one is instant.
+/// The file is never looked at again: when it changes, the app gives it another key. The UI
+/// thread never reads the content: the worker does, and decodes it. A file the decoder does
+/// not know (HEIC, say) shows the file icon and says so; one too large or broken says why.
 ///
 /// A picture over its [`Limits`] is too large: by default, over 64 megapixels. Peak memory
 /// while one is decoded is two of its buffers at a time (the decoded one and the copy an
@@ -238,15 +225,11 @@ pub(super) fn panics() -> usize {
 pub struct ImagePreview {
     /// Started on the first frame that needs it.
     worker: Option<Worker>,
-    /// The path and size of the last request sent, until it is answered, so a frame asks
+    /// The key and size of the last request sent, until it is answered, so a frame asks
     /// again only for something new.
-    asked: Option<(PathBuf, u32)>,
-    /// The path drawn in the last frame.
-    current: Option<PathBuf>,
-    /// The decoded files, one per path, the most recently shown last.
+    asked: Option<(String, u32)>,
+    /// The decoded contents, one per key, the most recently shown last.
     kept: Vec<Kept>,
-    /// How often the shown file is looked at again for a change.
-    recheck: Duration,
     /// How big a picture may be.
     limits: Limits,
 }
@@ -256,9 +239,7 @@ impl Default for ImagePreview {
         ImagePreview {
             worker: None,
             asked: None,
-            current: None,
             kept: Vec::new(),
-            recheck: RECHECK,
             limits: Limits::default().with_max_pixels(MAX_PIXELS),
         }
     }
@@ -276,39 +257,37 @@ impl ImagePreview {
         ImagePreview { limits, ..self }
     }
 
-    /// Draw `path` in the space `ui` has left.
-    pub fn ui(&mut self, ui: &mut egui::Ui, path: &Path) {
+    /// Draw the picture of `state` in the space `ui` has left. For Loading and Failed it
+    /// draws the spinner, or the reason and a Retry button, and reports a click on Retry.
+    pub fn ui(&mut self, ui: &mut egui::Ui, state: State<'_>) -> PreviewResponse {
+        let mut response = PreviewResponse::default();
         self.receive(ui.ctx());
+        let Some(content) = status_ui(ui, state, &mut response) else {
+            return response;
+        };
         let area = ui.available_rect_before_wrap();
         ui.allocate_rect(area, egui::Sense::hover());
         let ppp = ui.ctx().pixels_per_point();
         let max_side = ui.ctx().input(|i| i.max_texture_side) as u32;
         let longest = target(area.size(), ppp).min(max_side.max(1));
-        let picked = self.current.as_deref() != Some(path);
-        if picked {
-            self.current = Some(path.to_owned());
-        }
 
-        let Some(at) = self.kept.iter().position(|k| k.key.path == path) else {
-            self.ask(ui.ctx(), path, longest, None);
+        let Some(at) = self.kept.iter().position(|k| k.key == content.key) else {
+            self.ask(ui.ctx(), content, longest);
             egui::Spinner::new().paint_at(
                 ui,
                 egui::Rect::from_center_size(area.center(), egui::vec2(32.0, 32.0)),
             );
-            return;
+            return response;
         };
         let kept = self.kept.remove(at);
         self.kept.push(kept);
         let kept = &self.kept[self.kept.len() - 1];
         if !kept.serves(longest) {
             // The smaller decode is drawn until the larger one comes.
-            self.ask(ui.ctx(), path, longest, None);
-        } else if picked || kept.checked.elapsed() >= self.recheck {
-            let known = Some(kept.key.clone());
-            self.ask(ui.ctx(), path, longest, known);
+            self.ask(ui.ctx(), content, longest);
         }
-        ui.ctx().request_repaint_after(self.recheck);
         self.draw(ui, area, self.kept.len() - 1);
+        response
     }
 
     /// Draw the kept decode at `at` in `area`.
@@ -338,13 +317,13 @@ impl ImagePreview {
         inner.add(egui::Label::new(message).wrap());
     }
 
-    /// Send the worker a request for `path` at `longest` pixels, unless that is the one
+    /// Send the worker a request for `content` at `longest` pixels, unless that is the one
     /// still unanswered.
-    fn ask(&mut self, ctx: &egui::Context, path: &Path, longest: u32, known: Option<Key>) {
+    fn ask(&mut self, ctx: &egui::Context, content: &Content, longest: u32) {
         if self
             .asked
             .as_ref()
-            .is_some_and(|(p, l)| p == path && *l == longest)
+            .is_some_and(|(k, l)| *k == content.key && *l == longest)
         {
             return;
         }
@@ -353,10 +332,9 @@ impl ImagePreview {
             .get_or_insert_with(|| Worker::spawn(ctx.clone()));
         worker.pending.fetch_add(1, Ordering::SeqCst);
         let request = Request {
-            path: path.to_owned(),
+            content: content.clone(),
             longest,
             limits: self.limits,
-            known,
         };
         if worker.requests.send(request).is_err() {
             // The thread is gone (it panicked): start another on the next frame.
@@ -364,7 +342,7 @@ impl ImagePreview {
             self.asked = None;
             return;
         }
-        self.asked = Some((path.to_owned(), longest));
+        self.asked = Some((content.key.clone(), longest));
     }
 
     /// Keep what the worker has finished; whether it is shown is the frame's to decide.
@@ -374,21 +352,15 @@ impl ImagePreview {
         };
         loop {
             match worker.answers.try_recv() {
-                Ok(Answer::Unchanged { path, longest }) => {
-                    answered(&mut self.asked, &path, longest);
-                    if let Some(kept) = self.kept.iter_mut().find(|k| k.key.path == path) {
-                        kept.checked = Instant::now();
-                    }
-                }
-                Ok(Answer::Decoded {
+                Ok(Answer {
                     key,
                     longest,
                     decoded,
                 }) => {
-                    answered(&mut self.asked, &key.path, longest);
+                    answered(&mut self.asked, &key, longest);
                     let outcome = match decoded {
                         Decoded::Picture(pixels) => Outcome::Picture(ctx.load_texture(
-                            format!("corundum-preview {}", key.path.display()),
+                            format!("corundum-preview {key}"),
                             pixels,
                             egui::TextureOptions::LINEAR,
                         )),
@@ -396,12 +368,11 @@ impl ImagePreview {
                         Decoded::TooLarge => Outcome::TooLarge,
                         Decoded::Failed(reason) => Outcome::Failed(reason),
                     };
-                    self.kept.retain(|k| k.key.path != key.path);
+                    self.kept.retain(|k| k.key != key);
                     self.kept.push(Kept {
                         key,
                         longest,
                         outcome,
-                        checked: Instant::now(),
                     });
                     if self.kept.len() > KEPT {
                         self.kept.remove(0);
@@ -423,12 +394,6 @@ impl ImagePreview {
         self.limits
     }
 
-    /// How often the shown file is looked at again, for a test.
-    #[cfg(test)]
-    pub(super) fn set_recheck(&mut self, recheck: Duration) {
-        self.recheck = recheck;
-    }
-
     /// Something the worker thread holds while it runs.
     #[cfg(test)]
     pub(super) fn thread_token(&self) -> Option<std::sync::Weak<AtomicUsize>> {
@@ -444,11 +409,11 @@ impl ImagePreview {
     }
 }
 
-/// Forget the request for `path` at `longest` as unanswered, if it was the last sent.
-fn answered(asked: &mut Option<(PathBuf, u32)>, path: &Path, longest: u32) {
+/// Forget the request for `key` at `longest` as unanswered, if it was the last sent.
+fn answered(asked: &mut Option<(String, u32)>, key: &str, longest: u32) {
     if asked
         .as_ref()
-        .is_some_and(|(p, l)| p == path && *l == longest)
+        .is_some_and(|(k, l)| k == key && *l == longest)
     {
         *asked = None;
     }
