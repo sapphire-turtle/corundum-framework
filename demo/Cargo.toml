@@ -49,7 +49,7 @@ corundum-framework-build = { version = "0.9.1", path = "../crates/corundum-frame
 # around it (ios/, android/) declare what each needs (README.md has the list). Android has
 # no media session yet.
 [target.'cfg(not(target_os = "android"))'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["audio-preview", "eframe", "image-preview", "markdown-preview", "media-picker", "media-session", "qr-code", "qr-scan", "serde", "text-preview"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["audio-preview", "datetime", "eframe", "image-preview", "markdown-preview", "media-picker", "media-session", "qr-code", "qr-scan", "serde", "text-preview"] }
 tracing-subscriber = { workspace = true, features = ["fmt", "env-filter"] }
 
 # The updates panel replaces the running executable, which a phone's app never does (and its
@@ -69,7 +69,7 @@ objc2-avf-audio = { version = "0.3.2", default-features = false, features = ["st
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSData", "NSError", "NSString"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-corundum-framework = { path = "../crates/corundum-framework", features = ["android", "audio-preview", "image-preview", "markdown-preview", "media-picker", "qr-code", "qr-scan", "serde", "text-preview"] }
+corundum-framework = { path = "../crates/corundum-framework", features = ["android", "audio-preview", "datetime", "image-preview", "markdown-preview", "media-picker", "qr-code", "qr-scan", "serde", "text-preview"] }
 
 [features]
 # Built by the release workflow (demo-release.yml), not by `cargo run`: the demo as a

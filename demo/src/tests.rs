@@ -231,3 +231,28 @@ fn the_first_run_has_a_welcome_and_the_service_page() {
         ]
     );
 }
+
+#[test]
+fn the_dates_screen_draws() {
+    let (ctx, dir) = finished_context("dates");
+    let mut app = Demo::new(&ctx);
+    app.open(Screen::Dates);
+    let size = egui::vec2(1000.0, 700.0);
+    let week_heading = i18n::tr(&ctx, "corundum-datetime-week-column");
+    let mut found = false;
+    for _ in 0..2 {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| app.ui(ui));
+        output.textures_delta.clear();
+        // The calendar's week column heading, in the language the context is in.
+        found = output.shapes.iter().any(|clipped| {
+            matches!(&clipped.shape, egui::epaint::Shape::Text(t) if t.galley.text() == week_heading)
+        });
+    }
+    assert!(found, "no calendar drawn");
+    assert_eq!(app.current(), Some(Screen::Dates));
+    let _ = std::fs::remove_dir_all(dir);
+}

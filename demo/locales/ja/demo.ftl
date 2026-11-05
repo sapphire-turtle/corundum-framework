@@ -14,6 +14,7 @@ demo-screen-files = ファイル
 demo-screen-platform = プラットフォーム
 demo-screen-media = メディア
 demo-screen-editors = エディター
+demo-screen-dates = 日付
 demo-screen-settings = 設定
 # レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
 demo-action-new = 新しいメモ
@@ -191,3 +192,12 @@ demo-editors-intro = alumina のエディターを corundum のテーマで表�
 demo-editors-markdown = Markdown
 demo-editors-code = コード
 demo-editors-code-note = ハイライトなしの JSON のサンプルです。エディターはインデントを保つだけです。
+
+demo-dates-intro = alumina のカレンダーと日付・時刻ピッカーを、corundum の言葉とアイコンで表示します。週は月曜始まりで、週番号は ISO 準拠です。
+demo-dates-calendar = カレンダー
+demo-dates-buttons = ピッカーボタン
+demo-dates-date = 日付
+demo-dates-period = 期間
+demo-dates-time = 時刻
+demo-dates-datetime = 日時
+demo-dates-none = (なし)
