@@ -296,13 +296,63 @@ pub fn cloud_off() -> egui::ImageSource<'static> {
     icon!("cloud-off")
 }
 
+/// Bold text.
+pub fn bold() -> egui::ImageSource<'static> {
+    icon!("bold")
+}
+
+/// Italic text.
+pub fn italic() -> egui::ImageSource<'static> {
+    icon!("italic")
+}
+
+/// Struck-through text.
+pub fn strikethrough() -> egui::ImageSource<'static> {
+    icon!("strikethrough")
+}
+
+/// Code, inline.
+pub fn code() -> egui::ImageSource<'static> {
+    icon!("code")
+}
+
+/// A link.
+pub fn link() -> egui::ImageSource<'static> {
+    icon!("link")
+}
+
+/// A heading.
+pub fn heading() -> egui::ImageSource<'static> {
+    icon!("heading")
+}
+
+/// A numbered list.
+pub fn list_ordered() -> egui::ImageSource<'static> {
+    icon!("list-ordered")
+}
+
+/// A task list.
+pub fn list_todo() -> egui::ImageSource<'static> {
+    icon!("list-todo")
+}
+
+/// A quotation.
+pub fn text_quote() -> egui::ImageSource<'static> {
+    icon!("text-quote")
+}
+
+/// A block of code.
+pub fn square_code() -> egui::ImageSource<'static> {
+    icon!("square-code")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     type Icon = fn() -> egui::ImageSource<'static>;
 
-    const ALL: [(&str, Icon); 43] = [
+    const ALL: [(&str, Icon); 53] = [
         ("settings", settings),
         ("arrow_left", arrow_left),
         ("x", x),
@@ -346,6 +396,16 @@ mod tests {
         ("upload", upload),
         ("download", download),
         ("cloud_off", cloud_off),
+        ("bold", bold),
+        ("italic", italic),
+        ("strikethrough", strikethrough),
+        ("code", code),
+        ("link", link),
+        ("heading", heading),
+        ("list_ordered", list_ordered),
+        ("list_todo", list_todo),
+        ("text_quote", text_quote),
+        ("square_code", square_code),
     ];
 
     #[test]

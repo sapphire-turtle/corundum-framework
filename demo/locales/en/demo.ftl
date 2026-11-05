@@ -13,6 +13,7 @@ demo-screen-detail = Detail
 demo-screen-files = Files
 demo-screen-platform = Platform
 demo-screen-media = Media
+demo-screen-editors = Editors
 demo-screen-settings = Settings
 # The rail's action: a new note, written in the side pane beside whatever screen is open.
 demo-action-new = New note
@@ -198,3 +199,8 @@ demo-files-show = Show in file manager
 
 demo-files-none = Pick one file to see it here.
 demo-files-album = In the sample album
+
+demo-editors-intro = Alumina's editors, in corundum's theme. The toolbar has corundum's icons and speaks the language; a link clicked in the note is reported in the status bar.
+demo-editors-markdown = Markdown
+demo-editors-code = Code
+demo-editors-code-note = A JSON sample, with no highlighter: the editor keeps the indentation and nothing else.

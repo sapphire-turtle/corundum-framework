@@ -14,6 +14,8 @@ use super::Content;
 use super::ImagePreview;
 #[cfg(any(feature = "image-preview", feature = "audio-preview"))]
 use super::Kind;
+#[cfg(feature = "markdown-preview")]
+use super::MarkdownPreview;
 #[cfg(feature = "text-preview")]
 use super::TextPreview;
 use super::{FileInfo, InfoCard, PreviewResponse, State, kind_of};
@@ -32,6 +34,8 @@ pub struct FilePreview {
     player: Option<Arc<Player<Content>>>,
     #[cfg(feature = "text-preview")]
     text: TextPreview,
+    #[cfg(feature = "markdown-preview")]
+    markdown: MarkdownPreview,
 }
 
 impl FilePreview {
@@ -139,7 +143,11 @@ impl FilePreview {
             #[cfg(feature = "text-preview")]
             if is_text(&file.name) {
                 let (mut child, rect) = draw(ui, bounded);
-                response = self.text.ui(&mut child, state);
+                response = match () {
+                    #[cfg(feature = "markdown-preview")]
+                    () if is_markdown(&file.name) => self.markdown.ui(&mut child, state),
+                    () => self.text.ui(&mut child, state),
+                };
                 ui.allocate_rect(rect, egui::Sense::hover());
             }
         }
@@ -178,4 +186,12 @@ fn is_text(name: &str) -> bool {
 #[cfg(not(feature = "text-preview"))]
 fn is_text(_: &str) -> bool {
     false
+}
+
+/// Whether `name` is a Markdown file, by its extension.
+#[cfg(feature = "markdown-preview")]
+fn is_markdown(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, ext)| {
+        ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown")
+    })
 }

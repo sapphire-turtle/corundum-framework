@@ -10,7 +10,7 @@ use super::heading;
 type Icon = fn() -> egui::ImageSource<'static>;
 
 /// Every icon corundum-framework-gui bundles, by its Lucide name.
-pub(crate) const ALL: [(&str, Icon); 44] = [
+pub(crate) const ALL: [(&str, Icon); 54] = [
     ("settings", icons::settings),
     ("arrow-left", icons::arrow_left),
     ("x", icons::x),
@@ -55,6 +55,16 @@ pub(crate) const ALL: [(&str, Icon); 44] = [
     ("upload", icons::upload),
     ("download", icons::download),
     ("cloud-off", icons::cloud_off),
+    ("bold", icons::bold),
+    ("italic", icons::italic),
+    ("strikethrough", icons::strikethrough),
+    ("code", icons::code),
+    ("link", icons::link),
+    ("heading", icons::heading),
+    ("list-ordered", icons::list_ordered),
+    ("list-todo", icons::list_todo),
+    ("text-quote", icons::text_quote),
+    ("square-code", icons::square_code),
 ];
 
 /// How the grid draws the icons.

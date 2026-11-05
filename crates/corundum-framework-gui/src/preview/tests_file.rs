@@ -9,6 +9,8 @@ use crate::explorer::Entry;
 #[derive(Default, Debug)]
 struct Drawn {
     texts: Vec<(String, egui::Rect)>,
+    /// Each text's row heights, in step with `texts`.
+    rows: Vec<Vec<f32>>,
     image: bool,
     /// Where each textured rect was drawn.
     images: Vec<egui::Rect>,
@@ -19,9 +21,14 @@ struct Drawn {
 fn collect(shape: &egui::Shape, drawn: &mut Drawn) {
     match shape {
         egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, drawn)),
-        egui::Shape::Text(text) => drawn
-            .texts
-            .push((text.galley.text().to_owned(), text.visual_bounding_rect())),
+        egui::Shape::Text(text) => {
+            drawn
+                .texts
+                .push((text.galley.text().to_owned(), text.visual_bounding_rect()));
+            drawn
+                .rows
+                .push(text.galley.rows.iter().map(|r| r.height()).collect());
+        }
         egui::Shape::Mesh(mesh) => {
             drawn.image = true;
             drawn.images.push(mesh.calc_bounds());
@@ -58,7 +65,7 @@ fn frame(
     };
     let mut output = ctx.run_ui(input, |ui| {
         egui::CentralPanel::default().show(ui, |ui| {
-            *response = response.merge(card().ui(ui));
+            *response = std::mem::take(response).merge(card().ui(ui));
         });
     });
     // Unapplied texture deltas panic on drop; there is no renderer here.
@@ -331,7 +338,12 @@ fn a_failed_image_fetch_offers_retry() {
     let mut preview = FilePreview::new();
     let mut response = PreviewResponse::default();
     let drawn = frame_ui(&ctx, Vec::new(), |ui| {
-        response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+        response = std::mem::take(&mut response).merge(preview.ui(
+            ui,
+            file,
+            State::Failed("offline"),
+            false,
+        ));
     });
     assert!(drawn.has("offline"), "{drawn:?}");
     let at = drawn.rect("Retry").expect("a Retry button").center();
@@ -346,7 +358,12 @@ fn a_failed_image_fetch_offers_retry() {
         vec![button(false)],
     ] {
         let _ = frame_ui(&ctx, events, |ui| {
-            response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+            response = std::mem::take(&mut response).merge(preview.ui(
+                ui,
+                file,
+                State::Failed("offline"),
+                false,
+            ));
         });
     }
     assert!(response.retry);
@@ -523,4 +540,44 @@ fn a_text_file_shows_its_text_and_details() {
 fn a_ts_file_is_a_video_not_text() {
     // MPEG-TS recordings are multi-GB videos; they must not be fetched as text.
     assert!(!FilePreview::new().wants_content("rec.ts"));
+}
+
+/// The row heights of the first text drawn that contains `needle`, polling until it shows.
+#[cfg(feature = "markdown-preview")]
+fn rows_of(name: &str, needle: &str) -> Vec<f32> {
+    let ctx = egui::Context::default();
+    let content = super::Content::bytes("k", name, b"# Hi\n\nbody".to_vec());
+    let file = leaked(FileInfo::new(name));
+    let mut preview = FilePreview::new();
+    let start = std::time::Instant::now();
+    loop {
+        let drawn = frame_ui(&ctx, Vec::new(), |ui| {
+            let _ = preview.ui(ui, file, State::Ready(&content), false);
+        });
+        if let Some(i) = drawn.texts.iter().position(|(t, _)| t.contains(needle)) {
+            return drawn.rows[i].clone();
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "{drawn:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[cfg(feature = "markdown-preview")]
+#[test]
+fn markdown_files_go_to_the_markdown_preview() {
+    for name in ["a.md", "b.MARKDOWN"] {
+        let rows = rows_of(name, "Hi");
+        assert!(
+            rows.first().unwrap() > &(rows.last().unwrap() * 1.1),
+            "{name} {rows:?}"
+        );
+    }
+    let rows = rows_of("a.txt", "Hi");
+    assert!(
+        (rows.first().unwrap() - rows.last().unwrap()).abs() < 0.5,
+        "{rows:?}"
+    );
 }

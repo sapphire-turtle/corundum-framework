@@ -1,7 +1,9 @@
 //! [`TextPreview`]: a text file the app hands in, decoded off the UI thread and shown
-//! read-only.
+//! read-only; [`MarkdownPreview`] shows the same decoding formatted.
 
 mod decode;
+#[cfg(feature = "markdown-preview")]
+mod markdown;
 
 use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -14,6 +16,9 @@ use decode::{NotText, TEXT_LIMIT, Text, decode_text};
 use super::content::{Content, PreviewResponse, State, retry_button, status_ui};
 use crate::code::CodeEditor;
 use crate::{explorer, icons, tr};
+
+#[cfg(feature = "markdown-preview")]
+pub use markdown::MarkdownPreview;
 
 /// How many decoded texts are kept.
 const KEPT: usize = 8;
@@ -46,7 +51,7 @@ struct Worker {
 
 impl Worker {
     /// Start the thread. It takes the newest request it has, passing over older ones, and
-    /// ends when the [`TextPreview`] is dropped.
+    /// ends when the [`TextSource`] is dropped.
     fn spawn(ctx: egui::Context) -> Worker {
         let (requests, inbox) = channel::<Content>();
         let (outbox, answers) = channel::<Answer>();
@@ -106,19 +111,10 @@ fn read(content: &Content) -> Outcome {
     }
 }
 
-/// A text file in the detail pane: decoded on a worker thread, shown read-only and
-/// monospace in a scroll area, where it can be selected and copied.
-///
-/// What it draws is the [`Content`] the app hands in with a [`State`]; the app's key names
-/// the file. At most the first 256 KiB are read, and a note says when the file is longer.
-/// Only Unicode is read: UTF-8, or UTF-16 with a BOM; other bytes show as U+FFFD. The last texts shown are kept by key, so going back to one is
-/// instant, and its scroll position stays. The UI thread never reads the content: the worker
-/// does. A file that is not text (it has NUL bytes and no BOM) shows the file icon and says
-/// it can't be previewed; one that can't be read says why, with Retry.
-///
-/// Make one and keep it across frames; the thread it starts ends when it is dropped.
+/// The worker, the key it was last asked for, and the texts it has finished: what a preview
+/// of a text file needs to decode off the UI thread. The thread ends when it is dropped.
 #[derive(Default)]
-pub struct TextPreview {
+struct TextSource {
     /// Started on the first frame that needs it.
     worker: Option<Worker>,
     /// The key of the last request sent, until it is answered, so a frame asks again only
@@ -128,76 +124,24 @@ pub struct TextPreview {
     kept: Vec<(String, Outcome)>,
 }
 
-impl TextPreview {
-    /// An empty preview; its thread starts on the first frame that needs it.
-    pub fn new() -> TextPreview {
-        TextPreview::default()
-    }
-
-    /// Draw the text of `state` in the space `ui` has left. For Loading and Failed it draws
-    /// the spinner, or the reason and a Retry button, and reports a click on Retry.
-    pub fn ui(&mut self, ui: &mut egui::Ui, state: State<'_>) -> PreviewResponse {
-        let mut response = PreviewResponse::default();
+impl TextSource {
+    /// The outcome for `content`, which becomes the most recently shown; or `None` while
+    /// the worker is still reading it (it is asked, once).
+    fn get(&mut self, ctx: &egui::Context, content: &Content) -> Option<&mut Outcome> {
         self.receive();
-        let Some(content) = status_ui(ui, state, &mut response) else {
-            return response;
-        };
-        let area = ui.available_rect_before_wrap();
         let Some(at) = self.kept.iter().position(|(k, _)| *k == content.key) else {
-            self.ask(ui.ctx(), content);
-            ui.allocate_rect(area, egui::Sense::hover());
-            egui::Spinner::new().paint_at(
-                ui,
-                egui::Rect::from_center_size(area.center(), egui::vec2(32.0, 32.0)),
-            );
-            return response;
+            self.ask(ctx, content);
+            return None;
         };
         let kept = self.kept.remove(at);
         self.kept.push(kept);
-        let (key, outcome) = self.kept.last_mut().expect("just pushed");
-        let message = match outcome {
-            Outcome::Text { text, cut } => {
-                egui::ScrollArea::vertical()
-                    .id_salt(("text-preview-scroll", key.as_str()))
-                    .auto_shrink(false)
-                    .show(ui, |ui| {
-                        if *cut {
-                            let size = explorer::format_size(TEXT_LIMIT as u64);
-                            ui.label(
-                                egui::RichText::new(tr!(
-                                    ui,
-                                    "corundum-preview-text-cut",
-                                    size = size.as_str()
-                                ))
-                                .weak(),
-                            );
-                        }
-                        CodeEditor::new(text)
-                            .read_only(true)
-                            .id(egui::Id::unique(("text-preview-editor", key.as_str())))
-                            .show(ui);
-                    });
-                return response;
-            }
-            Outcome::Binary => tr!(ui, "corundum-preview-unsupported"),
-            Outcome::Failed(reason) => tr!(ui, "corundum-preview-failed", reason = reason.as_str()),
-        };
-        let failed = matches!(outcome, Outcome::Failed(_));
-        ui.allocate_rect(area, egui::Sense::hover());
-        let mut inner = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(area)
-                .layout(egui::Layout::top_down(egui::Align::Center)),
-        );
-        inner.add_space((area.height() / 2.0 - ICON).max(0.0));
-        inner.add(icons::image(&inner, icons::file(), ICON));
-        inner.add(egui::Label::new(message).wrap());
-        if failed && retry_button(&mut inner) {
-            // Forget the failure: the next frame asks the worker again.
-            self.kept.pop();
-            response.retry = true;
-        }
-        response
+        self.kept.last_mut().map(|(_, outcome)| outcome)
+    }
+
+    /// Forget the entry [`TextSource::get`] last returned, a failure the person retries:
+    /// the next frame asks the worker again.
+    fn retry(&mut self) {
+        self.kept.pop();
     }
 
     /// Send the worker a request for `content`, unless that is the one still unanswered.
@@ -244,17 +188,117 @@ impl TextPreview {
             }
         }
     }
+}
+
+/// The spinner of a text still being read, centred in `area`.
+fn pending_ui(ui: &mut egui::Ui, area: egui::Rect) {
+    ui.allocate_rect(area, egui::Sense::hover());
+    egui::Spinner::new().paint_at(
+        ui,
+        egui::Rect::from_center_size(area.center(), egui::vec2(32.0, 32.0)),
+    );
+}
+
+/// The note above a text that is only the file's first bytes.
+fn cut_note(ui: &mut egui::Ui) {
+    let size = explorer::format_size(TEXT_LIMIT as u64);
+    ui.label(
+        egui::RichText::new(tr!(ui, "corundum-preview-text-cut", size = size.as_str())).weak(),
+    );
+}
+
+/// For a binary file or a failure: the file icon and the message, centred in `area`, and
+/// for a failure Retry too. Whether Retry was clicked.
+fn message_ui(ui: &mut egui::Ui, area: egui::Rect, outcome: &Outcome) -> bool {
+    let message = match outcome {
+        Outcome::Text { .. } => return false,
+        Outcome::Binary => tr!(ui, "corundum-preview-unsupported"),
+        Outcome::Failed(reason) => tr!(ui, "corundum-preview-failed", reason = reason.as_str()),
+    };
+    ui.allocate_rect(area, egui::Sense::hover());
+    let mut inner = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(area)
+            .layout(egui::Layout::top_down(egui::Align::Center)),
+    );
+    inner.add_space((area.height() / 2.0 - ICON).max(0.0));
+    inner.add(icons::image(&inner, icons::file(), ICON));
+    inner.add(egui::Label::new(message).wrap());
+    matches!(outcome, Outcome::Failed(_)) && retry_button(&mut inner)
+}
+
+/// A text file in the detail pane: decoded on a worker thread, shown read-only and
+/// monospace in a scroll area, where it can be selected and copied.
+///
+/// What it draws is the [`Content`] the app hands in with a [`State`]; the app's key names
+/// the file. At most the first 256 KiB are read, and a note says when the file is longer.
+/// Only Unicode is read: UTF-8, or UTF-16 with a BOM; other bytes show as U+FFFD. The last
+/// texts shown are kept by key, so going back to one is instant, and its scroll position
+/// stays. The UI thread never reads the content: the worker does. A file that is not text
+/// (it has NUL bytes and no BOM) shows the file icon and says it can't be previewed; one
+/// that can't be read says why, with Retry.
+///
+/// Make one and keep it across frames; the thread it starts ends when it is dropped.
+#[derive(Default)]
+pub struct TextPreview {
+    source: TextSource,
+}
+
+impl TextPreview {
+    /// An empty preview; its thread starts on the first frame that needs it.
+    pub fn new() -> TextPreview {
+        TextPreview::default()
+    }
+
+    /// Draw the text of `state` in the space `ui` has left. For Loading and Failed it draws
+    /// the spinner, or the reason and a Retry button, and reports a click on Retry.
+    pub fn ui(&mut self, ui: &mut egui::Ui, state: State<'_>) -> PreviewResponse {
+        let mut response = PreviewResponse::default();
+        let Some(content) = status_ui(ui, state, &mut response) else {
+            return response;
+        };
+        let area = ui.available_rect_before_wrap();
+        let Some(outcome) = self.source.get(ui.ctx(), content) else {
+            pending_ui(ui, area);
+            return response;
+        };
+        if let Outcome::Text { text, cut } = outcome {
+            egui::ScrollArea::vertical()
+                .id_salt(("text-preview-scroll", content.key.as_str()))
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    if *cut {
+                        cut_note(ui);
+                    }
+                    CodeEditor::new(text)
+                        .read_only(true)
+                        .id(egui::Id::unique((
+                            "text-preview-editor",
+                            content.key.as_str(),
+                        )))
+                        .show(ui);
+                });
+        } else if message_ui(ui, area, outcome) {
+            self.source.retry();
+            response.retry = true;
+        }
+        response
+    }
 
     /// Something the worker thread holds while it runs.
     #[cfg(test)]
     pub(super) fn thread_token(&self) -> Option<std::sync::Weak<AtomicUsize>> {
-        self.worker.as_ref().map(|w| Arc::downgrade(&w.pending))
+        self.source
+            .worker
+            .as_ref()
+            .map(|w| Arc::downgrade(&w.pending))
     }
 
     /// Whether the worker has nothing left to do.
     #[cfg(test)]
     pub(super) fn idle(&self) -> bool {
-        self.worker
+        self.source
+            .worker
             .as_ref()
             .is_none_or(|w| w.pending.load(Ordering::SeqCst) == 0)
     }
