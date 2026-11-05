@@ -15,8 +15,8 @@ use corundum_framework::gui::detail::DetailPane;
 use corundum_framework::gui::explorer::{Entry, EntryKind, ExplorerEvent, FileExplorer, MenuItem};
 use corundum_framework::gui::i18n::Message;
 use corundum_framework::gui::preview::{
-    Content, ContentOpener, FileInfo, FilePreview, InfoCard, Kind, PreviewResponse, State as Ready,
-    kind_of,
+    Content, ContentOpener, FileInfo, FilePreview, InfoCard, Kind, PreviewResponse,
+    State as PreviewState, kind_of,
 };
 use corundum_framework::gui::{egui, icons, platform, tr};
 use corundum_framework::platform::dirs::AppDirs;
@@ -113,8 +113,14 @@ impl Detail {
         }
     }
 
-    /// Draw the picked file, or a word that none is.
-    fn ui(&mut self, ui: &mut egui::Ui, selected: Option<&Selected>) -> PreviewResponse {
+    /// Draw the picked file, or a word that none is. `album` is whether it is in the sample's
+    /// Music folder.
+    fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        selected: Option<&Selected>,
+        album: bool,
+    ) -> PreviewResponse {
         let Some(file) = selected else {
             ui.weak(tr!(ui, "demo-files-none"));
             return PreviewResponse::default();
@@ -142,10 +148,15 @@ impl Detail {
             return PreviewResponse::default();
         }
         let content = Content::file(file.key.clone(), file.path.clone());
+        if album && self.preview.wants_content(&file.info.name) {
+            // The Add composition: the app's own section, then the default previews.
+            ui.weak(tr!(ui, "demo-files-album"));
+            ui.add_space(4.0);
+        }
         self.preview.ui(
             ui,
             &file.info,
-            Ready::Ready(&content),
+            PreviewState::Ready(&content),
             platform::open_with_system_available(),
         )
     }
@@ -153,6 +164,7 @@ impl Detail {
 
 /// The first [`TEXT_MAX`] bytes of the text file at `path`.
 fn read_text(path: &Path) -> Result<String, String> {
+    // On the UI thread only because the file is tiny and capped at 4 KiB: a real app reads off it.
     let mut bytes = Vec::new();
     std::fs::File::open(path)
         .and_then(|f| f.take(TEXT_MAX).read_to_end(&mut bytes))
@@ -194,11 +206,17 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
         .take()
         .unwrap_or_else(|| (DetailPane::new("files-detail"), Detail::default()));
     let selected = state.selected();
+    // Files under the sample's Music folder get a section of the demo's own above the default.
+    let album = state.sample
+        && selected
+            .as_ref()
+            .zip(state.root.as_ref())
+            .is_some_and(|(file, root)| file.path.starts_with(root.join("Music")));
     let mut response = PreviewResponse::default();
     pane.ui(
         ui,
         |ui| main_ui(ui, state, log),
-        |ui| response = detail.ui(ui, selected.as_ref()),
+        |ui| response = detail.ui(ui, selected.as_ref(), album),
     );
     if response.retry {
         state.read(ui.ctx(), state.explorer.location().to_vec());

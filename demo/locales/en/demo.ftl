@@ -197,3 +197,4 @@ demo-files-copy = Copy name
 demo-files-show = Show in file manager
 
 demo-files-none = Pick one file to see it here.
+demo-files-album = In the sample album
