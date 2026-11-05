@@ -7,7 +7,7 @@ use corundum_framework::gui::datetime::chrono::{
     Datelike as _, Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike as _,
 };
 use corundum_framework::gui::datetime::{
-    self, Calendar, CalendarState, DatePickerButton, DateTimePickerButton, Period,
+    self, Calendar, CalendarState, DatePickerButton, DateTimePickerButton, Period, PeriodKind,
     PeriodPickerButton, TimePickerButton,
 };
 use corundum_framework::gui::{egui, tr};
@@ -56,6 +56,7 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State) {
 
     section(ui, "demo-dates-calendar");
     let output = Calendar::new("dates-calendar", &mut state.calendar)
+        .kinds(&PeriodKind::ALL)
         .selection(state.picked)
         .config(config.clone().show_week_numbers(true))
         .day_badge(badge)

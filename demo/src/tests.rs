@@ -239,7 +239,8 @@ fn the_dates_screen_draws() {
     app.open(Screen::Dates);
     let size = egui::vec2(1000.0, 700.0);
     let week_heading = i18n::tr(&ctx, "corundum-datetime-week-column");
-    let mut found = false;
+    let week_kind = i18n::tr(&ctx, "corundum-datetime-week");
+    let (mut found_heading, mut found_kind) = (false, false);
     for _ in 0..2 {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
@@ -247,12 +248,20 @@ fn the_dates_screen_draws() {
         };
         let mut output = ctx.run_ui(input, |ui| app.ui(ui));
         output.textures_delta.clear();
-        // The calendar's week column heading, in the language the context is in.
-        found = output.shapes.iter().any(|clipped| {
-            matches!(&clipped.shape, egui::epaint::Shape::Text(t) if t.galley.text() == week_heading)
-        });
+        let drawn = |text: &str| {
+            output.shapes.iter().any(|clipped| {
+                matches!(&clipped.shape, egui::epaint::Shape::Text(t) if t.galley.text() == text)
+            })
+        };
+        // The week column's heading and the kind switch's "Week", in the context's language.
+        found_heading = drawn(&week_heading);
+        found_kind = drawn(&week_kind);
     }
-    assert!(found, "no calendar drawn");
+    assert!(
+        found_heading,
+        "the calendar's week column heading {week_heading:?} was not drawn"
+    );
+    assert!(found_kind, "the kind switch's {week_kind:?} was not drawn");
     assert_eq!(app.current(), Some(Screen::Dates));
     let _ = std::fs::remove_dir_all(dir);
 }
