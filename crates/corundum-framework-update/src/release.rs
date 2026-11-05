@@ -125,6 +125,10 @@ pub struct Asset {
     /// Where it downloads from.
     #[serde(rename = "browser_download_url")]
     pub download_url: String,
+    /// The file's digest as GitHub reports it, `sha256:<hex>`; GitHub has it for files
+    /// uploaded since mid-2025. A download that does not match it is refused.
+    #[serde(default)]
+    pub digest: Option<String>,
 }
 
 /// The part of GitHub's release object this reads.

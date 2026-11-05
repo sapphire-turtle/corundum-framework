@@ -637,6 +637,7 @@ mod tests {
             assets: vec![Asset {
                 name: asset_name("app"),
                 download_url: "https://example.test/a".to_owned(),
+                digest: None,
             }],
         }
     }

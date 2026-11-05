@@ -15,7 +15,7 @@ categories = ["command-line-utilities"]
 # subcommand (`UpdateArgs`, `run`), for a binary that has a command line.
 [features]
 default = ["self-update"]
-self-update = ["dep:self-replace", "dep:tempfile", "dep:minisign-verify", "dep:base64"]
+self-update = ["dep:self-replace", "dep:tempfile", "dep:minisign-verify", "dep:base64", "dep:sha2"]
 cli = ["dep:clap"]
 
 [dependencies]
@@ -25,6 +25,7 @@ corundum-framework-platform = { version = "0.9.1", path = "../corundum-framework
 minisign-verify = { version = "0.2", optional = true }
 reqwest.workspace = true
 self-replace = { version = "1.5", optional = true }
+sha2 = { version = "0.11", optional = true }
 semver = { version = "1", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true

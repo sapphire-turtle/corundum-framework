@@ -10,6 +10,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Breaking
 
+- *(corundum-framework-update)* `Asset` has a new field, `digest`: the `sha256:<hex>` GitHub reports for the file, which `download_asset` checks the download against (sapphire-turtle/sapphire-framework#402)
 - *(corundum-framework-update)* `Error` has a new variant, `Signature`: a release file whose minisign signature is missing, does not match, or was made for another file (sapphire-turtle/sapphire-framework#402)
 
 ### Added

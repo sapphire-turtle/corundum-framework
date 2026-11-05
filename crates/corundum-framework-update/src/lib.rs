@@ -7,7 +7,7 @@
 //!
 //! - with a newer version: never a downgrade;
 //! - with the asset for this platform, `<asset>-<os>-<arch>[.exe]`, downloaded over HTTPS
-//!   from the repository's own release;
+//!   from the repository's own release, and matching the SHA-256 GitHub reports for it;
 //! - when the source names a minisign key ([`ReleaseSource::pubkey`]), only with a file whose
 //!   signature, `<file>.sig` beside it in the release, is that key's and names the file: then
 //!   the key, not GitHub, is the authority on what was released;

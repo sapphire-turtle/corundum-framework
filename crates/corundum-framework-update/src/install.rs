@@ -367,6 +367,9 @@ pub async fn download_asset(
     if bytes.is_empty() {
         return Err(Error::Http(format!("{name} downloaded empty")));
     }
+    if let Some(digest) = &binary.digest {
+        check_digest(&bytes, digest, &name)?;
+    }
     if let Some(pubkey) = source.update_pubkey() {
         let sig_name = format!("{name}.sig");
         let sig = release
@@ -386,6 +389,27 @@ pub async fn download_asset(
         crate::verify_signature(&bytes, &signature, pubkey, &name)?;
     }
     Ok(bytes)
+}
+
+/// Check `bytes` against GitHub's `digest` of the file `name`, `sha256:<hex>`. A digest of
+/// another algorithm is not checked. This only catches a download broken on the way: whoever
+/// can replace the file can replace the digest too, which the signature is for.
+#[cfg(feature = "self-update")]
+fn check_digest(bytes: &[u8], digest: &str, name: &str) -> Result<()> {
+    use sha2::{Digest as _, Sha256};
+    let Some(expected) = digest.strip_prefix("sha256:") else {
+        return Ok(());
+    };
+    let actual: String = Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if !actual.eq_ignore_ascii_case(expected) {
+        return Err(Error::Http(format!(
+            "{name} downloaded with SHA-256 {actual}, not {expected}"
+        )));
+    }
+    Ok(())
 }
 
 /// The command that updates a binary installed as `method`, when there is one to run:
@@ -886,6 +910,18 @@ mod tests {
             let root = signed_repository(b"new binary", None).await;
             let err = fetch_signed(&root, &key.public).await.unwrap_err();
             assert!(matches!(err, Error::Signature(_)), "{err}");
+        }
+
+        #[test]
+        fn a_download_is_checked_against_github_s_sha256() {
+            // SHA-256 of "abc".
+            let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+            check_digest(b"abc", &format!("sha256:{abc}"), "f").unwrap();
+            check_digest(b"abc", &format!("sha256:{}", abc.to_uppercase()), "f").unwrap();
+            let err = check_digest(b"abd", &format!("sha256:{abc}"), "f").unwrap_err();
+            assert!(matches!(err, Error::Http(_)), "{err}");
+            // Another algorithm is left to the signature.
+            check_digest(b"abd", "sha512:00", "f").unwrap();
         }
 
         #[tokio::test]
