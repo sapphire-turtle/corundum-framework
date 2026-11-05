@@ -122,7 +122,7 @@ impl<'a> InfoCard<'a> {
                 ui.add(egui::Label::new(egui::RichText::new(&file.name).heading()).wrap());
             });
             ui.add_space(8.0);
-            egui::Grid::new(ui.id().with("info_card"))
+            egui::Grid::new(ui.next_auto_id())
                 .num_columns(2)
                 .show(ui, |ui| {
                     for (label, value) in rows {
