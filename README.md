@@ -19,6 +19,7 @@ desktops and on phones.
 | [`corundum-framework-service`](crates/corundum-framework-service) | The app's background service registered with the OS's user-level service manager: a systemd user unit, a LaunchAgent, a scheduled task (`install`, `uninstall`, `status`, and `state`, `stop`, `start` for a GUI) | unreleased |
 | [`corundum-framework-keys`](crates/corundum-framework-keys) | API keys for an app's server: a store of named keys, one file each, in a directory the app chooses (a synced one works), their verification, an axum layer and a clap subcommand | unreleased |
 | [`corundum-framework-image`](crates/corundum-framework-image) | Without egui: a picture decoded to an sRGB RGBA8 thumbnail, its size limits checked from the header; `raw` (camera RAW, LGPL-2.1) and `webp` (lossy WebP encoding; WebP decodes without it) are off by default | unreleased |
+| [`corundum-framework-pdf`](crates/corundum-framework-pdf) | Without egui, and in pure Rust (hayro): a PDF's pages counted and one drawn to sRGB RGBA8, with limits on the input (64 MiB) and the output (2048 px) but not on the renderer's memory in between; encrypted and broken files told apart; text in a CJK font the PDF does not embed needs the app's font file | unreleased |
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | Without egui: audio files decoded (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus), resampled and played from a queue; `cpal` (the real sound device) is off by default | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
@@ -125,6 +126,7 @@ desktops and on phones.
 | `text-preview` | `preview::TextPreview`, a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread, and `preview::FilePreview` shows text files with it (brings `code-editor`) | no |
 | `markdown-editor` | `markdown`, alumina-markdown's `MarkdownEditor` re-exported, with `markdown::toolbar`: a formatting toolbar in corundum's Lucide icons and in the context's language, its colours following the visuals (brings alumina-markdown) | no |
 | `markdown-preview` | `preview::MarkdownPreview`, a Markdown file the app hands in, formatted and read-only in the detail pane, decoded like a text file; a link clicked is reported in `PreviewResponse::link`, not opened; `preview::FilePreview` shows `.md` and `.markdown` files with it (brings `markdown-editor` and `text-preview`) | no |
+| `pdf-preview` | `preview::PdfPreview`, a PDF the app hands in (bytes or a reader), drawn a page at a time in the detail pane with previous and next buttons; rendered in pure Rust (hayro) on a worker thread, at most 500 pages; only text in a CJK font the file does not embed falls back to the system CJK font, other missing fonts use the standard 14; a password-protected PDF shows a message; no text selection or search; `preview::FilePreview` shows `.pdf` files with it (brings corundum-framework-pdf) | no |
 | `datetime` | `datetime`, alumina-datetime's date, period, time and timestamp pickers re-exported, with `datetime::config`: its buttons in corundum's Lucide icons and every word in the context's language, weeks from Monday (brings alumina-datetime) | no |
 | `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
@@ -207,6 +209,7 @@ through to the gui crate.
 | `image-raw` | `image` with camera RAW files; rawler is LGPL-2.1, so an app turning this on takes on its terms (brings `image`) | no |
 | `image-webp` | `image` with lossy WebP encoding (`encode_webp`, through libwebp); WebP decodes without it (brings `image`) | no |
 | `image-preview` | The gui crate's `image-preview`: `preview::ImagePreview`, an image the app hands in (brings `gui` and `image`) | no |
+| `pdf` | `pdf`: corundum-framework-pdf | no |
 | `audio` | `audio`: corundum-framework-audio | no |
 | `audio-cpal` | `audio` with `CpalOutputs`, the real sound device (cpal) (brings `audio`) | no |
 | `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview`, a sound the app hands in (brings `gui`, `audio` and `audio-cpal`) | no |
@@ -214,6 +217,7 @@ through to the gui crate.
 | `text-preview` | The gui crate's `text-preview`: `preview::TextPreview`, a text file the app hands in (brings `gui` and `code-editor`) | no |
 | `markdown-editor` | The gui crate's `markdown-editor`: `gui::markdown`, alumina-markdown's editor with a toolbar in corundum's icons and words (brings `gui`) | no |
 | `markdown-preview` | The gui crate's `markdown-preview`: `preview::MarkdownPreview`, a Markdown file the app hands in (brings `gui`, `markdown-editor` and `text-preview`) | no |
+| `pdf-preview` | The gui crate's `pdf-preview`: `preview::PdfPreview`, a PDF the app hands in (brings `gui` and `pdf`) | no |
 | `datetime` | The gui crate's `datetime`: `gui::datetime`, alumina-datetime's pickers with `datetime::config` in corundum's icons and words (brings `gui`) | no |
 | `gui-keys` | The gui crate's `keys` page (brings `gui` and `keys`) | no |
 | `gui-update` | The gui crate's `update` panel (brings `gui` and `update`) | no |

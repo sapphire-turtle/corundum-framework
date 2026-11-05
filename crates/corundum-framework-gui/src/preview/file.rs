@@ -16,6 +16,8 @@ use super::ImagePreview;
 use super::Kind;
 #[cfg(feature = "markdown-preview")]
 use super::MarkdownPreview;
+#[cfg(feature = "pdf-preview")]
+use super::PdfPreview;
 #[cfg(feature = "text-preview")]
 use super::TextPreview;
 use super::{FileInfo, InfoCard, PreviewResponse, State, kind_of};
@@ -36,6 +38,8 @@ pub struct FilePreview {
     text: TextPreview,
     #[cfg(feature = "markdown-preview")]
     markdown: MarkdownPreview,
+    #[cfg(feature = "pdf-preview")]
+    pdf: PdfPreview,
 }
 
 impl FilePreview {
@@ -63,7 +67,7 @@ impl FilePreview {
             Kind::Image => decodable_image(name),
             #[cfg(feature = "audio-preview")]
             Kind::Audio => self.player.is_some(),
-            _ => is_text(name),
+            _ => is_text(name) || is_pdf(name),
         }
     }
 
@@ -92,7 +96,8 @@ impl FilePreview {
         not(any(
             feature = "image-preview",
             feature = "audio-preview",
-            feature = "text-preview"
+            feature = "text-preview",
+            feature = "pdf-preview"
         )),
         allow(unused_variables)
     )]
@@ -102,10 +107,16 @@ impl FilePreview {
         #[cfg(any(
             feature = "image-preview",
             feature = "audio-preview",
-            feature = "text-preview"
+            feature = "text-preview",
+            feature = "pdf-preview"
         ))]
         {
             let width = ui.available_width();
+            #[cfg(any(
+                feature = "image-preview",
+                feature = "audio-preview",
+                feature = "text-preview"
+            ))]
             let bounded = width.min(ui.available_height() * 0.6);
             let origin = ui.available_rect_before_wrap().min;
             let draw = |ui: &mut egui::Ui, height: f32| {
@@ -150,6 +161,13 @@ impl FilePreview {
                 };
                 ui.allocate_rect(rect, egui::Sense::hover());
             }
+            #[cfg(feature = "pdf-preview")]
+            if is_pdf(&file.name) {
+                // A little taller than an image: the page row needs room too.
+                let (mut child, rect) = draw(ui, width.min(ui.available_height() * 0.7));
+                response = self.pdf.ui(&mut child, state);
+                ui.allocate_rect(rect, egui::Sense::hover());
+            }
         }
         response
     }
@@ -185,6 +203,18 @@ fn is_text(name: &str) -> bool {
 
 #[cfg(not(feature = "text-preview"))]
 fn is_text(_: &str) -> bool {
+    false
+}
+
+/// Whether `name` is a PDF, by its extension.
+#[cfg(feature = "pdf-preview")]
+fn is_pdf(name: &str) -> bool {
+    name.rsplit_once('.')
+        .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("pdf"))
+}
+
+#[cfg(not(feature = "pdf-preview"))]
+fn is_pdf(_: &str) -> bool {
     false
 }
 

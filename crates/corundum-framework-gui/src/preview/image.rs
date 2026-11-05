@@ -9,12 +9,9 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use corundum_framework_image::{Error, Image, Limits, Source, thumbnail};
 
+pub(super) use super::content::target;
 use super::content::{Content, Data, PreviewResponse, State, retry_button, status_ui};
 use crate::{icons, tr};
-
-/// The sizes a picture is decoded to, in pixels on its longest side: the space it is drawn
-/// in, rounded up to one of these, so a pane resized a little does not decode it again.
-const SIZES: [u32; 4] = [256, 512, 1024, 2048];
 
 /// How many decoded pictures are kept.
 const KEPT: usize = 8;
@@ -423,14 +420,4 @@ fn answered(asked: &mut Option<(String, u32)>, key: &str, longest: u32) {
     {
         *asked = None;
     }
-}
-
-/// The longest side to decode to for a `size`-point space at `ppp` pixels per point: the
-/// first of [`SIZES`] at least that large, or the largest.
-pub(super) fn target(size: egui::Vec2, ppp: f32) -> u32 {
-    let wanted = (size.x.max(size.y) * ppp).ceil().max(0.0) as u32;
-    SIZES
-        .into_iter()
-        .find(|&s| s >= wanted)
-        .unwrap_or(SIZES[SIZES.len() - 1])
 }

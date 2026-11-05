@@ -55,6 +55,9 @@ image = ["dep:corundum-framework-image"]
 image-raw = ["image", "corundum-framework-image/raw"]
 # Lossy WebP encoding (`encode_webp`), through libwebp; WebP decodes without it.
 image-webp = ["image", "corundum-framework-image/webp"]
+# A PDF's pages counted and drawn, without egui and without a C library (hayro): for an app,
+# or its server. Text in a CJK font the PDF does not embed needs the app's own font file.
+pdf = ["dep:corundum-framework-pdf"]
 # Audio files decoded, resampled and played from a queue, without egui: for an app, or its
 # server. `audio-cpal` adds the real sound device (cpal; ALSA's headers on Linux).
 audio = ["dep:corundum-framework-audio"]
@@ -95,6 +98,9 @@ gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
 # `gui::preview::ImagePreview`: an image the app hands in drawn in the detail pane, decoded
 # on a worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
 image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
+# `gui::preview::PdfPreview`: a PDF the app hands in drawn a page at a time in the detail
+# pane, rendered on a worker thread in pure Rust (brings `pdf`).
+pdf-preview = ["gui", "pdf", "corundum-framework-gui/pdf-preview"]
 # `gui::preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags
 # read on a worker thread, through the app's `audio::Player<Content>` (brings `audio` and `audio-cpal`).
 audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-preview"]
@@ -148,4 +154,5 @@ corundum-framework-package = { version = "0.9.1", path = "../corundum-framework-
 corundum-framework-service = { version = "0.9.1", path = "../corundum-framework-service", optional = true, default-features = false }
 corundum-framework-keys = { version = "0.9.1", path = "../corundum-framework-keys", optional = true }
 corundum-framework-image = { version = "0.9.1", path = "../corundum-framework-image", optional = true }
+corundum-framework-pdf = { version = "0.9.1", path = "../corundum-framework-pdf", optional = true }
 corundum-framework-audio = { version = "0.9.1", path = "../corundum-framework-audio", optional = true }

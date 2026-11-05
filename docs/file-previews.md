@@ -59,4 +59,9 @@ reasonably can, not only for the formats the app was made for.
 - [Text, Markdown, PDF and date-time](superpowers/specs/2026-11-05-text-markdown-pdf-datetime-design.md):
   `text-preview` shows a text file read-only, read as UTF-8 or UTF-16 (with a BOM); `FilePreview` uses it for
   the text extensions. `markdown-preview` shows a Markdown file formatted and read-only, and reports a clicked link in
-  `PreviewResponse::link` for the app to open or not; `FilePreview` uses it for `.md` and `.markdown`.
+  `PreviewResponse::link` for the app to open or not; `FilePreview` uses it for `.md` and `.markdown`. `pdf-preview` shows
+  a PDF one page at a time, with previous and next buttons (at most 500 pages; a file over 64 MiB is refused). It renders
+  in pure Rust (hayro), on a worker thread. Only text in a CJK font the file does not embed falls back to the system CJK
+  font; other missing fonts use the standard 14. The limits bound the input and the output, not the renderer's memory in
+  between: a file built to exhaust memory aborts the process. A password-protected PDF shows a message instead of a page.
+  There is no text selection and no search. `FilePreview` uses it for `.pdf`.

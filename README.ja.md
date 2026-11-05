@@ -15,6 +15,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-update`](crates/corundum-framework-update) | アプリのバイナリの新しい GitHub リリースを見つけ、バイナリを置き換える | 未リリース |
 | [`corundum-framework-package`](crates/corundum-framework-package) | デスクトップで cargo-packager パッケージとしてのアプリ：起動時の処理、インストール・アンインストールのフック、署名つきの更新 | 未リリース |
 | [`corundum-framework-image`](crates/corundum-framework-image) | egui に依存しない部分：画像を sRGB・RGBA8 のサムネイルにデコードする。サイズの上限はヘッダーの段階で確かめる。`raw`（カメラの RAW。LGPL-2.1）と `webp`（WebP への非可逆エンコード。デコードには要らない）は既定では無効 | 未リリース |
+| [`corundum-framework-pdf`](crates/corundum-framework-pdf) | egui に依存しない部分で、純 Rust（hayro）：PDF のページ数を数え、1 ページを sRGB・RGBA8 に描く。入力（64 MiB）と出力（2048 px）には上限があるが、描画中のメモリには上限がない。パスワード付きと壊れたファイルは区別する。PDF に埋め込まれていない CJK フォントの文字には、アプリのフォントファイルが要る | 未リリース |
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | egui に依存しない部分：音声ファイル（FLAC、MP3、AAC、ALAC、Vorbis、WAV、Ogg Opus）をデコードしてリサンプリングし、キューから再生する。`cpal`（実際のサウンドデバイス）は既定では無効 | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
@@ -52,6 +53,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。UTF-8 と BOM 付き UTF-16 を読み、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
 | `markdown-editor` | `markdown`：alumina-markdown の `MarkdownEditor` の再エクスポートと、`markdown::toolbar`（corundum の Lucide アイコンと表示言語の書式ツールバー）。色は visuals に従う（alumina-markdown も有効になる） | 無効 |
 | `markdown-preview` | `preview::MarkdownPreview`：アプリが渡した Markdown ファイルを詳細ペインに整形して読み取り専用で表示する。テキストファイルと同じ方法でデコードし、クリックされたリンクは開かず `PreviewResponse::link` で返す。`preview::FilePreview` は `.md` と `.markdown` をこれで表示する（`markdown-editor` と `text-preview` も有効になる） | 無効 |
+| `pdf-preview` | `preview::PdfPreview`：アプリが渡した PDF（バイト列またはリーダー）を詳細ペインに 1 ページずつ描き、前へ・次へのボタンで切り替える。描画は純 Rust（hayro）でワーカースレッドで行い、最大 500 ページ。PDF に埋め込まれていない CJK フォントの文字だけがシステムの CJK フォントで代用され、ほかの足りないフォントは標準 14 フォントで描く。パスワードで保護された PDF はメッセージを表示する。テキストの選択と検索はない。`preview::FilePreview` は `.pdf` をこれで表示する（corundum-framework-pdf も有効になる） | 無効 |
 | `datetime` | `datetime`：alumina-datetime の日付・期間・時刻・日時ピッカーの再エクスポートと、`datetime::config`（ボタンは corundum の Lucide アイコン、文言は表示言語、週は月曜始まり）（alumina-datetime も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
@@ -88,6 +90,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `image-raw` | カメラの RAW ファイルも扱う `image`。rawler は LGPL-2.1 なので、有効にするアプリはその条件に従います（`image` も有効になる） | いいえ |
 | `image-webp` | WebP への非可逆エンコード（`encode_webp`。libwebp を使う）もできる `image`。WebP のデコードには要らない（`image` も有効になる） | いいえ |
 | `image-preview` | gui クレートの `image-preview`：`preview::ImagePreview`、アプリが渡した画像（`gui` と `image` も有効になる） | いいえ |
+| `pdf` | `pdf`：corundum-framework-pdf | いいえ |
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
 | `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
@@ -95,6 +98,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
 | `markdown-editor` | gui クレートの `markdown-editor`：`gui::markdown`、alumina-markdown のエディタと、corundum のアイコンと言語のツールバー `markdown::toolbar`（`gui` も有効になる） | いいえ |
 | `markdown-preview` | gui クレートの `markdown-preview`：`preview::MarkdownPreview`、アプリが渡した Markdown ファイル（`gui`、`markdown-editor`、`text-preview` も有効になる） | いいえ |
+| `pdf-preview` | gui クレートの `pdf-preview`：`preview::PdfPreview`、アプリが渡した PDF（`gui` と `pdf` も有効になる） | いいえ |
 | `datetime` | gui クレートの `datetime`：`gui::datetime`、alumina-datetime のピッカーと、corundum のアイコンと言語の `datetime::config`（`gui` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |

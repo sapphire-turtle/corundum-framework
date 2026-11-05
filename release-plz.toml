@@ -51,6 +51,10 @@ name = "corundum-framework-image"
 version_group = "corundum"
 
 [[package]]
+name = "corundum-framework-pdf"
+version_group = "corundum"
+
+[[package]]
 name = "corundum-framework-audio"
 version_group = "corundum"
 

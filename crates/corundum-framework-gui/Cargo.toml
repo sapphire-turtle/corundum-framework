@@ -87,6 +87,10 @@ keys = ["dep:corundum-framework-keys"]
 # pane, decoded on a worker thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
 # (WebP among them) only: an app wanting RAW previews turns on that crate's `raw` itself.
 image-preview = ["dep:corundum-framework-image"]
+# `preview::PdfPreview`: a PDF the app hands in (bytes or a reader) drawn a page at a time in
+# the detail pane, rendered on a worker thread by corundum-framework-pdf (pure Rust, so on
+# the phones too).
+pdf-preview = ["dep:corundum-framework-pdf"]
 # `preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags read
 # on a worker thread and the sound made by a `Player<Content>` (spawned with
 # `preview::ContentOpener`) of corundum-framework-audio on the default device (cpal). Linux
@@ -125,6 +129,8 @@ eframe = { version = "0.37", optional = true, default-features = false, features
 ] }
 # The image previews' decoding (`image-preview`).
 corundum-framework-image = { version = "0.9.1", path = "../corundum-framework-image", optional = true }
+# The PDF previews' rendering (`pdf-preview`).
+corundum-framework-pdf = { version = "0.9.1", path = "../corundum-framework-pdf", optional = true }
 # The audio previews' tags and playback (`audio-preview`).
 corundum-framework-audio = { version = "0.9.1", path = "../corundum-framework-audio", optional = true }
 # The code editor `code` re-exports (`code-editor`).

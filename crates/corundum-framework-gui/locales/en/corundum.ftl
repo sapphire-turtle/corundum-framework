@@ -199,6 +199,15 @@ corundum-preview-too-large = This image is too large to preview.
 corundum-preview-failed = Couldn't read this file: { $reason }
 corundum-preview-retry = Retry
 
+# The PDF preview (`preview::PdfPreview`): the page buttons and why a PDF shows no page.
+corundum-preview-pdf-page = { $page } / { $count }
+corundum-preview-pdf-page-of = { $page } / { $shown } of { $count }
+corundum-preview-pdf-previous = Previous page
+corundum-preview-pdf-next = Next page
+corundum-preview-pdf-encrypted = This PDF is password-protected and can't be previewed.
+corundum-preview-pdf-broken = Couldn't read this PDF: { $reason }
+corundum-preview-pdf-too-large = This PDF is too large to preview.
+
 # The audio preview (`preview::AudioPreview`): its button, and why the device did not play.
 # A file that is not audio, or that failed, says so with the strings above.
 corundum-preview-play = Play

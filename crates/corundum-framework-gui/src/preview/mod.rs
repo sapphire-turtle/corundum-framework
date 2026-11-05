@@ -11,6 +11,8 @@
 //!   tells the app whether to fetch the content at all.
 //! - [`ImagePreview`] (the `image-preview` feature): draws a picture, decoded on a worker
 //!   thread.
+//! - [`PdfPreview`] (the `pdf-preview` feature): draws a PDF's pages one at a time, with buttons
+//!   to page through them, rendered on a worker thread.
 //! - [`AudioPreview`] (the `audio-preview` feature): shows a sound file's tags, read on a
 //!   worker thread, with a play button and a seek bar over the app's
 //!   corundum-framework-audio `Player`.
@@ -72,6 +74,8 @@ mod file;
 mod image;
 mod info;
 mod kind;
+#[cfg(feature = "pdf-preview")]
+mod pdf;
 #[cfg(feature = "text-preview")]
 mod text;
 
@@ -83,6 +87,8 @@ pub use file::FilePreview;
 pub use image::ImagePreview;
 pub use info::{FileInfo, InfoCard};
 pub use kind::{Kind, kind_of};
+#[cfg(feature = "pdf-preview")]
+pub use pdf::PdfPreview;
 #[cfg(feature = "markdown-preview")]
 pub use text::MarkdownPreview;
 #[cfg(feature = "text-preview")]
@@ -98,5 +104,7 @@ mod tests_content;
 mod tests_file;
 #[cfg(all(test, feature = "markdown-preview"))]
 mod tests_markdown;
+#[cfg(all(test, feature = "pdf-preview"))]
+mod tests_pdf;
 #[cfg(all(test, feature = "text-preview"))]
 mod tests_text;

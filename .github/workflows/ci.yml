@@ -43,7 +43,7 @@ jobs:
         for f in axum clap; do
           cargo clippy -p corundum-framework-keys --all-targets --features $f --locked -- -D warnings || exit 1
         done
-        for f in media-picker qr-scan qr-code keys image-preview audio-preview code-editor text-preview markdown-editor markdown-preview datetime; do
+        for f in media-picker qr-scan qr-code keys image-preview audio-preview code-editor text-preview markdown-editor markdown-preview datetime pdf-preview; do
           cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
         done
         # The image crate with no features (the common formats), and `raw` and `webp` each
@@ -52,6 +52,8 @@ jobs:
         for f in raw webp; do
           cargo clippy -p corundum-framework-image --all-targets --features $f --locked -- -D warnings || exit 1
         done
+        # The PDF crate (hayro's default features only).
+        cargo clippy -p corundum-framework-pdf --all-targets --locked -- -D warnings
         # The audio crate with no features, and `cpal` and `test-support` each alone.
         cargo clippy -p corundum-framework-audio --all-targets --locked -- -D warnings
         for f in cpal test-support; do
@@ -202,6 +204,20 @@ jobs:
           cargo tree --locked --target all -p corundum-framework-image --all-features -e normal > tree.txt
           if grep -qE ' (egui|eframe)[a-z_-]* v' tree.txt; then
             echo "egui is built for the image crate"
+            exit 1
+          fi
+
+  # The PDF crate renders for a server too: none of its features may bring egui.
+  pdf-without-egui:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: egui is not built for the pdf crate
+        run: |
+          cargo tree --locked --target all -p corundum-framework-pdf --all-features -e normal > tree.txt
+          if grep -qE ' (egui|eframe)[a-z_-]* v' tree.txt; then
+            echo "egui is built for the pdf crate"
             exit 1
           fi
 
