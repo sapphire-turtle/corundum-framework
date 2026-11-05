@@ -177,10 +177,19 @@ pub(crate) fn status_ui<'a>(
             );
             inner.add_space((area.height() / 2.0 - SPINNER).max(0.0));
             inner.add(egui::Label::new(reason).wrap());
-            if inner.button(tr!(inner, "corundum-preview-retry")).clicked() {
+            if retry_button(&mut inner) {
                 response.retry = true;
             }
         }
     }
     None
+}
+
+/// The Retry button every failure offers; whether it was clicked.
+#[cfg_attr(
+    not(any(feature = "image-preview", feature = "audio-preview")),
+    allow(dead_code)
+)]
+pub(crate) fn retry_button(ui: &mut egui::Ui) -> bool {
+    ui.button(tr!(ui, "corundum-preview-retry")).clicked()
 }

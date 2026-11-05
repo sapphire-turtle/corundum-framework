@@ -11,6 +11,8 @@ const DEADLINE: Duration = Duration::from_secs(10);
 struct Drawn {
     /// The text of every label.
     texts: Vec<String>,
+    /// Where each of those was drawn, in points.
+    text_rects: Vec<egui::Rect>,
     /// The pixel size of every texture drawn but the font atlas.
     textures: Vec<[usize; 2]>,
     /// Where each of those was drawn, in points.
@@ -38,7 +40,19 @@ impl Screen {
     }
 
     fn frame_state(&self, preview: &mut ImagePreview, state: State<'_>) -> Drawn {
+        self.frame_events(preview, state, Vec::new()).0
+    }
+
+    /// A frame with `events`, and what the preview answered.
+    fn frame_events(
+        &self,
+        preview: &mut ImagePreview,
+        state: State<'_>,
+        events: Vec<egui::Event>,
+    ) -> (Drawn, PreviewResponse) {
+        let mut response = PreviewResponse::default();
         let input = egui::RawInput {
+            events,
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
                 egui::vec2(400.0, 300.0),
@@ -49,10 +63,10 @@ impl Screen {
             egui::CentralPanel::default().show(ui, |ui| {
                 if self.scroll {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        let _ = preview.ui(ui, state);
+                        response = preview.ui(ui, state);
                     });
                 } else {
-                    let _ = preview.ui(ui, state);
+                    response = preview.ui(ui, state);
                 }
             });
         });
@@ -64,7 +78,7 @@ impl Screen {
         for clipped in &output.shapes {
             collect(&clipped.shape, &textures, &mut drawn);
         }
-        drawn
+        (drawn, response)
     }
 
     /// Frames of `content` until `done` holds of one, within the deadline; that frame's.
@@ -93,7 +107,10 @@ fn collect(shape: &egui::Shape, textures: &egui::epaint::TextureManager, drawn: 
                 collect(shape, textures, drawn);
             }
         }
-        egui::Shape::Text(text) => drawn.texts.push(text.galley.text().to_owned()),
+        egui::Shape::Text(text) => {
+            drawn.texts.push(text.galley.text().to_owned());
+            drawn.text_rects.push(text.visual_bounding_rect());
+        }
         egui::Shape::Mesh(mesh) if mesh.texture_id != egui::TextureId::default() => {
             if let Some(meta) = textures.meta(mesh.texture_id) {
                 drawn.textures.push(meta.size);
@@ -220,6 +237,55 @@ fn a_reader_that_fails_says_why() {
             .iter()
             .any(|t| t.starts_with("Couldn't read this file"))
     });
+}
+
+#[test]
+fn a_reader_that_failed_offers_retry() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let opened = Arc::new(AtomicUsize::new(0));
+    let count = opened.clone();
+    let png = png_bytes("k", "late.png", 64, 32);
+    let content = Content::reader("k", "late.png", move || {
+        if count.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "gone"));
+        }
+        png.open()
+    });
+    let screen = Screen::new();
+    let mut preview = ImagePreview::new();
+
+    let failed = screen.until(&mut preview, &content, |_, d| {
+        d.texts.iter().any(|t| t.starts_with("Couldn't read"))
+    });
+    let at = failed
+        .texts
+        .iter()
+        .position(|t| t == "Retry")
+        .map(|i| failed.text_rects[i].center())
+        .unwrap_or_else(|| panic!("no Retry: {failed:?}"));
+    // The failure is kept: another frame does not open the file again.
+    screen.frame(&mut preview, &content);
+    assert_eq!(opened.load(Ordering::SeqCst), 1);
+
+    let button = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    };
+    let state = State::Ready(&content);
+    let (_, down) = screen.frame_events(
+        &mut preview,
+        state,
+        vec![egui::Event::PointerMoved(at), button(true)],
+    );
+    assert!(!down.retry);
+    let (_, up) = screen.frame_events(&mut preview, state, vec![button(false)]);
+    assert!(up.retry);
+
+    screen.until(&mut preview, &content, |_, d| d.textures == [[64, 32]]);
 }
 
 #[test]

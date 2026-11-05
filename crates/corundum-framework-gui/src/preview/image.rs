@@ -9,7 +9,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
 
 use corundum_framework_image::{Error, Image, Limits, Source, thumbnail};
 
-use super::content::{Content, Data, PreviewResponse, State, status_ui};
+use super::content::{Content, Data, PreviewResponse, State, retry_button, status_ui};
 use crate::{icons, tr};
 
 /// The sizes a picture is decoded to, in pixels on its longest side: the space it is drawn
@@ -286,12 +286,17 @@ impl ImagePreview {
             // The smaller decode is drawn until the larger one comes.
             self.ask(ui.ctx(), content, longest);
         }
-        self.draw(ui, area, self.kept.len() - 1);
+        if self.draw(ui, area, self.kept.len() - 1) {
+            // Forget the failure: the next frame asks the worker again.
+            self.kept.pop();
+            response.retry = true;
+        }
         response
     }
 
-    /// Draw the kept decode at `at` in `area`.
-    fn draw(&self, ui: &mut egui::Ui, area: egui::Rect, at: usize) {
+    /// Draw the kept decode at `at` in `area`. True if Retry, offered for a failure to read,
+    /// was clicked.
+    fn draw(&self, ui: &mut egui::Ui, area: egui::Rect, at: usize) -> bool {
         let message = match &self.kept[at].outcome {
             Outcome::Picture(texture) => {
                 let ppp = ui.ctx().pixels_per_point();
@@ -301,7 +306,7 @@ impl ImagePreview {
                 let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
                 ui.painter()
                     .image(texture.id(), shown, uv, egui::Color32::WHITE);
-                return;
+                return false;
             }
             Outcome::Unsupported => tr!(ui, "corundum-preview-unsupported"),
             Outcome::TooLarge => tr!(ui, "corundum-preview-too-large"),
@@ -315,6 +320,7 @@ impl ImagePreview {
         inner.add_space((area.height() / 2.0 - ICON).max(0.0));
         inner.add(icons::image(&inner, icons::file(), ICON));
         inner.add(egui::Label::new(message).wrap());
+        matches!(self.kept[at].outcome, Outcome::Failed(_)) && retry_button(&mut inner)
     }
 
     /// Send the worker a request for `content` at `longest` pixels, unless that is the one

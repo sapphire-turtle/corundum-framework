@@ -45,12 +45,14 @@ impl FilePreview {
         }
     }
 
-    /// Whether this preview draws `name`'s content. When it is false, the app need not
-    /// fetch the content: the info card needs none.
+    /// Whether this preview draws `name`'s content. An image `corundum-framework-image`
+    /// cannot decode (SVG, HEIC, AVIF, BMP) is not drawn, so it gets the info card and the
+    /// app does not fetch it. When it is false, the app need not fetch the content: the info
+    /// card needs none.
     pub fn wants_content(&self, name: &str) -> bool {
         match kind_of(name) {
             #[cfg(feature = "image-preview")]
-            Kind::Image => true,
+            Kind::Image => decodable_image(name),
             #[cfg(feature = "audio-preview")]
             Kind::Audio => self.player.is_some(),
             _ => false,
@@ -125,4 +127,15 @@ impl FilePreview {
         }
         response
     }
+}
+
+/// Whether `corundum-framework-image` decodes the image called `name`, by its extension:
+/// PNG, JPEG, GIF, WebP and TIFF. SVG, HEIC, AVIF and BMP it does not.
+#[cfg(feature = "image-preview")]
+fn decodable_image(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, ext)| {
+        ["png", "jpg", "jpeg", "gif", "webp", "tif", "tiff"]
+            .iter()
+            .any(|known| ext.eq_ignore_ascii_case(known))
+    })
 }

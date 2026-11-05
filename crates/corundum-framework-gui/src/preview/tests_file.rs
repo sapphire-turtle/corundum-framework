@@ -466,3 +466,16 @@ fn silent_wav() -> super::Content {
     bytes.resize(bytes.len() + data_len as usize, 0);
     super::Content::bytes("k", "a.wav", bytes)
 }
+
+#[cfg(feature = "image-preview")]
+#[test]
+fn an_image_the_decoder_cannot_read_is_not_fetched() {
+    let preview = FilePreview::new();
+    for name in ["a.svg", "a.heic", "a.avif", "a.bmp"] {
+        assert!(!preview.wants_content(name), "{name}");
+        assert_eq!(kind_of(name), Kind::Image, "{name}");
+    }
+    for name in ["a.png", "a.JPG", "a.webp", "a.gif"] {
+        assert!(preview.wants_content(name), "{name}");
+    }
+}
