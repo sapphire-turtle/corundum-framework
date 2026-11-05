@@ -58,7 +58,7 @@ fn frame(
     };
     let mut output = ctx.run_ui(input, |ui| {
         egui::CentralPanel::default().show(ui, |ui| {
-            *response = response.merge(card().ui(ui));
+            *response = std::mem::take(response).merge(card().ui(ui));
         });
     });
     // Unapplied texture deltas panic on drop; there is no renderer here.
@@ -331,7 +331,12 @@ fn a_failed_image_fetch_offers_retry() {
     let mut preview = FilePreview::new();
     let mut response = PreviewResponse::default();
     let drawn = frame_ui(&ctx, Vec::new(), |ui| {
-        response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+        response = std::mem::take(&mut response).merge(preview.ui(
+            ui,
+            file,
+            State::Failed("offline"),
+            false,
+        ));
     });
     assert!(drawn.has("offline"), "{drawn:?}");
     let at = drawn.rect("Retry").expect("a Retry button").center();
@@ -346,7 +351,12 @@ fn a_failed_image_fetch_offers_retry() {
         vec![button(false)],
     ] {
         let _ = frame_ui(&ctx, events, |ui| {
-            response = response.merge(preview.ui(ui, file, State::Failed("offline"), false));
+            response = std::mem::take(&mut response).merge(preview.ui(
+                ui,
+                file,
+                State::Failed("offline"),
+                false,
+            ));
         });
     }
     assert!(response.retry);

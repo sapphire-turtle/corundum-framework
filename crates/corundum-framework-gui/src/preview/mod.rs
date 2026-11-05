@@ -16,6 +16,9 @@
 //!   corundum-framework-audio `Player`.
 //! - [`TextPreview`] (the `text-preview` feature): shows a text file read-only, as UTF-8 or
 //!   UTF-16 with a BOM, decoded on a worker thread; [`FilePreview`] uses it for the text extensions.
+//! - [`MarkdownPreview`] (the `markdown-preview` feature): shows a Markdown file formatted and
+//!   read-only, decoded like [`TextPreview`]; a link clicked is reported in
+//!   [`PreviewResponse::link`], not opened.
 //! - [`InfoCard`]: says what is known of a file ([`FileInfo`]) that no preview draws.
 //! - [`kind_of`]: tells what a file is by its name.
 //!
@@ -80,6 +83,8 @@ pub use file::FilePreview;
 pub use image::ImagePreview;
 pub use info::{FileInfo, InfoCard};
 pub use kind::{Kind, kind_of};
+#[cfg(feature = "markdown-preview")]
+pub use text::MarkdownPreview;
 #[cfg(feature = "text-preview")]
 pub use text::TextPreview;
 
@@ -91,5 +96,7 @@ mod tests_audio;
 mod tests_content;
 #[cfg(test)]
 mod tests_file;
+#[cfg(all(test, feature = "markdown-preview"))]
+mod tests_markdown;
 #[cfg(all(test, feature = "text-preview"))]
 mod tests_text;

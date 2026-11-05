@@ -1,7 +1,9 @@
 //! [`TextPreview`]: a text file the app hands in, decoded off the UI thread and shown
-//! read-only.
+//! read-only; [`MarkdownPreview`] shows the same decoding formatted.
 
 mod decode;
+#[cfg(feature = "markdown-preview")]
+mod markdown;
 
 use std::io::Read;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -14,6 +16,9 @@ use decode::{NotText, TEXT_LIMIT, Text, decode_text};
 use super::content::{Content, PreviewResponse, State, retry_button, status_ui};
 use crate::code::CodeEditor;
 use crate::{explorer, icons, tr};
+
+#[cfg(feature = "markdown-preview")]
+pub use markdown::MarkdownPreview;
 
 /// How many decoded texts are kept.
 const KEPT: usize = 8;

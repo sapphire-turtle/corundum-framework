@@ -102,6 +102,9 @@ markdown-editor = ["dep:alumina-markdown"]
 # `preview::TextPreview`: a text file's first 256 KiB shown read-only in the code editor, its
 # UTF-8 or UTF-16 with a BOM, decoded on a worker thread. Pure Rust, so on the phones too.
 text-preview = ["code-editor"]
+# `preview::MarkdownPreview`: a Markdown file decoded like a TextPreview and shown formatted and
+# read-only by alumina-markdown; a link clicked is reported in `PreviewResponse::link`.
+markdown-preview = ["markdown-editor", "text-preview"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.

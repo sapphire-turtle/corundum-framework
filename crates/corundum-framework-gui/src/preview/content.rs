@@ -119,21 +119,26 @@ pub enum State<'a> {
 }
 
 /// What the person asked of a preview in this frame.
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
 #[must_use]
 pub struct PreviewResponse {
     /// The person pressed Retry: the app should get the content again.
     pub retry: bool,
     /// The person asked to open the file with the system's app.
     pub open: bool,
+    /// The person clicked this link in a Markdown preview: the app decides what to do with
+    /// it. The text is the link's target as written.
+    pub link: Option<String>,
 }
 
 impl PreviewResponse {
-    /// This response and `other` together: each field is set if it is set in either.
+    /// This response and `other` together: each flag is set if it is set in either; the link
+    /// is `other`'s if it has one, else this one's.
     pub fn merge(self, other: PreviewResponse) -> PreviewResponse {
         PreviewResponse {
             retry: self.retry || other.retry,
             open: self.open || other.open,
+            link: other.link.or(self.link),
         }
     }
 }

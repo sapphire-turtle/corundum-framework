@@ -160,19 +160,22 @@ fn merging_responses_sets_a_field_if_either_has_it() {
     let retry = PreviewResponse {
         retry: true,
         open: false,
+        link: None,
     };
     let open = PreviewResponse {
         retry: false,
         open: true,
+        link: None,
     };
     assert_eq!(
-        retry.merge(open),
+        retry.merge(open.clone()),
         PreviewResponse {
             retry: true,
-            open: true
+            open: true,
+            link: None
         }
     );
-    assert_eq!(PreviewResponse::default().merge(open), open);
+    assert_eq!(PreviewResponse::default().merge(open.clone()), open);
 }
 
 #[test]
@@ -193,4 +196,19 @@ fn the_retry_string_exists_in_both_languages() {
         texts.push(text);
     }
     assert_ne!(texts[0], texts[1]);
+}
+
+#[test]
+fn merge_keeps_a_link() {
+    let link = |s: &str| PreviewResponse {
+        link: Some(s.into()),
+        ..Default::default()
+    };
+    let merged = link("x").merge(PreviewResponse::default());
+    assert_eq!(merged.link.as_deref(), Some("x"));
+    let merged = PreviewResponse::default().merge(link("y"));
+    assert_eq!(merged.link.as_deref(), Some("y"));
+    // Both have one: the right side wins.
+    let merged = link("x").merge(link("y"));
+    assert_eq!(merged.link.as_deref(), Some("y"));
 }
