@@ -282,6 +282,13 @@ pub fn run(
         .with_inner_size(inner_size)
         .with_min_inner_size(min_inner_size)
         .with_title(&title);
+    // For About's app-menu row (`settings::AboutRows::for_window`).
+    let create = move |cc: &eframe::CreationContext<'_>| {
+        if let Some(spec) = launcher {
+            crate::settings::launcher::set_window_spec(&cc.egui_ctx, spec);
+        }
+        create(cc)
+    };
     if let Some(spec) = launcher {
         if wants_launcher && let Err(err) = launcher::refresh(&spec) {
             tracing::warn!("could not put {} in the app menu: {err}", spec.id);

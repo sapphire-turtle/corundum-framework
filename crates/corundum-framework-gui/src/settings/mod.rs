@@ -11,6 +11,8 @@
 //! [`AppearancePage`] is the theme and the language over those tabs. [`RailPage`] is the
 //! order of the shell's rail, and which items it shows. [`LauncherRow`] is a row for an app's
 //! own page: whether the app is in the OS's app menu, and the button that changes it.
+//! [`AboutRows`] puts it together with the other rows of an About page about the app's
+//! install: its updates, its background services and its command line.
 //! With the `service` feature, on the desktops, `ServiceRow` is an About-page row per
 //! background service: what it is doing, and the buttons that start, stop, remove or
 //! repair it.
@@ -20,13 +22,14 @@
 //! settings. [`RailPage`] alone hands its change to the shell at once, and [`LauncherRow`]
 //! changes the app menu at once, keeping the choice in corundum's [store](crate::store).
 
+mod about;
 mod appearance;
 #[cfg(all(
     feature = "package",
     not(any(target_os = "ios", target_os = "android"))
 ))]
 mod cli;
-mod launcher;
+pub(crate) mod launcher;
 mod layout;
 mod rail;
 mod scope;
@@ -36,6 +39,7 @@ mod scope;
 ))]
 mod service;
 
+pub use about::AboutRows;
 pub use appearance::{AppearanceChange, AppearanceCtx, AppearancePage, AppearanceScope};
 #[cfg(all(
     feature = "package",

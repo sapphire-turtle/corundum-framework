@@ -29,6 +29,23 @@ pub struct LauncherRow {
     shown: Option<&'static str>,
 }
 
+/// Where the window keeps the spec it was given, in the context's memory.
+fn window_spec_id() -> egui::Id {
+    egui::Id::unique("corundum_window_launcher_spec")
+}
+
+/// Keep `spec`, the window's, in `ctx` for [`window_spec`].
+#[cfg_attr(not(feature = "eframe"), allow(dead_code))]
+pub(crate) fn set_window_spec(ctx: &egui::Context, spec: LauncherSpec) {
+    ctx.data_mut(|d| d.insert_temp(window_spec_id(), spec));
+}
+
+/// The spec the window was given with
+/// [`WindowOptions::launcher`](crate::window::WindowOptions::launcher), if it was.
+pub(crate) fn window_spec(ctx: &egui::Context) -> Option<LauncherSpec> {
+    ctx.data(|d| d.get_temp(window_spec_id()))
+}
+
 /// What a click on the row's button does.
 #[derive(Clone, Copy)]
 enum Act {

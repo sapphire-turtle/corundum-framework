@@ -83,7 +83,11 @@ desktops and on phones.
 - **App menu entry**: `WindowOptions::launcher(spec)` puts the app in the desktop's app
   menu at start (and sets the window's app id and icon), and `settings::LauncherRow`, a row
   for an About page, removes it and adds it back; with a store the removal is kept, and the
-  entry is not written again on the next start. A Windows app also sets
+  entry is not written again on the next start. An AppImage's window writes no entry of its
+  own, so its About page needs the row for the app to get its icon. `settings::AboutRows`
+  is an About page's install rows together — the update panel, the background services,
+  the command line on `PATH` and the app-menu row — and `AboutRows::for_window(ctx)` takes
+  the spec the window was given. A Windows app also sets
   `#![cfg_attr(windows, windows_subsystem = "windows")]` in its `main.rs`, or the console
   opens with it, and at every logon too if it registers itself as a background service.
   A binary that is also a command line calls `platform::console::attach_parent()` (the
