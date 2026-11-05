@@ -1259,6 +1259,7 @@ dependencies = [
  "corundum-framework-image",
  "corundum-framework-keys",
  "corundum-framework-package",
+ "corundum-framework-pdf",
  "corundum-framework-platform",
  "corundum-framework-service",
  "corundum-framework-update",

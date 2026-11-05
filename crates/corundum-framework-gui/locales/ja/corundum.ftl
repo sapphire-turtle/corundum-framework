@@ -187,6 +187,15 @@ corundum-preview-too-large = この画像は大きすぎてプレビューでき
 corundum-preview-failed = このファイルを読めませんでした：{ $reason }
 corundum-preview-retry = 再試行
 
+# PDFのプレビュー（`preview::PdfPreview`）：ページの送りボタンと、ページを出せない理由。
+corundum-preview-pdf-page = { $page } / { $count }
+corundum-preview-pdf-page-of = { $page } / { $shown }（全 { $count } ページ）
+corundum-preview-pdf-previous = 前のページ
+corundum-preview-pdf-next = 次のページ
+corundum-preview-pdf-encrypted = このPDFはパスワードで保護されているため、プレビューできません。
+corundum-preview-pdf-broken = このPDFを読めませんでした：{ $reason }
+corundum-preview-pdf-too-large = このPDFは大きすぎてプレビューできません。
+
 # 音声のプレビュー（`preview::AudioPreview`）：ボタンと、機器で再生できなかった理由。
 # 音声でないファイルや失敗したファイルは、上の文言で伝える。
 corundum-preview-play = 再生

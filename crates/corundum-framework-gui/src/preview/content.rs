@@ -150,7 +150,11 @@ impl PreviewResponse {
 /// The spinner's size, and the space above a failure's reason, in points.
 // Only the previews that ask for content draw the status; the feature-less build has none.
 #[cfg_attr(
-    not(any(feature = "image-preview", feature = "audio-preview")),
+    not(any(
+        feature = "image-preview",
+        feature = "audio-preview",
+        feature = "pdf-preview"
+    )),
     allow(dead_code)
 )]
 const SPINNER: f32 = 32.0;
@@ -159,7 +163,11 @@ const SPINNER: f32 = 32.0;
 /// `ui`, and returns `None`. For Ready, draws nothing and returns the content. Sets
 /// `response.retry` when Retry is clicked.
 #[cfg_attr(
-    not(any(feature = "image-preview", feature = "audio-preview")),
+    not(any(
+        feature = "image-preview",
+        feature = "audio-preview",
+        feature = "pdf-preview"
+    )),
     allow(dead_code)
 )]
 pub(crate) fn status_ui<'a>(
@@ -196,9 +204,29 @@ pub(crate) fn status_ui<'a>(
 
 /// The Retry button every failure offers; whether it was clicked.
 #[cfg_attr(
-    not(any(feature = "image-preview", feature = "audio-preview")),
+    not(any(
+        feature = "image-preview",
+        feature = "audio-preview",
+        feature = "pdf-preview"
+    )),
     allow(dead_code)
 )]
 pub(crate) fn retry_button(ui: &mut egui::Ui) -> bool {
     ui.button(tr!(ui, "corundum-preview-retry")).clicked()
+}
+
+/// The sizes a picture is rendered to, in pixels on its longest side: the space it is drawn
+/// in, rounded up to one of these, so a pane resized a little does not render it again.
+#[cfg(any(feature = "image-preview", feature = "pdf-preview"))]
+const SIZES: [u32; 4] = [256, 512, 1024, 2048];
+
+/// The longest side to render to for a `size`-point space at `ppp` pixels per point: the
+/// first of the sizes at least that large, or the largest.
+#[cfg(any(feature = "image-preview", feature = "pdf-preview"))]
+pub(crate) fn target(size: egui::Vec2, ppp: f32) -> u32 {
+    let wanted = (size.x.max(size.y) * ppp).ceil().max(0.0) as u32;
+    SIZES
+        .into_iter()
+        .find(|&s| s >= wanted)
+        .unwrap_or(SIZES[SIZES.len() - 1])
 }
