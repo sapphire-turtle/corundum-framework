@@ -208,3 +208,28 @@ corundum-preview-kind-unknown = ファイル
 
 # テキストのプレビュー（`preview::TextPreview`）：一部だけを表示しているときの注記。
 corundum-preview-text-cut = 先頭の { $size } だけを表示しています。
+
+# Markdown のツールバー（`markdown::toolbar`）：ラベルはアイコンがないときのボタンの文字、
+# 名前はスクリーンリーダーとホバーの文字。ラベルは ASCII のまま。
+corundum-markdown-strong-label = B
+corundum-markdown-emphasis-label = I
+corundum-markdown-strikethrough-label = S
+corundum-markdown-code-label = </>
+corundum-markdown-link-label = Link
+corundum-markdown-heading-label = H
+corundum-markdown-bullet-list-label = -
+corundum-markdown-numbered-list-label = 1.
+corundum-markdown-task-list-label = [ ]
+corundum-markdown-quote-label = >
+corundum-markdown-code-block-label = { "{ }" }
+corundum-markdown-strong-name = 太字
+corundum-markdown-emphasis-name = 斜体
+corundum-markdown-strikethrough-name = 取り消し線
+corundum-markdown-code-name = コード
+corundum-markdown-link-name = リンク
+corundum-markdown-heading-name = 見出し
+corundum-markdown-bullet-list-name = 箇条書き
+corundum-markdown-numbered-list-name = 番号付きリスト
+corundum-markdown-task-list-name = タスクリスト
+corundum-markdown-quote-name = 引用
+corundum-markdown-code-block-name = コードブロック

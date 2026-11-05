@@ -104,6 +104,8 @@ code-editor = ["gui", "corundum-framework-gui/code-editor"]
 # `gui::preview::TextPreview`: a text file the app hands in, read-only in the detail pane, its
 # read as UTF-8 or UTF-16 and decoded on a worker thread (brings `code-editor`).
 text-preview = ["gui", "code-editor", "corundum-framework-gui/text-preview"]
+# `gui::markdown`: alumina-markdown's editor, with a toolbar in corundum's icons and words.
+markdown-editor = ["gui", "corundum-framework-gui/markdown-editor"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,

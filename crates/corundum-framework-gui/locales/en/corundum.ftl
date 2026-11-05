@@ -220,3 +220,28 @@ corundum-preview-kind-unknown = File
 
 # The text preview (`preview::TextPreview`): the note on a file shown only in part.
 corundum-preview-text-cut = Showing the first { $size }.
+
+# The Markdown toolbar (`markdown::toolbar`): a button's label, shown when it has no icon, and
+# its name, for screen readers and the hover text. Labels stay ASCII.
+corundum-markdown-strong-label = B
+corundum-markdown-emphasis-label = I
+corundum-markdown-strikethrough-label = S
+corundum-markdown-code-label = </>
+corundum-markdown-link-label = Link
+corundum-markdown-heading-label = H
+corundum-markdown-bullet-list-label = -
+corundum-markdown-numbered-list-label = 1.
+corundum-markdown-task-list-label = [ ]
+corundum-markdown-quote-label = >
+corundum-markdown-code-block-label = { "{ }" }
+corundum-markdown-strong-name = Bold
+corundum-markdown-emphasis-name = Italic
+corundum-markdown-strikethrough-name = Strikethrough
+corundum-markdown-code-name = Code
+corundum-markdown-link-name = Link
+corundum-markdown-heading-name = Heading
+corundum-markdown-bullet-list-name = Bulleted list
+corundum-markdown-numbered-list-name = Numbered list
+corundum-markdown-task-list-name = Task list
+corundum-markdown-quote-name = Quote
+corundum-markdown-code-block-name = Code block
