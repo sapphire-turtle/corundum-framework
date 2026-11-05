@@ -14,6 +14,8 @@
 //! - [`AudioPreview`] (the `audio-preview` feature): shows a sound file's tags, read on a
 //!   worker thread, with a play button and a seek bar over the app's
 //!   corundum-framework-audio `Player`.
+//! - [`TextPreview`] (the `text-preview` feature): shows a text file read-only, as UTF-8 or
+//!   UTF-16 with a BOM, decoded on a worker thread; [`FilePreview`] uses it for the text extensions.
 //! - [`InfoCard`]: says what is known of a file ([`FileInfo`]) that no preview draws.
 //! - [`kind_of`]: tells what a file is by its name.
 //!
@@ -67,6 +69,8 @@ mod file;
 mod image;
 mod info;
 mod kind;
+#[cfg(feature = "text-preview")]
+mod text;
 
 #[cfg(feature = "audio-preview")]
 pub use audio::{AudioPreview, ContentOpener};
@@ -76,6 +80,8 @@ pub use file::FilePreview;
 pub use image::ImagePreview;
 pub use info::{FileInfo, InfoCard};
 pub use kind::{Kind, kind_of};
+#[cfg(feature = "text-preview")]
+pub use text::TextPreview;
 
 #[cfg(all(test, feature = "image-preview"))]
 mod tests;
@@ -85,3 +91,5 @@ mod tests_audio;
 mod tests_content;
 #[cfg(test)]
 mod tests_file;
+#[cfg(all(test, feature = "text-preview"))]
+mod tests_text;

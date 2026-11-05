@@ -216,6 +216,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alumina-code"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94bb64be5a991ded296d49ce54c2410a2a5b168f0bbeb23a6218a090e73dd72f"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "android-activity"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1208,6 +1217,7 @@ dependencies = [
 name = "corundum-framework-gui"
 version = "0.9.1"
 dependencies = [
+ "alumina-code",
  "android-activity",
  "android_log-sys",
  "corundum-framework-audio",

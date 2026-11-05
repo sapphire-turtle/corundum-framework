@@ -486,6 +486,10 @@ fn make_sample(root: &Path) -> std::io::Result<()> {
     file(root.join("Music/First album/cover.png"), sample_png)?;
     file(root.join("Music/First album/00 Tone.wav"), &tone_wav())?;
     file(
+        root.join("Music/First album/album.cue"),
+        ALBUM_CUE.as_bytes(),
+    )?;
+    file(
         root.join("Documents/notes.txt"),
         b"Drag me into another folder.\n",
     )?;
@@ -501,6 +505,9 @@ fn make_sample(root: &Path) -> std::io::Result<()> {
         b"The corundum demo's sample folder.\n",
     )
 }
+
+/// A cue sheet, in UTF-8 like every text file the preview shows.
+const ALBUM_CUE: &str = "REM Sample cue sheet\nPERFORMER \"コランダム\"\nTITLE \"最初のアルバム\"\nFILE \"00 Tone.wav\" WAVE\n  TRACK 01 AUDIO\n    TITLE \"トーン\"\n    INDEX 01 00:00:00\n";
 
 /// A 2 s, 44.1 kHz, mono, 16-bit WAV of a 440 Hz tone, its 44-byte header written by hand.
 fn tone_wav() -> Vec<u8> {

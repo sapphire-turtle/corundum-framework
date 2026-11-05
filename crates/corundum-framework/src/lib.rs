@@ -33,6 +33,8 @@
 //! | `audio` | [`audio`] | `corundum-framework-audio`: audio files (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus) decoded, resampled and played from a queue by `audio::Player`, without egui |
 //! | `audio-cpal` | `audio::CpalOutputs` | the real sound device, cpal's default output (brings `audio`) |
 //! | `audio-preview` | `gui::preview::AudioPreview` | a sound the app hands in, played in the detail pane through a `Player<Content>`, its tags read on a worker thread (brings `gui`, `audio` and `audio-cpal`) |
+//! | `code-editor` | `gui::code` | alumina-code's `CodeEditor`, whose colours follow the visuals; the app brings its own `Highlighter` (brings `gui`) |
+//! | `text-preview` | `gui::preview::TextPreview` | a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread (brings `gui` and `code-editor`) |
 //! | `gui-keys` | `gui::keys` | the API keys page in Settings, over a store on this machine or the app's own backend; each key is added with one of the app's profiles (brings `gui` and `keys`) |
 //! | `gui-update` | `gui::update` | the gui crate's `update` panel: the Settings → About rows that look for a newer release (brings `gui` and `update`) |
 //! | `gui-self-update` | `gui::update` | the panel also downloads the release and replaces the running binary (brings `gui-update` and `self-update`) |

@@ -205,3 +205,6 @@ corundum-preview-kind-video = { $ext } 動画
 corundum-preview-kind-text = { $ext } 文書
 corundum-preview-kind-other = { $ext } ファイル
 corundum-preview-kind-unknown = ファイル
+
+# テキストのプレビュー（`preview::TextPreview`）：一部だけを表示しているときの注記。
+corundum-preview-text-cut = 先頭の { $size } だけを表示しています。

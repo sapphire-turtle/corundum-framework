@@ -56,3 +56,6 @@ reasonably can, not only for the formats the app was made for.
 - [Detail-pane previews over content the app hands in](superpowers/specs/2026-11-05-detail-pane-previews-design.md):
   the app hands in bytes or a reader, wherever the file lives; `FilePreview` and `InfoCard`
   need no feature; the sound plays through a `Player<Content>` spawned with `ContentOpener`.
+- [Text, Markdown, PDF and date-time](superpowers/specs/2026-11-05-text-markdown-pdf-datetime-design.md):
+  `text-preview` shows a text file read-only, read as UTF-8 or UTF-16 (with a BOM); `FilePreview` uses it for
+  the text extensions.

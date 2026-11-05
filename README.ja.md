@@ -48,6 +48,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
 | `image-preview` | `preview::ImagePreview`：アプリが渡した画像（バイト列またはリーダー）を詳細ペインに描く。デコードはワーカースレッドで行う（`preview::FilePreview` と `InfoCard` は機能なしで使える。corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
 | `audio-preview` | `preview::AudioPreview`：アプリが渡した音声を詳細ペインで、`ContentOpener` で起動したアプリの `Player<Content>` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
+| `code-editor` | `code`：alumina-code の `CodeEditor` の再エクスポート。インデントを保つ egui 用のエディタで、色は visuals に従う。ハイライターはアプリが用意する（alumina-code も有効になる） | 無効 |
+| `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。UTF-8 と BOM 付き UTF-16 を読み、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
@@ -86,6 +88,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
 | `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
+| `code-editor` | gui クレートの `code-editor`：`gui::code`、alumina-code のエディタ（`gui` も有効になる） | いいえ |
+| `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |
