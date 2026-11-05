@@ -15,7 +15,7 @@ mod content;
 mod image;
 
 #[cfg(feature = "audio-preview")]
-pub use audio::AudioPreview;
+pub use audio::{AudioPreview, ContentOpener};
 pub use content::{Content, Data, PreviewResponse, Reader, State};
 #[cfg(feature = "image-preview")]
 pub use image::ImagePreview;
