@@ -1,4 +1,6 @@
+use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use hayro::hayro_interpret::InterpreterSettings;
@@ -8,7 +10,7 @@ use hayro::hayro_syntax::{DecryptionError, LoadPdfError, Pdf};
 use hayro::vello_cpu::color::palette::css::WHITE;
 use hayro::{PixmapSettings, RenderCache, RenderSettings, render};
 
-use crate::{Error, MAX_INPUT, MAX_PAGES};
+use crate::{Error, MAX_INPUT, MAX_PAGES, MAX_SIDE};
 
 const PANICKED: &str = "the PDF renderer panicked";
 
@@ -36,11 +38,14 @@ pub struct Page {
 
 /// An opened PDF.
 ///
-/// Not meant to cross threads: hayro keeps `Rc` caches, so open and render on the same
-/// thread (the gui crate's worker does) and send the [`Page`] back.
+/// Deliberately neither `Send` nor `Sync`: a `Document` stays on the thread that opened it,
+/// so a future hayro that is not `Send` is not a breaking change. Open and render on a
+/// worker thread (the gui crate's does) and send the [`Page`] back.
 pub struct Document {
     pdf: Pdf,
     settings: InterpreterSettings,
+    /// Keeps `Document` `!Send` and `!Sync`.
+    _not_send: PhantomData<Rc<()>>,
 }
 
 /// The bytes as hayro wants them, without copying the `Arc<[u8]>`.
@@ -109,6 +114,7 @@ impl Document {
         Ok(Document {
             pdf,
             settings: settings(cjk),
+            _not_send: PhantomData,
         })
     }
 
@@ -119,7 +125,8 @@ impl Document {
 
     /// Render page `index` (0-based, below `min(page_count, MAX_PAGES)`) to sRGB RGBA8 with
     /// its longest side `longest` pixels, on white. The scale comes from the page's size in
-    /// points, so a huge page is never drawn at its own size.
+    /// points, so a huge page is never drawn at its own size. A `longest` above [`MAX_SIDE`]
+    /// is clamped to it.
     pub fn render(&self, index: usize, longest: u32) -> Result<Page, Error> {
         if index >= self.page_count().min(MAX_PAGES) {
             return Err(Error::Unsupported(format!("no page {index}")));
@@ -134,10 +141,10 @@ impl Document {
         if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
             return Err(Error::Broken("the page has no size".into()));
         }
-        // The pixmap is `(points * scale) as u16`: a hair over, so that rounding in f32
-        // does not truncate the longest side to one pixel short.
-        let longest = longest.clamp(1, u32::from(u16::MAX));
-        let scale = longest as f32 / w.max(h) * 1.0001;
+        // The pixmap is `(points * scale) as u16`, which truncates: aim half a pixel over, so
+        // the longest side floors to exactly `longest`.
+        let longest = longest.clamp(1, MAX_SIDE);
+        let scale = (longest as f32 + 0.5) / w.max(h);
         if w.min(h) * scale < 1.0 {
             return Err(Error::Unsupported("the page is too narrow to draw".into()));
         }

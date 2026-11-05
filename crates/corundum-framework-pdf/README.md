@@ -12,8 +12,9 @@ opaque, drawn on white.
   page is never drawn at its own size. `MAX_PAGES` (500) is how many pages a caller should
   offer.
 - A panic in the renderer on a bad file becomes `Error::Broken`.
-- A `Document` is not `Send` (hayro shares its caches with `Rc`): open and render on one
-  thread, and send the finished `Page` back.
+- A `Document` is deliberately neither `Send` nor `Sync`: it stays on the thread that opened it,
+  so a future hayro that is not `Send` is not a breaking change. Open and render on a worker
+  thread, and send the finished `Page` back. `render` clamps `longest` to `MAX_SIDE` (2048).
 
 The standard 14 fonts (Helvetica, Times and the like), which most generated PDFs use without
 embedding them, are drawn from fonts built into hayro (about 270 KB). Text in a CJK font the

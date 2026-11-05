@@ -94,7 +94,7 @@ fn an_encrypted_pdf_with_no_password_renders() {
 }
 
 #[test]
-fn a_truncated_pdf_is_broken() {
+fn a_truncated_pdf_is_broken_or_shorter_and_never_panics() {
     let bytes = fixture("two-pages.pdf");
     let cut =
         |percent: usize| -> Arc<[u8]> { bytes[..bytes.len() * percent / 100].to_vec().into() };
@@ -191,4 +191,14 @@ fn not_embedded_japanese_uses_the_fallback() {
         all_ink(&with),
         all_ink(&without)
     );
+}
+
+#[test]
+fn a_request_above_the_limit_is_clamped() {
+    let page = open("two-pages.pdf").render(0, 10_000).unwrap();
+    assert_eq!(
+        page.width.max(page.height),
+        corundum_framework_pdf::MAX_SIDE
+    );
+    assert_eq!(page.height, 2048);
 }

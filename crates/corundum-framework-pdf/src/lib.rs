@@ -11,8 +11,9 @@
 //! # Ok::<(), corundum_framework_pdf::Error>(())
 //! ```
 //!
-//! A [`Document`] is **not `Send`**: hayro shares its caches with `Rc`. Open it and render
-//! from it on one thread, the worker's, and send the finished [`Page`] (plain bytes) back.
+//! A [`Document`] is deliberately neither `Send` nor `Sync`: it stays on the thread that
+//! opened it, so a future hayro that is not `Send` is not a breaking change. Open and render
+//! on a worker thread, and send the finished [`Page`] (plain bytes) back.
 
 mod error;
 mod render;
@@ -26,3 +27,6 @@ pub const MAX_INPUT: usize = 64 * 1024 * 1024;
 /// The pages a caller should offer: [`Document::render`] takes an index below
 /// `min(page_count, MAX_PAGES)`.
 pub const MAX_PAGES: usize = 500;
+
+/// The longest side [`Document::render`] draws: 2048 pixels. A larger request is clamped.
+pub const MAX_SIDE: u32 = 2048;
