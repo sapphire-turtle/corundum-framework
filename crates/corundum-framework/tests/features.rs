@@ -127,3 +127,10 @@ fn markdown_editor_is_alumina_s() {
     let _ = corundum_framework::gui::markdown::MarkdownEditor::new;
     let _ = corundum_framework::gui::markdown::toolbar;
 }
+
+#[cfg(feature = "markdown-preview")]
+#[test]
+fn markdown_preview_is_the_gui_crate_s() {
+    let _: fn() -> corundum_framework::gui::preview::MarkdownPreview =
+        corundum_framework::gui::preview::MarkdownPreview::new;
+}

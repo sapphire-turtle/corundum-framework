@@ -6,6 +6,7 @@ use corundum_framework::gui::theme::{ThemeSettings, Tint};
 use corundum_framework::gui::{Side, egui};
 
 mod detail;
+mod editors;
 mod files;
 mod fonts;
 pub(crate) mod icons;
@@ -37,13 +38,15 @@ pub enum Screen {
     Platform,
     /// A made-up player under the OS's media keys and in its "now playing".
     Media,
+    /// Alumina's Markdown editor under corundum's toolbar, and its code editor.
+    Editors,
     /// An app's Settings screen, in the footer: corundum's, with the demo's pages in it.
     Settings,
 }
 
 impl Screen {
     /// Every screen, in the rail's order, Settings last.
-    pub const ALL: [Screen; 10] = [
+    pub const ALL: [Screen; 11] = [
         Screen::Overview,
         Screen::Theme,
         Screen::Fonts,
@@ -53,6 +56,7 @@ impl Screen {
         Screen::Files,
         Screen::Platform,
         Screen::Media,
+        Screen::Editors,
         Screen::Settings,
     ];
 }
@@ -80,6 +84,7 @@ pub(crate) struct State {
     files: files::State,
     platform: platform::State,
     pub(crate) media: media::State,
+    editors: editors::State,
 }
 
 impl State {
@@ -99,6 +104,7 @@ impl State {
             files: files::State::default(),
             platform: platform::State::read(),
             media: media::State::new(),
+            editors: editors::State::default(),
         }
     }
 }
@@ -131,6 +137,7 @@ pub(crate) fn ui(
                 Screen::Language => language::ui(ui, state, language),
                 Screen::Platform => platform::ui(ui, &mut state.platform),
                 Screen::Media => media::ui(ui, &mut state.media),
+                Screen::Editors => editors::ui(ui, &mut state.editors, &mut state.log),
                 Screen::Settings | Screen::Detail | Screen::Files => {
                     unreachable!("drawn above")
                 }

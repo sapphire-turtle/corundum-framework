@@ -13,6 +13,7 @@ demo-screen-detail = 詳細
 demo-screen-files = ファイル
 demo-screen-platform = プラットフォーム
 demo-screen-media = メディア
+demo-screen-editors = エディター
 demo-screen-settings = 設定
 # レールのアクション：新しいメモ。どの画面を開いていても、サイドペインに書く。
 demo-action-new = 新しいメモ
@@ -185,3 +186,8 @@ demo-files-show = ファイルマネージャーで表示
 
 demo-files-none = ファイルを 1 つ選ぶと、ここに表示されます。
 demo-files-album = サンプルのアルバムの中
+
+demo-editors-intro = alumina のエディターを corundum のテーマで表示します。ツールバーは corundum のアイコンと表示言語を使い、ノートのリンクをクリックするとステータスバーに表示されます。
+demo-editors-markdown = Markdown
+demo-editors-code = コード
+demo-editors-code-note = ハイライトなしの JSON のサンプルです。エディターはインデントを保つだけです。

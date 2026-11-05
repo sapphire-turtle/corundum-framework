@@ -221,6 +221,9 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
     if response.retry {
         state.read(ui.ctx(), state.explorer.location().to_vec());
     }
+    if let Some(url) = response.link {
+        *log = Message::new("demo-status-opened").arg("name", url);
+    }
     if response.open
         && let Some(file) = &selected
     {
@@ -493,7 +496,7 @@ fn make_sample(root: &Path) -> std::io::Result<()> {
         root.join("Documents/notes.txt"),
         b"Drag me into another folder.\n",
     )?;
-    file(root.join("Documents/Old/plan.md"), b"# Plan\n")?;
+    file(root.join("Documents/Old/plan.md"), PLAN.as_bytes())?;
     for n in 1..=150 {
         file(
             root.join(format!("Many files/file {n}.txt")),
@@ -505,6 +508,9 @@ fn make_sample(root: &Path) -> std::io::Result<()> {
         b"The corundum demo's sample folder.\n",
     )
 }
+
+/// A Markdown note, with a heading, a list and a link, for the Markdown preview.
+const PLAN: &str = "# Plan\n\n## Next\n\n- draft the outline\n- ask for a review\n\nSee the [corundum repository](https://github.com/fluo10/corundum-framework).\n";
 
 /// A cue sheet, in UTF-8 like every text file the preview shows.
 const ALBUM_CUE: &str = "REM Sample cue sheet\nPERFORMER \"コランダム\"\nTITLE \"最初のアルバム\"\nFILE \"00 Tone.wav\" WAVE\n  TRACK 01 AUDIO\n    TITLE \"トーン\"\n    INDEX 01 00:00:00\n";
