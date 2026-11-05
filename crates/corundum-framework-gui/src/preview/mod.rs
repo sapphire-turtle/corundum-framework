@@ -67,6 +67,8 @@ mod file;
 mod image;
 mod info;
 mod kind;
+#[cfg(feature = "text-preview")]
+mod text;
 
 #[cfg(feature = "audio-preview")]
 pub use audio::{AudioPreview, ContentOpener};

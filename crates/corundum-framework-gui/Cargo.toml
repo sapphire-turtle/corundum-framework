@@ -94,6 +94,9 @@ audio-preview = ["dep:corundum-framework-audio", "corundum-framework-audio/cpal"
 # `code`: alumina-code's editor (`code::CodeEditor`) re-exported, its colours following the
 # visuals. The app brings its own `code::Highlighter`; the editor knows no language.
 code-editor = ["dep:alumina-code"]
+# `preview::TextPreview`: a text file's first 256 KiB shown read-only in the code editor, its
+# encoding (UTF-8, a BOM, or a guess) found on a worker thread. Pure Rust, so on the phones too.
+text-preview = ["code-editor", "dep:chardetng", "dep:encoding_rs"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -115,6 +118,9 @@ corundum-framework-image = { version = "0.9.1", path = "../corundum-framework-im
 corundum-framework-audio = { version = "0.9.1", path = "../corundum-framework-audio", optional = true }
 # The code editor `code` re-exports (`code-editor`).
 alumina-code = { version = "0.1", optional = true }
+# The text previews' encoding guess and decoding (`text-preview`).
+chardetng = { version = "1", optional = true }
+encoding_rs = { version = "0.8", optional = true }
 # The API keys page's store and types (`keys`).
 corundum-framework-keys = { version = "0.9.1", path = "../corundum-framework-keys", optional = true }
 # Release lookup and advice; the download and replacement come with `self-update`.
