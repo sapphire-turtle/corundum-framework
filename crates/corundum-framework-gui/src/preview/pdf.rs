@@ -235,7 +235,13 @@ fn render(content: &Content, page: usize, longest: u32, state: &mut Opened) -> R
                 pixels: egui::ColorImage::from_rgba_unmultiplied(size, &rendered.rgba),
             }
         }
-        Err(error) => Rendered::of_error(error),
+        Err(error) => {
+            // A damaged page may mean a damaged file: Retry reopens it from the content.
+            if matches!(error, Error::Broken(_)) {
+                state.document = None;
+            }
+            Rendered::of_error(error)
+        }
     }
 }
 
@@ -393,22 +399,7 @@ impl PdfPreview {
     fn bar(&mut self, ui: &mut egui::Ui, bar: egui::Rect, place: usize, shown: usize) {
         let Place { page, count, .. } = self.places[place];
         let count = count.unwrap_or(shown);
-        let label = if count > shown {
-            tr!(
-                ui,
-                "corundum-preview-pdf-page-of",
-                page = page + 1,
-                shown = shown,
-                count = count
-            )
-        } else {
-            tr!(
-                ui,
-                "corundum-preview-pdf-page",
-                page = page + 1,
-                count = count
-            )
-        };
+        let label = page_label(ui.ctx(), page, shown, count);
         let mut row = ui.new_child(egui::UiBuilder::new().max_rect(bar).layout(
             egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
         ));
@@ -590,5 +581,50 @@ impl PdfPreview {
                 }
             }
         }
+    }
+}
+
+/// The page number's text: "n / N", or "n / 500 of N" for a file with more pages than can be
+/// paged to. `page` is from 0.
+fn page_label(ctx: &egui::Context, page: usize, shown: usize, count: usize) -> String {
+    if count > shown {
+        tr!(
+            ctx,
+            "corundum-preview-pdf-page-of",
+            page = page + 1,
+            shown = shown,
+            count = count
+        )
+    } else {
+        tr!(
+            ctx,
+            "corundum-preview-pdf-page",
+            page = page + 1,
+            count = count
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn past_500_pages_the_label_says_how_many_there_are() {
+        let place = Place {
+            key: "k".into(),
+            page: 0,
+            count: Some(731),
+        };
+        assert_eq!(place.shown(), Some(MAX_PAGES));
+        let ctx = egui::Context::default();
+        let label = page_label(&ctx, 2, 500, 731);
+        assert!(
+            label.contains('3') && label.contains("500") && label.contains("731"),
+            "{label:?}"
+        );
+        assert!(label.contains("of"), "{label:?}");
+        let plain = page_label(&ctx, 0, 2, 2);
+        assert!(!plain.contains("of"), "{plain:?}");
     }
 }

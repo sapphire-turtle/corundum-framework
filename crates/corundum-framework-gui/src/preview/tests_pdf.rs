@@ -209,6 +209,10 @@ fn the_page_buttons_stop_at_the_ends() {
     let _ = screen.click(&mut preview, &content, next_at(last.rect_of("2 / 2")));
     let still = screen.frame(&mut preview, State::Ready(&content));
     assert!(still.has("2 / 2"), "{still:?}");
+    // Previous from the last page goes back.
+    let _ = screen.click(&mut preview, &content, previous_at(last.rect_of("2 / 2")));
+    let back = screen.until(&mut preview, &content, |d| d.has("1 / 2") && !d.path);
+    assert!(!back.has("2 / 2"), "{back:?}");
 }
 
 #[test]
