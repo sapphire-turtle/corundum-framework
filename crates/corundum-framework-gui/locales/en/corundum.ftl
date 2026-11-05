@@ -204,3 +204,16 @@ corundum-preview-retry = Retry
 corundum-preview-play = Play
 corundum-preview-pause = Pause
 corundum-preview-audio-device = Couldn't play through the audio device: { $reason }
+
+# The info card (`preview::InfoCard`): its rows, the kind of a file, and the open button.
+corundum-preview-size = Size
+corundum-preview-kind = Kind
+corundum-preview-modified = Modified
+corundum-preview-created = Created
+corundum-preview-open = Open with the system's app
+corundum-preview-kind-image = { $ext } image
+corundum-preview-kind-audio = { $ext } audio
+corundum-preview-kind-video = { $ext } video
+corundum-preview-kind-text = { $ext } document
+corundum-preview-kind-other = { $ext } file
+corundum-preview-kind-unknown = File

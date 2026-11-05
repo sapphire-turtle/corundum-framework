@@ -192,3 +192,16 @@ corundum-preview-retry = 再試行
 corundum-preview-play = 再生
 corundum-preview-pause = 一時停止
 corundum-preview-audio-device = オーディオ機器で再生できませんでした：{ $reason }
+
+# 情報カード（`preview::InfoCard`）：項目名、ファイルの種類、開くボタン。
+corundum-preview-size = サイズ
+corundum-preview-kind = 種類
+corundum-preview-modified = 更新日時
+corundum-preview-created = 作成日時
+corundum-preview-open = システムのアプリで開く
+corundum-preview-kind-image = { $ext } 画像
+corundum-preview-kind-audio = { $ext } 音声
+corundum-preview-kind-video = { $ext } 動画
+corundum-preview-kind-text = { $ext } 文書
+corundum-preview-kind-other = { $ext } ファイル
+corundum-preview-kind-unknown = ファイル

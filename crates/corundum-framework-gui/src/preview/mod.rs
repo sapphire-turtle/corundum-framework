@@ -6,19 +6,24 @@
 //! for in a [`PreviewResponse`]. [`ImagePreview`] (the `image-preview` feature) draws a
 //! picture, decoded on a worker thread. [`AudioPreview`] (the `audio-preview` feature)
 //! shows a sound file's tags, read on a worker thread, with a play button and a seek bar
-//! over the app's corundum-framework-audio `Player`.
+//! over the app's corundum-framework-audio `Player`. [`kind_of`] tells what a file is by its
+//! name, and [`InfoCard`] says what is known of a file ([`FileInfo`]) that no preview draws.
 
 #[cfg(feature = "audio-preview")]
 mod audio;
 mod content;
 #[cfg(feature = "image-preview")]
 mod image;
+mod info;
+mod kind;
 
 #[cfg(feature = "audio-preview")]
 pub use audio::{AudioPreview, ContentOpener};
 pub use content::{Content, Data, PreviewResponse, Reader, State};
 #[cfg(feature = "image-preview")]
 pub use image::ImagePreview;
+pub use info::{FileInfo, InfoCard};
+pub use kind::{Kind, kind_of};
 
 #[cfg(all(test, feature = "image-preview"))]
 mod tests;
@@ -26,3 +31,5 @@ mod tests;
 mod tests_audio;
 #[cfg(test)]
 mod tests_content;
+#[cfg(test)]
+mod tests_file;

@@ -146,7 +146,7 @@ pub fn icon_for(entry: &Entry) -> egui::ImageSource<'static> {
 }
 
 /// Documents and text, shown with a page of text.
-const TEXT_EXTENSIONS: &[&str] = &[
+pub(crate) const TEXT_EXTENSIONS: &[&str] = &[
     "txt", "md", "pdf", "doc", "docx", "odt", "rtf", "csv", "json", "toml", "yaml", "yml", "log",
 ];
 
