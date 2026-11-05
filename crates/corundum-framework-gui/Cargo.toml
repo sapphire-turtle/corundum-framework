@@ -89,7 +89,9 @@ keys = ["dep:corundum-framework-keys"]
 image-preview = ["dep:corundum-framework-image"]
 # `preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags read
 # on a worker thread and the sound made by a `Player<Content>` (spawned with
-# `preview::ContentOpener`) of corundum-framework-audio on the default device (cpal; ALSA's headers on Linux).
+# `preview::ContentOpener`) of corundum-framework-audio on the default device (cpal). Linux
+# needs ALSA's headers; Android, API 26 (AAudio); an iOS app links AudioToolbox and
+# CoreAudio.
 audio-preview = ["dep:corundum-framework-audio", "corundum-framework-audio/cpal"]
 
 [dependencies]
