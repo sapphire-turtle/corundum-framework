@@ -7,7 +7,8 @@
 //! Android, [`android`] is the JNI underneath: the process's JavaVM and context, and the
 //! activity a window draws in. [`package`] tells whether the running executable is a
 //! Velopack package. [`fs`] has the file calls std has no portable form of: a rename that
-//! never replaces its destination.
+//! never replaces its destination. [`limits`] raises the process's limit on open files, as
+//! Go does for every program, so a network app is not held to macOS's 256.
 //!
 //! The `icon` and `launcher` features, on by default, are the desktop's extras: `icon`
 //! renders an app's SVG to PNG, icns and ico, and `launcher` puts a desktop app in the OS's
@@ -47,6 +48,7 @@ pub mod instance;
 mod ios;
 #[cfg(feature = "launcher")]
 pub mod launcher;
+pub mod limits;
 pub mod locale;
 #[cfg(feature = "media-picker")]
 pub mod media;
