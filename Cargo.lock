@@ -1196,7 +1196,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "corundum-framework-audio",
  "corundum-framework-gui",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-audio"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "corundum-framework-audio",
  "cpal",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-build"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "corundum-framework-platform",
  "png 0.18.1",
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-gui"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "alumina-code",
  "alumina-datetime",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-image"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "fast_image_resize",
  "image",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-keys"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1331,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-package"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "cargo-packager-updater",
  "corundum-framework-platform",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-pdf"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "hayro",
  "thiserror 2.0.21",
@@ -1357,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-platform"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "block2 0.6.2",
  "dirs 7.0.0",
@@ -1388,7 +1388,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-service"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-update"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -5237,7 +5237,7 @@ dependencies = [
  "log",
  "pico-args",
  "rgb",
- "svgtypes 0.16.1",
+ "svgtypes 0.16.2",
  "tiny-skia 0.12.0",
  "usvg 0.49.0",
 ]
@@ -5987,9 +5987,9 @@ dependencies = [
 
 [[package]]
 name = "svgtypes"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "695b5790b3131dafa99b3bbfd25a216edb3d216dad9ca208d4657bfb8f2abc3d"
+checksum = "9f12b12995e3638c70618c1facb1ce65302f6a6f706b675f07c58a5d7391120e"
 dependencies = [
  "kurbo 0.13.1",
  "siphasher",
@@ -6490,7 +6490,7 @@ dependencies = [
  "toml_datetime 1.1.2+spec-1.1.0",
  "toml_parser",
  "toml_writer",
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]
 
 [[package]]
@@ -6534,7 +6534,7 @@ dependencies = [
  "indexmap",
  "toml_datetime 1.1.2+spec-1.1.0",
  "toml_parser",
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]
 
 [[package]]
@@ -6543,7 +6543,7 @@ version = "1.1.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]
 
 [[package]]
@@ -6840,7 +6840,7 @@ dependencies = [
  "simplecss",
  "siphasher",
  "strict-num",
- "svgtypes 0.16.1",
+ "svgtypes 0.16.2",
  "tiny-skia-path 0.12.0",
 ]
 
@@ -7783,9 +7783,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 dependencies = [
  "memchr",
 ]
@@ -7978,7 +7978,7 @@ dependencies = [
  "uds_windows",
  "uuid",
  "windows-sys 0.61.2",
- "winnow 1.0.4",
+ "winnow 1.0.5",
  "zbus_macros",
  "zbus_names",
  "zvariant",
@@ -8030,7 +8030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "812a12be4ead7a59e18ea8f047d08add0066b73bc62fc1467066a2472ae088dd"
 dependencies = [
  "serde",
- "winnow 1.0.4",
+ "winnow 1.0.5",
  "zvariant",
 ]
 
@@ -8041,7 +8041,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1586c021a01ca0a9216dcd874e546382e156a5cbab5fab6cb5f10087e22682a"
 dependencies = [
  "serde",
- "winnow 1.0.4",
+ "winnow 1.0.5",
  "zbus_names",
  "zvariant",
 ]
@@ -8172,7 +8172,7 @@ dependencies = [
  "endi",
  "enumflags2",
  "serde",
- "winnow 1.0.4",
+ "winnow 1.0.5",
  "zcheapstr",
  "zvariant_derive",
  "zvariant_utils",
@@ -8201,5 +8201,5 @@ dependencies = [
  "quote",
  "serde",
  "syn 3.0.9",
- "winnow 1.0.4",
+ "winnow 1.0.5",
 ]

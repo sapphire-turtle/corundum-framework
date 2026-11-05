@@ -8,6 +8,59 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.9.1...v0.10.0) - 2026-11-05
+
+### Added
+
+- FilePreview shows PDFs; pdf-preview in the umbrella crate, CI and the demo
+- *(corundum-framework-pdf)* count a PDF's pages and render one, in pure Rust (hayro) ([#98](https://github.com/sapphire-turtle/corundum-framework/pull/98))
+- *(corundum-framework-gui)* AboutRows, an About page's install rows together
+- *(corundum-framework-gui)* alumina-datetime as gui::datetime, in corundum's icons and words (datetime)
+- FilePreview shows Markdown; markdown-preview in the umbrella crate, CI, and the demo's Editors screen
+- *(corundum-framework-gui)* [**breaking**] MarkdownPreview; a link clicked in a preview is reported in PreviewResponse::link ([#100](https://github.com/sapphire-turtle/corundum-framework/pull/100))
+- *(corundum-framework-gui)* alumina-markdown as gui::markdown, with a toolbar in corundum's icons and words (markdown-editor)
+- *(corundum-framework-gui)* FilePreview shows text files; text-preview in the umbrella crate, CI and the demo
+- *(corundum-framework-gui)* alumina-code's editor as gui::code (code-editor)
+- *(platform)* fs::rename_no_replace, an atomic rename that never replaces
+- *(corundum-framework-gui)* PdfPreview, a PDF's pages in the detail pane ([#98](https://github.com/sapphire-turtle/corundum-framework/pull/98))
+- *(corundum-framework-gui)* TextPreview, a text file read-only in the detail pane ([#99](https://github.com/sapphire-turtle/corundum-framework/pull/99))
+- *(corundum-framework-gui)* decode a text file's first 256 KiB, guessing its encoding
+- *(update)* [**breaking**] check a download against GitHub's SHA-256
+- *(corundum-framework-gui)* FilePreview, the detail pane's default by a file's kind ([#97](https://github.com/sapphire-turtle/corundum-framework/pull/97))
+- *(corundum-framework-gui)* the preview's info card, and opening a file with the system's app
+- *(corundum-framework-gui)* [**breaking**] AudioPreview plays content the app hands in, through ContentOpener
+- *(corundum-framework-gui)* [**breaking**] ImagePreview draws content the app hands in
+- *(corundum-framework-gui)* preview content the app hands in, and its loading and failed states
+- *(update)* [**breaking**] verify a release file's minisign signature
+- *(build)* the app icon rendered for the iOS and Android projects
+
+### Fixed
+
+- *(corundum-framework-pdf, corundum-framework-gui)* lazy shared CJK fallback, page bar after a page failure, honest memory docs ([#98](https://github.com/sapphire-turtle/corundum-framework/pull/98))
+- *(corundum-framework-gui)* the date pickers' Japanese words, and how often to build their config
+- *(platform)* macOS renames to a name differing only in case, as Windows does
+- *(corundum-framework-gui)* PdfPreview test the Previous button and the over-500 label, reopen after a broken page ([#98](https://github.com/sapphire-turtle/corundum-framework/pull/98))
+- *(demo)* build for Android API 26 and link the iOS audio frameworks, for audio-preview
+- *(corundum-framework-gui)* .ts is a video, not a text file
+- *(corundum-framework-gui)* the text preview wraps at the pane's width
+- *(corundum-framework-gui)* an image that failed to read offers Retry, and one the decoder cannot read is not fetched
+- *(corundum-framework-gui)* the info card's grid id comes from the ui's next auto id
+- *(corundum-framework-gui)* the info card's footer rows and name
+- *(corundum-framework-gui)* Enter starts a new line, and the keyboard stays up on Android
+
+### Other
+
+- Merge pull request #124 from sapphire-turtle/feat/datetime
+- *(corundum-framework-gui)* text previews read UTF-8 and UTF-16 only
+- the detail pane's previews over content the app hands in
+- Merge pull request #121 from sapphire-turtle/feat/markdown-preview
+- Merge pull request #120 from sapphire-turtle/feat/text-preview
+- Merge pull request #118 from sapphire-turtle/feat/detail-pane-previews
+- *(corundum-framework-gui)* what a preview's link holds, and that the app checks it before opening
+- *(corundum-framework-gui)* the text preview's worker, shared
+- Merge branch 'feat/text-preview' into feat/markdown-preview
+- Merge branch 'feat/detail-pane-previews' into feat/text-preview
+
 ### Breaking
 
 - *(corundum-framework-update)* `Asset` has a new field, `digest`: the `sha256:<hex>` GitHub reports for the file, which `download_asset` checks the download against (sapphire-turtle/sapphire-framework#402)
