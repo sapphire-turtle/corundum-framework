@@ -37,6 +37,7 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State, log: &mut Message) {
     ui.label(tr!(ui, "demo-editors-intro"));
 
     section(ui, "demo-editors-markdown");
+    // The toolbar and its editor share this id.
     let id = ui.make_persistent_id("editors-markdown");
     markdown::toolbar(ui.ctx(), &mut state.note, id).show(ui);
     let output = MarkdownEditor::new(&mut state.note)

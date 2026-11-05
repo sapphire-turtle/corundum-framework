@@ -13,6 +13,9 @@ pub use alumina_markdown::*;
 use crate::{icons, tr};
 
 /// The toolbar's buttons as corundum's Lucide icons.
+///
+/// The icons need the image loaders (`icons::install_loaders`, which corundum's shell
+/// already installs); without them the buttons show no icon.
 pub fn toolbar_icons() -> ToolbarIcons {
     let mut i = ToolbarIcons::default();
     i.strong = Some(icons::bold());
@@ -64,6 +67,9 @@ pub fn toolbar_names(ctx: &egui::Context) -> ToolbarNames {
 }
 
 /// A toolbar for the editor with `editor_id`, with all three above applied.
+///
+/// The icons need the image loaders (`icons::install_loaders`, which corundum's shell
+/// already installs); without them the buttons show no icon.
 pub fn toolbar<'t>(
     ctx: &egui::Context,
     text: &'t mut String,

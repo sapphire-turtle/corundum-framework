@@ -10,7 +10,8 @@ use crate::preview::content::{PreviewResponse, State, status_ui};
 ///
 /// The decoding, the 256 KiB limit with its note, the kept texts, Retry and the worker
 /// thread are the text preview's. A link the person clicks is in
-/// [`PreviewResponse::link`], as written in the file: the app decides what it means. There
+/// [`PreviewResponse::link`], as the Markdown parser reads its target (a relative one
+/// comes unresolved): the app decides what it means. There
 /// is no toolbar, and typing does nothing.
 ///
 /// Make one and keep it across frames; the thread it starts ends when it is dropped.

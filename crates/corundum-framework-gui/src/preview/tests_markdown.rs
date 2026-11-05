@@ -165,6 +165,35 @@ fn a_clicked_link_is_reported() {
 }
 
 #[test]
+fn a_reference_link_is_reported_resolved() {
+    let content = Content::bytes("k", "a.md", b"[x][r]\n\n[r]: https://e.com".to_vec());
+    let screen = Screen::new();
+    let mut preview = MarkdownPreview::new();
+
+    let drawn = screen.until(&mut preview, &content, |d| d.has("x"));
+    let rect = drawn.rect("x");
+    let (_, response) = screen.frame_events(
+        &mut preview,
+        State::Ready(&content),
+        click(rect.min + egui::vec2(6.0, 8.0)),
+    );
+    assert_eq!(response.link.as_deref(), Some("https://e.com"));
+}
+
+#[test]
+fn an_empty_link_does_not_panic() {
+    let content = Content::bytes("k", "a.md", b"[x]()".to_vec());
+    let screen = Screen::new();
+    let mut preview = MarkdownPreview::new();
+
+    let drawn = screen.until(&mut preview, &content, |d| d.has("x"));
+    let rect = drawn.rect("x");
+    let (_, response) =
+        screen.frame_events(&mut preview, State::Ready(&content), click(rect.center()));
+    assert_eq!(response.link.as_deref(), Some(""));
+}
+
+#[test]
 fn the_preview_is_read_only() {
     let content = Content::bytes("k", "a.md", b"hello".to_vec());
     let screen = Screen::new();
