@@ -185,6 +185,7 @@ corundum-keys-profile-unknown = { $id }（不明）
 corundum-preview-unsupported = このファイルはプレビューできません。
 corundum-preview-too-large = この画像は大きすぎてプレビューできません。
 corundum-preview-failed = このファイルを読めませんでした：{ $reason }
+corundum-preview-retry = 再試行
 
 # 音声のプレビュー（`preview::AudioPreview`）：ボタンと、機器で再生できなかった理由。
 # 音声でないファイルや失敗したファイルは、上の文言で伝える。

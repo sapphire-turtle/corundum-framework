@@ -54,7 +54,6 @@ pub mod look;
 #[cfg(feature = "media-session")]
 pub mod media_session;
 pub mod platform;
-#[cfg(any(feature = "image-preview", feature = "audio-preview"))]
 pub mod preview;
 #[cfg(feature = "qr-code")]
 pub mod qr;
