@@ -8,6 +8,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Breaking
+
+- *(corundum-framework-update)* `Asset` has a new field, `digest`: the `sha256:<hex>` GitHub reports for the file, which `download_asset` checks the download against (sapphire-turtle/sapphire-framework#402)
+- *(corundum-framework-update)* `Error` has a new variant, `Signature`: a release file whose minisign signature is missing, does not match, or was made for another file (sapphire-turtle/sapphire-framework#402)
+
+### Added
+
+- *(corundum-framework-update)* `ReleaseSource::pubkey`: with a minisign public key (the base64 of the `.pub` file, as `PackageSpec::update_pubkey` takes it), `download_asset` — and so the `update` command and the GUI's update panel — downloads `<file>.sig` beside the release file and returns the file only when it is that key's signature of it, made for that file name. `verify_signature` checks one file. Signatures are cargo-packager's (`cargo packager signer sign`), so one key signs both the packages and the bare binaries (sapphire-turtle/sapphire-framework#402)
+
 ## [0.9.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.9.0...v0.9.1) - 2026-11-04
 
 ### Fixed

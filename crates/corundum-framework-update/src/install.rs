@@ -331,9 +331,14 @@ async fn download(client: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
 /// Download `release`'s file for this machine, the one `source` names with
 /// [`ReleaseSource::asset`].
 ///
+/// With a key ([`ReleaseSource::pubkey`]) the file's signature, `<file>.sig` in the same
+/// release, is downloaded too, and the file is returned only when it is that key's signature
+/// of this file ([`verify_signature`](crate::verify_signature)).
+///
 /// [`Error::NotConfigured`] when `source` names none, [`Error::NoAsset`] when the release has
-/// no file for this platform, and [`Error::Http`] when the download fails, is empty or is
-/// larger than [`MAX_DOWNLOAD`].
+/// no file for this platform, [`Error::Signature`] when the file is not signed or the signature
+/// does not match, and [`Error::Http`] when the download fails, is empty or is larger than
+/// [`MAX_DOWNLOAD`].
 #[cfg(feature = "self-update")]
 pub async fn download_asset(
     client: &reqwest::Client,
@@ -362,7 +367,49 @@ pub async fn download_asset(
     if bytes.is_empty() {
         return Err(Error::Http(format!("{name} downloaded empty")));
     }
+    if let Some(digest) = &binary.digest {
+        check_digest(&bytes, digest, &name)?;
+    }
+    if let Some(pubkey) = source.update_pubkey() {
+        let sig_name = format!("{name}.sig");
+        let sig = release
+            .assets
+            .iter()
+            .find(|a| a.name == sig_name)
+            .ok_or_else(|| {
+                Error::Signature(format!(
+                    "{} {} has {name} but no signature {sig_name}",
+                    source.repository(),
+                    release.version
+                ))
+            })?;
+        let signature = download(client, &sig.download_url).await?;
+        let signature = String::from_utf8(signature)
+            .map_err(|_| Error::Signature(format!("{sig_name} is not text")))?;
+        crate::verify_signature(&bytes, &signature, pubkey, &name)?;
+    }
     Ok(bytes)
+}
+
+/// Check `bytes` against GitHub's `digest` of the file `name`, `sha256:<hex>`. A digest of
+/// another algorithm is not checked. This only catches a download broken on the way: whoever
+/// can replace the file can replace the digest too, which the signature is for.
+#[cfg(feature = "self-update")]
+fn check_digest(bytes: &[u8], digest: &str, name: &str) -> Result<()> {
+    use sha2::{Digest as _, Sha256};
+    let Some(expected) = digest.strip_prefix("sha256:") else {
+        return Ok(());
+    };
+    let actual: String = Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if !actual.eq_ignore_ascii_case(expected) {
+        return Err(Error::Http(format!(
+            "{name} downloaded with SHA-256 {actual}, not {expected}"
+        )));
+    }
+    Ok(())
 }
 
 /// The command that updates a binary installed as `method`, when there is one to run:
@@ -797,6 +844,84 @@ mod tests {
             assert_eq!(release.version, v("0.20.0"));
             let bytes = download_asset(&client, &source, &release).await.unwrap();
             assert_eq!(bytes, b"new binary");
+        }
+
+        /// A repository with release 0.20.0 of `app`: its file for this machine, and that
+        /// file's signature `sig` when there is one.
+        async fn signed_repository(binary: &[u8], sig: Option<String>) -> String {
+            let name = asset_name("app");
+            let binary = binary.to_vec();
+            serve(move |root| {
+                let sig_asset = match sig {
+                    Some(_) => format!(
+                        r#",{{"name":"{name}.sig","browser_download_url":"{root}/dl/{name}.sig"}}"#
+                    ),
+                    None => String::new(),
+                };
+                let releases = format!(
+                    r#"[{{"tag_name":"v0.20.0","html_url":"{root}/r/v0.20.0","assets":[
+                        {{"name":"{name}","browser_download_url":"{root}/dl/{name}"}}{sig_asset}]}}]"#
+                );
+                let mut routes = vec![
+                    (RELEASES.to_owned(), releases.into_bytes()),
+                    (format!("/dl/{name}"), binary),
+                ];
+                if let Some(sig) = sig {
+                    routes.push((format!("/dl/{name}.sig"), sig.into_bytes()));
+                }
+                routes
+            })
+            .await
+        }
+
+        async fn fetch_signed(root: &str, pubkey: &str) -> Result<Vec<u8>> {
+            let source = ReleaseSource::github("o", "r")
+                .api_base(root)
+                .asset("app")
+                .pubkey(pubkey);
+            let client = crate::client("test/0.0.0").unwrap();
+            let release = latest_release(&client, &source).await.unwrap();
+            download_asset(&client, &source, &release).await
+        }
+
+        #[tokio::test]
+        async fn a_signed_release_is_fetched_when_its_signature_matches() {
+            let key = crate::verify::tests::Key::new();
+            let sig = key.sign(b"new binary", &asset_name("app"));
+            let root = signed_repository(b"new binary", Some(sig)).await;
+            assert_eq!(
+                fetch_signed(&root, &key.public).await.unwrap(),
+                b"new binary"
+            );
+        }
+
+        #[tokio::test]
+        async fn a_release_whose_file_is_not_the_signed_one_is_refused() {
+            let key = crate::verify::tests::Key::new();
+            let sig = key.sign(b"new binary", &asset_name("app"));
+            let root = signed_repository(b"swapped binary", Some(sig)).await;
+            let err = fetch_signed(&root, &key.public).await.unwrap_err();
+            assert!(matches!(err, Error::Signature(_)), "{err}");
+        }
+
+        #[tokio::test]
+        async fn an_unsigned_release_is_refused_when_a_key_is_named() {
+            let key = crate::verify::tests::Key::new();
+            let root = signed_repository(b"new binary", None).await;
+            let err = fetch_signed(&root, &key.public).await.unwrap_err();
+            assert!(matches!(err, Error::Signature(_)), "{err}");
+        }
+
+        #[test]
+        fn a_download_is_checked_against_github_s_sha256() {
+            // SHA-256 of "abc".
+            let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+            check_digest(b"abc", &format!("sha256:{abc}"), "f").unwrap();
+            check_digest(b"abc", &format!("sha256:{}", abc.to_uppercase()), "f").unwrap();
+            let err = check_digest(b"abd", &format!("sha256:{abc}"), "f").unwrap_err();
+            assert!(matches!(err, Error::Http(_)), "{err}");
+            // Another algorithm is left to the signature.
+            check_digest(b"abd", "sha512:00", "f").unwrap();
         }
 
         #[tokio::test]
