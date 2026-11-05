@@ -97,7 +97,7 @@ fn link_launcher(path: &Path, exe: &Path) -> io::Result<bool> {
 /// Writes the app's bundle. The icon is rendered first, so that an icon that cannot be
 /// rendered leaves nothing behind.
 pub(crate) fn register(spec: &LauncherSpec, root: &Root, exe: &Path) -> io::Result<Registered> {
-    let icns = crate::icon::icns(spec.icon_svg)?;
+    let icns = crate::icon::icns(spec.macos_icon_svg.unwrap_or(spec.icon_svg))?;
     let plist = write_if_changed(&plist_path(spec, root), info_plist(spec).as_bytes())?;
     let icon = write_if_changed(&icon_path(spec, root), &icns)?;
     let link = link_launcher(&launcher_path(spec, root), exe)?;
@@ -169,6 +169,7 @@ mod tests {
         description: "Every piece corundum shares",
         category: "Development",
         icon_svg: SVG,
+        macos_icon_svg: None,
         bundle_prefix: "org.sapphire-turtle",
     };
 
@@ -328,5 +329,20 @@ mod tests {
         };
         assert!(register(&spec, &root(dir.path()), Path::new("/opt/a/x")).is_err());
         assert!(!dir.path().join("Applications/Corundum Demo.app").exists());
+    }
+
+    #[test]
+    fn the_bundle_takes_the_macos_icon_when_there_is_one() {
+        const TILE: &[u8] = br#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="blue"/></svg>"#;
+        let dir = tempfile::tempdir().unwrap();
+        let root = root(dir.path());
+        let spec = LauncherSpec {
+            macos_icon_svg: Some(TILE),
+            ..SPEC
+        };
+        register(&spec, &root, Path::new("/opt/a/x")).unwrap();
+        let written = std::fs::read(icon_path(&spec, &root)).unwrap();
+        assert_eq!(written, crate::icon::icns(TILE).unwrap());
+        assert_ne!(written, crate::icon::icns(SVG).unwrap());
     }
 }

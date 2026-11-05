@@ -44,6 +44,7 @@ pub(crate) const LAUNCHER: corundum_framework::platform::launcher::LauncherSpec 
         description: "Every piece corundum-framework shares",
         category: "Development",
         icon_svg: include_bytes!("../assets/app-icon.svg"),
+        macos_icon_svg: Some(include_bytes!("../assets/app-icon-macos.svg")),
         bundle_prefix: "org.sapphire-turtle",
     };
 

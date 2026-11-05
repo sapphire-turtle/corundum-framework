@@ -454,6 +454,7 @@ mod tests {
             description: "A test app",
             category: "Utility",
             icon_svg: b"<svg/>",
+            macos_icon_svg: None,
             bundle_prefix: "net.example",
         };
         assert!(WindowOptions::new("x").launcher_spec().is_none());

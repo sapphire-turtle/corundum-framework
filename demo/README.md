@@ -168,8 +168,10 @@ corundum's mark in the faceted brand blue, drawn in [`assets/`](assets) and only
 
 - `app-icon.svg`: the mark as it is, for the desktops (the window's, the Windows
   executable's through `build.rs`, and the packages') and Android 7;
-- `app-icon-square.svg`: iOS's, the mark on a light grey tile, full-bleed, as iOS rounds the
-  corners itself;
+- `app-icon-square.svg`: iOS's, the mark on a light grey tile (`#F1F4F7`, the
+  sapphire-turtle avatar's), full-bleed, as iOS rounds the corners itself;
+- `app-icon-macos.svg`: macOS's, the mark on the same tile drawn on the macOS icon grid, for
+  the app bundle the demo puts in `~/Applications` (`LauncherSpec::macos_icon_svg`);
 - `app-icon-foreground.svg`: the foreground of Android's adaptive icon, from Android 8 on,
   on the tile's colour (`res/values/ic_launcher_background.xml`).
 
