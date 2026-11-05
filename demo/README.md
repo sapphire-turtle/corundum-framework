@@ -31,6 +31,7 @@ session.
 | `qr-code` | yes | yes | yes | nothing |
 | `qr-scan` | none | the camera (AVFoundation) | Google's code scanner | iOS: `NSCameraUsageDescription` in `project.yml`. Android: `play-services-code-scanner` in `app/build.gradle.kts`, and the `com.google.mlkit.vision.DEPENDENCIES` meta-data in the manifest, so Play installs the scanner with the app |
 | `media-session` | MPRIS (Linux), the media flyout (Windows), Now Playing (macOS) | the lock screen and Control Centre | none yet | iOS: `UIBackgroundModes: audio` in `project.yml`, and MediaPlayer and AVFAudio linked |
+| `audio-preview` | the default sound device (cpal) | an Audio Unit | AAudio | Android: `minSdk = 26`, and `build-rust.sh` builds for API 26. iOS: AudioToolbox and CoreAudio linked in `project.yml` |
 | `single-instance` | one window: a second start brings the first's to the front and exits | not turned on (the OS runs an app once) | not turned on | nothing |
 
 On a device, from the Platform screen:

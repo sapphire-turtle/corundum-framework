@@ -8,8 +8,9 @@ android {
 
     defaultConfig {
         applicationId = "org.sapphire_turtle.corundum_demo"
-        // LocaleList (the system's languages, corundum-framework-platform) is API 24.
-        minSdk = 24
+        // LocaleList (the system's languages, corundum-framework-platform) is API 24; AAudio,
+        // which cpal plays through (`audio-preview`), is API 26 (build-rust.sh builds for it).
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.0"
