@@ -295,6 +295,15 @@ pub fn run(
         }
         viewport = with_launcher_look(viewport, &spec);
     }
+    // macOS takes the Dock icon from the app bundle. Setting one at run time would replace it
+    // while the app runs, and only then: the Dock would show the bundle's icon (fitted into
+    // the system's icon shape) when the app is closed and a different, bare one when it is
+    // open. `IconData::default()` tells eframe to leave the icon alone, which also keeps its
+    // own default egui icon off a window opened without a launcher spec.
+    #[cfg(target_os = "macos")]
+    {
+        viewport = viewport.with_icon(std::sync::Arc::new(egui::IconData::default()));
+    }
     let native = eframe::NativeOptions {
         viewport,
         wgpu_options: gpu::wgpu_options(),
@@ -367,7 +376,8 @@ fn with_launcher_look(
         tracing::warn!("could not set the app id of {}: {err}", spec.id);
     }
     let viewport = viewport.with_app_id(spec.id);
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    // Not on macOS, where the bundle's icon is the one to show: see `run`.
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_os = "macos")))]
     {
         const SIZE: u32 = 256;
         match corundum_framework_platform::icon::render_rgba(spec.icon_svg, SIZE) {
