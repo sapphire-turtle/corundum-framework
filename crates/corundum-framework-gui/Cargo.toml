@@ -83,13 +83,13 @@ single-instance = ["corundum-framework-platform/single-instance"]
 # `keys`: the API keys page (`keys::KeysPage`), over corundum-framework-keys's store on this
 # machine (`LocalKeys`) or the app's own backend.
 keys = ["dep:corundum-framework-keys"]
-# `preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a worker
-# thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
+# `preview::ImagePreview`: an image the app hands in (bytes or a reader) drawn in the detail
+# pane, decoded on a worker thread by corundum-framework-image (pure Rust, so on the phones too). Its default formats
 # (WebP among them) only: an app wanting RAW previews turns on that crate's `raw` itself.
 image-preview = ["dep:corundum-framework-image"]
-# `preview::AudioPreview`: a picked audio file played in the detail pane, its tags read on a
-# worker thread and the sound made by corundum-framework-audio's `Player` on the default
-# device (cpal; ALSA's headers on Linux).
+# `preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags read
+# on a worker thread and the sound made by a `Player<Content>` (spawned with
+# `preview::ContentOpener`) of corundum-framework-audio on the default device (cpal; ALSA's headers on Linux).
 audio-preview = ["dep:corundum-framework-audio", "corundum-framework-audio/cpal"]
 
 [dependencies]

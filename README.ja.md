@@ -46,8 +46,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `media-picker` | `platform::MediaPicker`：スマートフォンのアルバムから写真と動画を選ぶ（デスクトップではファイルダイアログ）。Android アプリは Activity の `onActivityResult` を corundum に渡します（`corundum_framework_platform::media::available` を参照）。iOS では Info.plist のキーは要りません | 無効 |
 | `qr-scan` | `platform::scan_qr`：スマートフォンのカメラで QR コードを読む（iOS は AVFoundation、Android は Google のコードスキャナー）。デスクトップでは使えません。iOS は `NSCameraUsageDescription`、Android はアプリの `play-services-code-scanner` 依存が必要です（`corundum_framework_platform::qr::available` を参照）。無効なら iOS でカメラの API をリンクしません | 無効 |
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
-| `image-preview` | `preview::ImagePreview`：選んだ画像ファイルを詳細ペインに描く。デコードはワーカースレッドで行う（corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
-| `audio-preview` | `preview::AudioPreview`：選んだ音声ファイルを詳細ペインでアプリの `Player` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
+| `image-preview` | `preview::ImagePreview`：アプリが渡した画像（バイト列またはリーダー）を詳細ペインに描く。デコードはワーカースレッドで行う（`preview::FilePreview` と `InfoCard` は機能なしで使える。corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
+| `audio-preview` | `preview::AudioPreview`：アプリが渡した音声を詳細ペインで、`ContentOpener` で起動したアプリの `Player<Content>` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
 
@@ -82,10 +82,10 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `image` | `image`：corundum-framework-image | いいえ |
 | `image-raw` | カメラの RAW ファイルも扱う `image`。rawler は LGPL-2.1 なので、有効にするアプリはその条件に従います（`image` も有効になる） | いいえ |
 | `image-webp` | WebP への非可逆エンコード（`encode_webp`。libwebp を使う）もできる `image`。WebP のデコードには要らない（`image` も有効になる） | いいえ |
-| `image-preview` | gui クレートの `image-preview`：`preview::ImagePreview`（`gui` と `image` も有効になる） | いいえ |
+| `image-preview` | gui クレートの `image-preview`：`preview::ImagePreview`、アプリが渡した画像（`gui` と `image` も有効になる） | いいえ |
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
-| `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
+| `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
 | `gui-update` | gui クレートの `update` パネル（`gui` と `update` も有効になる） | いいえ |
 | `gui-self-update` | gui クレートの `self-update`（`gui-update` と `self-update` も有効になる） | いいえ |
 | `gui-package` | gui クレートの `package`：アプリ自身のパッケージの行（`gui-update` と `package` も有効になる） | いいえ |

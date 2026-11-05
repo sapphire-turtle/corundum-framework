@@ -92,11 +92,11 @@ qr-scan = ["gui", "corundum-framework-gui/qr-scan"]
 qr-code = ["gui", "corundum-framework-gui/qr-code"]
 # `gui::keys`: the API keys page in Settings (brings `gui` and `keys`).
 gui-keys = ["gui", "keys", "corundum-framework-gui/keys"]
-# `gui::preview::ImagePreview`: a picked image file drawn in the detail pane, decoded on a
-# worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
+# `gui::preview::ImagePreview`: an image the app hands in drawn in the detail pane, decoded
+# on a worker thread (brings `image`; its `image-raw` and `image-webp` stay the app's to turn on).
 image-preview = ["gui", "image", "corundum-framework-gui/image-preview"]
-# `gui::preview::AudioPreview`: a picked audio file played in the detail pane, its tags read
-# on a worker thread, through the app's `audio::Player` (brings `audio` and `audio-cpal`).
+# `gui::preview::AudioPreview`: a sound the app hands in played in the detail pane, its tags
+# read on a worker thread, through the app's `audio::Player<Content>` (brings `audio` and `audio-cpal`).
 audio-preview = ["gui", "audio", "audio-cpal", "corundum-framework-gui/audio-preview"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
