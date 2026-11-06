@@ -28,7 +28,9 @@ pub fn list(
         path: dir.to_string(),
         source,
     };
-    let mut found = Vec::new();
+    // Names first, without a stat each: only the page's entries are stat'ed, so a large
+    // folder costs a sort of its names, not a stat of every entry.
+    let mut names = Vec::new();
     for item in fs::read_dir(&full).map_err(io)? {
         let item = item.map_err(io)?;
         let Ok(name) = item.file_name().into_string() else {
@@ -44,23 +46,26 @@ pub fn list(
         if ws.is_hidden(app, &child) {
             continue;
         }
-        // Gone since `read_dir` saw it: leave it out.
-        let Ok(meta) = item.path().symlink_metadata() else {
-            continue;
-        };
-        found.push((name, meta));
+        names.push(name);
     }
-    found.sort_by(|a, b| a.0.cmp(&b.0));
+    names.sort_unstable();
     let limit = params
         .limit
         .unwrap_or(DEFAULT_LIST_LIMIT)
         .clamp(1, MAX_LIST_LIMIT) as usize;
-    let more = found.len() > limit;
-    let mut entries: Vec<Entry> = found
-        .into_iter()
-        .take(limit)
-        .map(|(name, meta)| entry_for(name, &meta))
-        .collect();
+    let mut rest = names.into_iter();
+    let mut entries: Vec<Entry> = Vec::with_capacity(limit.min(rest.len()));
+    for name in rest.by_ref() {
+        // Gone since `read_dir` saw it: leave it out, and take the next.
+        let Ok(meta) = full.join(&name).symlink_metadata() else {
+            continue;
+        };
+        entries.push(entry_for(name, &meta));
+        if entries.len() == limit {
+            break;
+        }
+    }
+    let more = rest.len() > 0;
     app.annotate(&dir, &mut entries);
     let next_cursor = more
         .then(|| entries.last().map(|e| e.name.clone()))
