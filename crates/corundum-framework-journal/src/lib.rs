@@ -5,14 +5,16 @@
 //! [`BatchEnd`]. A batch made by an undo or a redo names the batch it reverses, so the log
 //! tells the whole story. See the journal spec for the design.
 //!
-//! This module set holds the ids and the records.
+//! This crate holds the ids, the records, and the operations with their registry.
 
 #![warn(missing_docs)]
 
 mod ids;
+mod op;
 mod record;
 
 pub use ids::{Actor, BatchId, OpId, Origin};
+pub use op::{Applied, OpKind, Operation, Planned, Registry};
 pub use record::{
     BatchBegin, BatchEnd, BatchRecords, BatchSummary, OpRecord, Outcome, Record, Skip,
 };
