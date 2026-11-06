@@ -1,0 +1,18 @@
+[package]
+name = "corundum-framework-journal"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.11.0"
+edition.workspace = true
+description = "An undo log for an app server's changes: batches of recorded operations, each with its plan and outcome, that can be undone and redone"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["undo", "journal", "log", "server"]
+categories = ["data-structures"]
+
+[dependencies]
+grain-id = { version = "0.15", features = ["serde"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
