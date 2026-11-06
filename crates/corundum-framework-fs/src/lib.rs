@@ -13,6 +13,7 @@ mod error;
 mod list;
 mod path;
 mod read;
+mod service;
 mod workspace;
 
 pub use app::WorkspaceApp;
@@ -21,4 +22,5 @@ pub use error::FsError;
 pub use list::list;
 pub use path::WsPath;
 pub use read::{read, stat};
+pub use service::FsService;
 pub use workspace::Workspace;

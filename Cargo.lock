@@ -1199,6 +1199,8 @@ name = "corundum-framework"
 version = "0.11.0"
 dependencies = [
  "corundum-framework-audio",
+ "corundum-framework-fs",
+ "corundum-framework-fs-api",
  "corundum-framework-gui",
  "corundum-framework-image",
  "corundum-framework-keys",
