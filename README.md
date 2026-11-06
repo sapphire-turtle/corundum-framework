@@ -125,9 +125,6 @@ desktops and on phones.
 | `qr-code` | `qr::QrCode`, a QR code drawn from text (brings the `qrcode` crate) | no |
 | `image-preview` | `preview::ImagePreview`, an image the app hands in (bytes or a reader) drawn in the detail pane, decoded on a worker thread (`preview::FilePreview` and `InfoCard` need no feature; brings corundum-framework-image; its `raw` and `webp` stay the app's to turn on) | no |
 | `audio-preview` | `preview::AudioPreview`, a sound the app hands in played in the detail pane through the app's `Player<Content>` spawned with `ContentOpener`, its tags read on a worker thread (brings corundum-framework-audio with `cpal`, the real sound device) | no |
-| `fs-api` | `fs_api`: corundum-framework-fs-api | no |
-| `fs` | `fs`: corundum-framework-fs (brings `fs-api`) | no |
-| `journal` | `journal`: corundum-framework-journal | no |
 | `code-editor` | `code`, alumina-code's `CodeEditor` re-exported: an editor for egui that keeps the indentation, its colours following the visuals; the app brings its own `Highlighter` (brings alumina-code) | no |
 | `text-preview` | `preview::TextPreview`, a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread, and `preview::FilePreview` shows text files with it (brings `code-editor`) | no |
 | `markdown-editor` | `markdown`, alumina-markdown's `MarkdownEditor` re-exported, with `markdown::toolbar`: a formatting toolbar in corundum's Lucide icons and in the context's language, its colours following the visuals (brings alumina-markdown) | no |
@@ -219,6 +216,9 @@ through to the gui crate.
 | `audio` | `audio`: corundum-framework-audio | no |
 | `audio-cpal` | `audio` with `CpalOutputs`, the real sound device (cpal) (brings `audio`) | no |
 | `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview`, a sound the app hands in (brings `gui`, `audio` and `audio-cpal`) | no |
+| `fs-api` | `fs_api`: corundum-framework-fs-api | no |
+| `fs` | `fs`: corundum-framework-fs (brings `fs-api`) | no |
+| `journal` | `journal`: corundum-framework-journal | no |
 | `code-editor` | The gui crate's `code-editor`: `gui::code`, alumina-code's editor (brings `gui`) | no |
 | `text-preview` | The gui crate's `text-preview`: `preview::TextPreview`, a text file the app hands in (brings `gui` and `code-editor`) | no |
 | `markdown-editor` | The gui crate's `markdown-editor`: `gui::markdown`, alumina-markdown's editor with a toolbar in corundum's icons and words (brings `gui`) | no |

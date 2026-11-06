@@ -52,9 +52,6 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `qr-code` | `qr::QrCode`：文字列から描く QR コード（`qrcode` クレートも有効になる） | 無効 |
 | `image-preview` | `preview::ImagePreview`：アプリが渡した画像（バイト列またはリーダー）を詳細ペインに描く。デコードはワーカースレッドで行う（`preview::FilePreview` と `InfoCard` は機能なしで使える。corundum-framework-image も有効になる。その `raw` と `webp` はアプリが有効にします） | 無効 |
 | `audio-preview` | `preview::AudioPreview`：アプリが渡した音声を詳細ペインで、`ContentOpener` で起動したアプリの `Player<Content>` を通して再生する。タグはワーカースレッドで読む（corundum-framework-audio と、その `cpal`（実際のサウンドデバイス）も有効になる） | 無効 |
-| `fs-api` | `fs_api`：corundum-framework-fs-api | いいえ |
-| `fs` | `fs`：corundum-framework-fs（`fs-api` も有効になる） | いいえ |
-| `journal` | `journal`：corundum-framework-journal | いいえ |
 | `code-editor` | `code`：alumina-code の `CodeEditor` の再エクスポート。インデントを保つ egui 用のエディタで、色は visuals に従う。ハイライターはアプリが用意する（alumina-code も有効になる） | 無効 |
 | `text-preview` | `preview::TextPreview`：アプリが渡したテキストファイルを詳細ペインに読み取り専用で表示する。UTF-8 と BOM 付き UTF-16 を読み、ワーカースレッドでデコードする。`preview::FilePreview` もこれでテキストファイルを表示する（`code-editor` も有効になる） | 無効 |
 | `markdown-editor` | `markdown`：alumina-markdown の `MarkdownEditor` の再エクスポートと、`markdown::toolbar`（corundum の Lucide アイコンと表示言語の書式ツールバー）。色は visuals に従う（alumina-markdown も有効になる） | 無効 |
@@ -100,6 +97,9 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
 | `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
+| `fs-api` | `fs_api`：corundum-framework-fs-api | いいえ |
+| `fs` | `fs`：corundum-framework-fs（`fs-api` も有効になる） | いいえ |
+| `journal` | `journal`：corundum-framework-journal | いいえ |
 | `code-editor` | gui クレートの `code-editor`：`gui::code`、alumina-code のエディタ（`gui` も有効になる） | いいえ |
 | `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
 | `markdown-editor` | gui クレートの `markdown-editor`：`gui::markdown`、alumina-markdown のエディタと、corundum のアイコンと言語のツールバー `markdown::toolbar`（`gui` も有効になる） | いいえ |
