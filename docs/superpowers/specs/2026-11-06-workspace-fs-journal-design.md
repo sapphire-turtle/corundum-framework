@@ -265,6 +265,11 @@ pub enum Route {
 For a folder, `route` and `follow` get the folder's path. The app handles the managed files
 under it itself (asteria updates the cache's paths under that prefix).
 
+A compensating batch drops the children an inverse returns, because the original children
+are undone by their own inverses. So follow-up work that must also run after an undo
+(reindexing, a cache update) is an undoable child operation, whose inverse does that work
+again. The journal has no separate "re-run after undo" kind of child (decided 2026-11-06).
+
 ### Mounting
 
 `FsService<C>` holds the engine, the registry and the journal.
