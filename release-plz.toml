@@ -58,6 +58,14 @@ version_group = "corundum"
 name = "corundum-framework-audio"
 version_group = "corundum"
 
+[[package]]
+name = "corundum-framework-fs-api"
+version_group = "corundum"
+
+[[package]]
+name = "corundum-framework-fs"
+version_group = "corundum"
+
 # The tag, the GitHub release (its notes are the version's CHANGELOG section), and the one
 # changelog at the root, with the other crates' commits in it.
 [[package]]

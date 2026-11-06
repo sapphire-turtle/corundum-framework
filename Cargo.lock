@@ -1199,6 +1199,8 @@ name = "corundum-framework"
 version = "0.11.0"
 dependencies = [
  "corundum-framework-audio",
+ "corundum-framework-fs",
+ "corundum-framework-fs-api",
  "corundum-framework-gui",
  "corundum-framework-image",
  "corundum-framework-keys",
@@ -1244,6 +1246,29 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "corundum-framework-fs"
+version = "0.11.0"
+dependencies = [
+ "base64 0.23.1",
+ "corundum-framework-fs-api",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "corundum-framework-fs-api"
+version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

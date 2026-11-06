@@ -62,6 +62,10 @@ pdf = ["dep:corundum-framework-pdf"]
 # server. `audio-cpal` adds the real sound device (cpal; ALSA's headers on Linux).
 audio = ["dep:corundum-framework-audio"]
 audio-cpal = ["audio", "corundum-framework-audio/cpal"]
+# The fs.* methods of an app's server, as plain serde data: for a client.
+fs-api = ["dep:corundum-framework-fs-api"]
+# The engine that serves them over the server's workspace folder (brings `fs-api`).
+fs = ["dep:corundum-framework-fs", "fs-api"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -156,3 +160,5 @@ corundum-framework-keys = { version = "0.11.0", path = "../corundum-framework-ke
 corundum-framework-image = { version = "0.11.0", path = "../corundum-framework-image", optional = true }
 corundum-framework-pdf = { version = "0.11.0", path = "../corundum-framework-pdf", optional = true }
 corundum-framework-audio = { version = "0.11.0", path = "../corundum-framework-audio", optional = true }
+corundum-framework-fs-api = { version = "0.11.0", path = "../corundum-framework-fs-api", optional = true }
+corundum-framework-fs = { version = "0.11.0", path = "../corundum-framework-fs", optional = true }

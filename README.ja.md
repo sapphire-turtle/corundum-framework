@@ -17,6 +17,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-image`](crates/corundum-framework-image) | egui に依存しない部分：画像を sRGB・RGBA8 のサムネイルにデコードする。サイズの上限はヘッダーの段階で確かめる。`raw`（カメラの RAW。LGPL-2.1）と `webp`（WebP への非可逆エンコード。デコードには要らない）は既定では無効 | 未リリース |
 | [`corundum-framework-pdf`](crates/corundum-framework-pdf) | egui に依存しない部分で、純 Rust（hayro）：PDF のページ数を数え、1 ページを sRGB・RGBA8 に描く。入力（64 MiB）と出力（2048 px）には上限があるが、描画中のメモリには上限がない。パスワード付きと壊れたファイルは区別する。PDF に埋め込まれていない CJK フォントの文字には、アプリのフォントファイルが要る | 未リリース |
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | egui に依存しない部分：音声ファイル（FLAC、MP3、AAC、ALAC、Vorbis、WAV、Ogg Opus）をデコードしてリサンプリングし、キューから再生する。`cpal`（実際のサウンドデバイス）は既定では無効 | 未リリース |
+| [`corundum-framework-fs-api`](crates/corundum-framework-fs-api) | アプリのサーバーがワークスペースのフォルダーについて提供する `fs.*` メソッド（`fs.list`、`fs.stat`、`fs.read`）の名前、パラメーター、結果、エラーコード。クライアント向けの serde データだけ | 未リリース |
+| [`corundum-framework-fs`](crates/corundum-framework-fs) | egui に依存しない部分：それを提供するエンジン。サーバー自身の JSON-RPC ルーターにマウントする（`FsService::dispatch`）。パスは検査され、シンボリックリンクはたどらない。ドットで始まる名前とアプリ自身のファイル（サイドカー）は隠す。フォルダーはページ単位で一覧し、アプリが管理するエントリーには印を付ける。ファイルは最大 1 MiB の範囲で読む | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
@@ -93,6 +95,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `pdf` | `pdf`：corundum-framework-pdf | いいえ |
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
+| `fs-api` | `fs_api`：corundum-framework-fs-api | いいえ |
+| `fs` | `fs`：corundum-framework-fs（`fs-api` も有効になる） | いいえ |
 | `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
 | `code-editor` | gui クレートの `code-editor`：`gui::code`、alumina-code のエディタ（`gui` も有効になる） | いいえ |
 | `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
