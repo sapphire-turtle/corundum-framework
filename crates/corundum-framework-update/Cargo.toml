@@ -22,7 +22,7 @@ cli = ["dep:clap"]
 base64 = { version = "0.22", optional = true }
 clap = { workspace = true, optional = true }
 corundum-framework-platform = { version = "0.11.0", path = "../corundum-framework-platform", default-features = false }
-minisign-verify = { version = "0.2", optional = true }
+minisign-verify = { version = "0.3", optional = true }
 reqwest.workspace = true
 self-replace = { version = "1.5", optional = true }
 sha2 = { version = "0.11", optional = true }
