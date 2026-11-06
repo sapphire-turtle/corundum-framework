@@ -1209,6 +1209,7 @@ dependencies = [
  "corundum-framework-fs-api",
  "corundum-framework-gui",
  "corundum-framework-image",
+ "corundum-framework-journal",
  "corundum-framework-keys",
  "corundum-framework-package",
  "corundum-framework-pdf",

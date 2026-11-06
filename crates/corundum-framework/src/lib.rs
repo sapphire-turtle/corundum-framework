@@ -34,9 +34,10 @@
 //! | `pdf-preview` | `gui::preview::PdfPreview` | a PDF the app hands in, drawn a page at a time in the detail pane and rendered on a worker thread; `FilePreview` shows `.pdf` files with it (brings `gui` and `pdf`) |
 //! | `audio` | [`audio`] | `corundum-framework-audio`: audio files (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus) decoded, resampled and played from a queue by `audio::Player`, without egui |
 //! | `audio-cpal` | `audio::CpalOutputs` | the real sound device, cpal's default output (brings `audio`) |
+//! | `audio-preview` | `gui::preview::AudioPreview` | a sound the app hands in, played in the detail pane through a `Player<Content>`, its tags read on a worker thread (brings `gui`, `audio` and `audio-cpal`) |
 //! | `fs-api` | [`fs_api`] | `corundum-framework-fs-api`: the `fs.*` methods of an app's server (`fs.list`, `fs.stat`, `fs.read`), their types and error codes, for a client |
 //! | `fs` | [`fs`] | `corundum-framework-fs`: the engine that serves them over the server's workspace folder, hiding the app's own files (brings `fs-api`) |
-//! | `audio-preview` | `gui::preview::AudioPreview` | a sound the app hands in, played in the detail pane through a `Player<Content>`, its tags read on a worker thread (brings `gui`, `audio` and `audio-cpal`) |
+//! | `journal` | [`journal`] | `corundum-framework-journal`: an undo log for an app server's changes: batches of the app's operations run on one writer thread and recorded, undone and redone per UI session, over a `JournalStore` (an in-memory one is included); no file system, no tokio |
 //! | `code-editor` | `gui::code` | alumina-code's `CodeEditor`, whose colours follow the visuals; the app brings its own `Highlighter` (brings `gui`) |
 //! | `text-preview` | `gui::preview::TextPreview` | a text file the app hands in, read-only in the detail pane; read as UTF-8 or UTF-16 and decoded on a worker thread (brings `gui` and `code-editor`) |
 //! | `markdown-editor` | `gui::markdown` | alumina-markdown's `MarkdownEditor`, with `markdown::toolbar` in corundum's Lucide icons and words (brings `gui`) |
@@ -86,6 +87,9 @@ pub use corundum_framework_fs_api as fs_api;
 
 #[cfg(feature = "fs")]
 pub use corundum_framework_fs as fs;
+
+#[cfg(feature = "journal")]
+pub use corundum_framework_journal as journal;
 
 // The egui the components are built against, at the top as well: an app that depends on
 // this facade alone renders with this one.
