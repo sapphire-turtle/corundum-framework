@@ -39,3 +39,22 @@ impl WorkspaceApp for HidesXmp {
         path.as_str().ends_with(".xmp") || path.as_str() == "meta"
     }
 }
+
+/// An app that manages `*.jpg` as photos, and checks the folder it is told of.
+pub struct ManagesJpg {
+    pub expect_dir: WsPath,
+}
+
+impl WorkspaceApp for ManagesJpg {
+    fn annotate(&self, dir: &WsPath, entries: &mut [corundum_framework_fs::api::Entry]) {
+        assert_eq!(dir, &self.expect_dir);
+        for e in entries {
+            if e.name.ends_with(".jpg") {
+                e.managed = Some(corundum_framework_fs::api::Managed {
+                    kind: "photo".into(),
+                    item_id: e.name.clone(),
+                });
+            }
+        }
+    }
+}

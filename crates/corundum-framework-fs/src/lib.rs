@@ -10,11 +10,13 @@
 
 mod app;
 mod error;
+mod list;
 mod path;
 mod workspace;
 
 pub use app::WorkspaceApp;
 pub use corundum_framework_fs_api as api;
 pub use error::FsError;
+pub use list::list;
 pub use path::WsPath;
 pub use workspace::Workspace;
