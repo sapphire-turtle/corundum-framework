@@ -227,8 +227,10 @@ The built-in kinds:
   Moving a folder moves everything in it.
 - **`fs.mkdir { path }`**. Its undo removes the folder if it is still empty, and is skipped
   otherwise.
-- **`fs.trash { path, expect }`** moves the entry to `<the app's hidden folder>/trash/<op_id>/<path>`.
-  Its undo moves it back, unless something is in its place by then.
+- **`fs.trash { path, expect }`** makes its own trash id (a grain id) when it applies, moves
+  the entry to `<the app's hidden folder>/trash/<trash_id>/<path>`, and keeps the id in its
+  `Done`, so its inverse can move it back: the `Operation` trait does not pass the op id to
+  `apply`. Its undo moves it back, unless something is in its place by then.
 
 `expect` is the `size` and `mtime` the client saw, and optionally a `file/1` hash. A file
 that changed since is skipped with `precondition_failed`.
