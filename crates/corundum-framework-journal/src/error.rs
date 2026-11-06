@@ -4,6 +4,7 @@ use crate::{BatchId, StoreError};
 
 /// Why the journal refused or failed a call.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum JournalError {
     /// The origin has no batch left to undo.
     #[error("nothing to undo")]
@@ -23,9 +24,13 @@ pub enum JournalError {
     /// The store has no such batch.
     #[error("batch {0} not found")]
     NotFound(BatchId),
-    /// The worker's queue is full.
+    /// The worker's queue is full; trying again later may work.
     #[error("the journal is busy")]
     Busy,
+    /// The worker is gone, so the journal can take no more work. It ends only if it
+    /// panicked, which a store that panics can make it do; no later call will work.
+    #[error("the journal's worker has stopped")]
+    Stopped,
     /// An operation's kind is not registered.
     #[error("operation {index}: unknown kind {kind:?}")]
     UnknownKind {

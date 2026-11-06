@@ -50,7 +50,9 @@ pub struct JournalConfig {
     pub may_undo: MayUndo,
     /// The clock. The default is the system's.
     pub now: Clock,
-    /// How many jobs can wait for the worker before the journal is `Busy`. The default is 64.
+    /// How many jobs can wait for the worker before the journal is `Busy`. The default is
+    /// 64; the journal takes 0 as 1, since with no room at all nearly every call would be
+    /// `Busy`.
     pub queue: usize,
 }
 
@@ -175,7 +177,7 @@ impl<C: Send + Sync + 'static> Journal<C> {
         store: impl JournalStore + 'static,
         config: JournalConfig,
     ) -> Journal<C> {
-        let (jobs, queue) = mpsc::sync_channel(config.queue);
+        let (jobs, queue) = mpsc::sync_channel(config.queue.max(1));
         let shared = Arc::new(Shared {
             registry,
             ctx,
@@ -218,8 +220,9 @@ impl<C: Send + Sync + 'static> Journal<C> {
     ///
     /// The whole batch is refused, with nothing written, if an operation's kind is unknown
     /// ([`JournalError::UnknownKind`]) or its plan does not parse
-    /// ([`JournalError::InvalidPlan`]), naming the first such operation; or with
-    /// [`JournalError::Busy`] if the queue is full. Otherwise the batch's begin is written
+    /// ([`JournalError::InvalidPlan`]), naming the first such operation; with
+    /// [`JournalError::Busy`] if the queue is full; or with [`JournalError::Stopped`] if the
+    /// worker is gone. Otherwise the batch's begin is written
     /// before this returns, and the batch goes on the origin's undo stack.
     pub fn submit(
         &self,
@@ -258,7 +261,7 @@ impl<C: Send + Sync + 'static> Journal<C> {
             Err(TrySendError::Full(_)) => return Err(JournalError::Busy),
             Err(TrySendError::Disconnected(_)) => {
                 tracing::error!("the journal's worker is gone");
-                return Err(JournalError::Busy);
+                return Err(JournalError::Stopped);
             }
         }
         let batch_id = begin.batch_id;

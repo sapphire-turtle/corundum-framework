@@ -8,6 +8,7 @@ use crate::{Actor, BatchId, OpId, Origin};
 /// Why an operation was not done.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(tag = "reason", content = "message", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Skip {
     /// What the operation expected was not there any more.
     #[error("precondition failed")]
@@ -127,6 +128,9 @@ pub struct BatchSummary {
     pub skipped: u32,
     /// Whether the batch ended.
     pub complete: bool,
+    /// Whether the batch ended cut short, as its end says.
+    #[serde(default)]
+    pub interrupted: bool,
     /// The batch that undid this one, if any.
     pub undone_by: Option<BatchId>,
 }

@@ -402,4 +402,6 @@ fn an_undo_whose_target_was_evicted_before_it_ran_is_an_error() {
         .find(|s| s.begin.batch_id == u)
         .unwrap();
     assert!(summary.complete);
+    assert!(summary.interrupted);
+    assert_eq!((summary.done, summary.skipped), (0, 0));
 }

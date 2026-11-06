@@ -318,3 +318,85 @@ fn an_undo_whose_begin_failed_leaves_its_target_to_undo() {
     assert_eq!(ctx.value("a"), None);
     assert_eq!(j.history(None, 10).unwrap().len(), 2);
 }
+
+#[test]
+fn a_zero_queue_still_takes_a_batch() {
+    let (j, ctx) = journal_with(JournalConfig {
+        queue: 0,
+        ..JournalConfig::default()
+    });
+    let gate = ctx.gate();
+    let w = submit(&j, vec![Planned::new::<Wait>(&())]);
+    // A rendezvous: once this returns, the worker is inside the `Wait`, off the queue.
+    gate.send(()).unwrap();
+    let a = j.submit(vec![set("a", 1)], &gui(), &u1(), None);
+    drop(gate);
+    let a = a.unwrap();
+    j.wait(w).unwrap();
+    j.wait(a).unwrap();
+    assert_eq!(ctx.value("a"), Some(1));
+}
+
+/// A `MemoryStore` that panics when it is given an operation's record, which kills the
+/// worker; the worker's thread then drops `Stopped`, which says so.
+struct PanickyStore(MemoryStore);
+
+struct Stopped(mpsc::Sender<()>);
+
+impl Drop for Stopped {
+    fn drop(&mut self) {
+        let _ = self.0.send(());
+    }
+}
+
+thread_local! {
+    static ON_EXIT: std::cell::RefCell<Option<Stopped>> = const { std::cell::RefCell::new(None) };
+}
+
+static STOPPED: std::sync::Mutex<Option<mpsc::Sender<()>>> = std::sync::Mutex::new(None);
+
+impl JournalStore for PanickyStore {
+    fn append(&mut self, record: &Record) -> Result<(), StoreError> {
+        if let Record::Op(_) = record {
+            // Thread-local values are dropped as the thread exits, after its stack unwound
+            // and dropped the worker's end of the queue.
+            let tx = STOPPED.lock().unwrap().take().unwrap();
+            ON_EXIT.with(|s| *s.borrow_mut() = Some(Stopped(tx)));
+            panic!("the store fails hard");
+        }
+        self.0.append(record)
+    }
+
+    fn batches_rev(
+        &self,
+        cursor: Option<BatchId>,
+        limit: usize,
+    ) -> Result<Vec<BatchSummary>, StoreError> {
+        self.0.batches_rev(cursor, limit)
+    }
+
+    fn batch(&self, id: BatchId) -> Result<Option<BatchRecords>, StoreError> {
+        self.0.batch(id)
+    }
+}
+
+#[test]
+fn a_dead_worker_is_stopped() {
+    let (tx, rx) = mpsc::channel();
+    *STOPPED.lock().unwrap() = Some(tx);
+    let j = Journal::new(
+        registry(),
+        Shared::default(),
+        PanickyStore(MemoryStore::default()),
+        JournalConfig::default(),
+    );
+    submit(&j, vec![set("a", 1)]);
+    // The timeout only detects a hang.
+    rx.recv_timeout(Duration::from_secs(30))
+        .expect("the worker died");
+    assert_eq!(
+        j.submit(vec![set("b", 1)], &gui(), &u1(), None),
+        Err(JournalError::Stopped)
+    );
+    assert_eq!(j.undo(&gui(), &u1()), Err(JournalError::Stopped));
+}

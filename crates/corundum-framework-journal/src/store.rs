@@ -6,6 +6,7 @@ use crate::{BatchBegin, BatchId, BatchRecords, BatchSummary, OpRecord, Outcome, 
 
 /// Why a store failed.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum StoreError {
     /// An I/O error, with its message.
     #[error("i/o error: {0}")]
@@ -69,6 +70,7 @@ impl MemoryStore {
                     done: 0,
                     skipped: 0,
                     complete: false,
+                    interrupted: false,
                     undone_by: None,
                 },
                 ops: Vec::new(),
@@ -106,7 +108,10 @@ impl JournalStore for MemoryStore {
             Record::Begin(b) => self.begin(b),
             Record::Op(o) => self.op(o),
             Record::End(e) => match self.batches.get_mut(&e.batch_id) {
-                Some(b) => b.summary.complete = true,
+                Some(b) => {
+                    b.summary.complete = true;
+                    b.summary.interrupted = e.interrupted;
+                }
                 None => tracing::debug!(batch = ?e.batch_id, "end for an unknown batch dropped"),
             },
         }
@@ -196,6 +201,26 @@ mod tests {
         assert_eq!(got.summary.done, 1);
         assert_eq!(got.summary.skipped, 1);
         assert!(got.summary.complete);
+    }
+
+    #[test]
+    fn an_interrupted_end_shows_in_the_summary() {
+        let mut s = MemoryStore::default();
+        let b = begin("app");
+        let id = b.batch_id;
+        s.append(&Record::Begin(b)).unwrap();
+        assert!(!s.batch(id).unwrap().unwrap().summary.interrupted);
+        s.append(&Record::End(BatchEnd {
+            batch_id: id,
+            done: 0,
+            skipped: 0,
+            interrupted: true,
+        }))
+        .unwrap();
+        let got = s.batch(id).unwrap().unwrap().summary;
+        assert!(got.complete);
+        assert!(got.interrupted);
+        assert!(s.batches_rev(None, 1).unwrap()[0].interrupted);
     }
 
     #[test]
