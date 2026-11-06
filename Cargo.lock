@@ -1247,6 +1247,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "corundum-framework-fs-api"
+version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "corundum-framework-gui"
 version = "0.11.0"
 dependencies = [
