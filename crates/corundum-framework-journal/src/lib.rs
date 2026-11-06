@@ -12,9 +12,11 @@
 mod ids;
 mod op;
 mod record;
+mod store;
 
 pub use ids::{Actor, BatchId, OpId, Origin};
 pub use op::{Applied, OpKind, Operation, Planned, Registry};
 pub use record::{
     BatchBegin, BatchEnd, BatchRecords, BatchSummary, OpRecord, Outcome, Record, Skip,
 };
+pub use store::{JournalStore, MemoryStore, StoreError};
