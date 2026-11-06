@@ -1,0 +1,24 @@
+[package]
+name = "corundum-framework-fs"
+# Versioned with the other corundum-framework crates (release-plz's `corundum` group).
+version = "0.11.0"
+edition.workspace = true
+description = "An app server's workspace folder over the fs.* methods: checked paths, the app's files hidden, folders listed a page at a time and files read in ranges"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["json-rpc", "filesystem", "workspace", "server"]
+categories = ["filesystem"]
+
+[dependencies]
+base64 = "0.23"
+corundum-framework-fs-api = { version = "0.11.0", path = "../corundum-framework-fs-api" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
