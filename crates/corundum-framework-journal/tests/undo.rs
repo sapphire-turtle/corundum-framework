@@ -367,3 +367,39 @@ fn twenty_undos_in_a_row_all_work() {
     }
     assert!(keys.iter().all(|k| ctx.value(k).is_none()));
 }
+
+#[test]
+fn an_undo_whose_target_was_evicted_before_it_ran_is_an_error() {
+    let ctx = Shared::default();
+    let j = Journal::new(
+        registry(),
+        ctx.clone(),
+        MemoryStore::new(5),
+        JournalConfig::default(),
+    );
+    let gate = ctx.gate();
+    submit(&j, vec![Planned::new::<Wait>(&())]);
+    // A rendezvous: once this returns, the worker is inside the `Wait`.
+    gate.send(()).unwrap();
+    let a = submit(&j, vec![set("a", 1)]);
+    let u = j.undo(&gui(), &u1()).unwrap();
+    // Four more batches push the gated one and `a` out of a store of five.
+    let mut last = None;
+    for i in 0..4 {
+        last = Some(submit(&j, vec![set("b", i)]));
+    }
+    assert!(j.status(a).is_err());
+    drop(gate);
+    assert_eq!(j.wait(u), Err(JournalError::Expired(a)));
+    assert_eq!(j.status(u), Err(JournalError::Expired(a)));
+    j.wait(last.unwrap()).unwrap();
+    assert_eq!(ctx.value("a"), Some(1));
+    // The compensation's end says it was cut short.
+    let summary = j
+        .history(None, 10)
+        .unwrap()
+        .into_iter()
+        .find(|s| s.begin.batch_id == u)
+        .unwrap();
+    assert!(summary.complete);
+}

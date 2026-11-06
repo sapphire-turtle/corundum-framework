@@ -12,7 +12,7 @@ use crate::op::Unparsed;
 use crate::undo::{self, Inverse};
 use crate::{
     Actor, BatchBegin, BatchEnd, BatchId, BatchRecords, BatchSummary, JournalError, JournalStore,
-    OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip, StoreError,
+    OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip,
 };
 
 /// How far back undo reaches.
@@ -86,8 +86,9 @@ struct State {
     reserved: HashSet<BatchId>,
     /// Batches queued whose begin could not be written: the worker drops them unrun.
     cancelled: HashSet<BatchId>,
-    /// Batches a record of which could not be written, with the first error.
-    failed: HashMap<BatchId, StoreError>,
+    /// Batches that failed, with the first error: a record of theirs could not be written,
+    /// or, for a compensation, its target could not be read or had left the store.
+    failed: HashMap<BatchId, JournalError>,
 }
 
 /// Work for the worker.
@@ -398,11 +399,14 @@ impl<C: Send + Sync + 'static> Journal<C> {
 
     /// A batch with its operations so far, or [`JournalError::NotFound`].
     ///
-    /// [`JournalError::Store`] if one of the batch's records could not be written.
+    /// [`JournalError::Store`] if one of the batch's records could not be written. For an
+    /// undo or a redo: [`JournalError::Expired`] if its target left the store before it
+    /// ran, and [`JournalError::Store`] if the target could not be read; such a batch ends
+    /// at once, with nothing done, and its end says it was interrupted.
     pub fn status(&self, id: BatchId) -> Result<BatchRecords, JournalError> {
         let state = self.shared().lock();
         if let Some(e) = state.failed.get(&id) {
-            return Err(e.clone().into());
+            return Err(e.clone());
         }
         state.store.batch(id)?.ok_or(JournalError::NotFound(id))
     }
@@ -410,13 +414,14 @@ impl<C: Send + Sync + 'static> Journal<C> {
     /// Blocks until the batch has ended, and gives it with its operations.
     ///
     /// [`JournalError::NotFound`] if the store has no such batch, or drops it while waiting;
-    /// [`JournalError::Store`] if one of the batch's records could not be written.
+    /// [`JournalError::Store`] if one of the batch's records could not be written; and, for
+    /// an undo or a redo, the errors [`Journal::status`] gives.
     pub fn wait(&self, id: BatchId) -> Result<BatchRecords, JournalError> {
         let shared = self.shared();
         let mut state = shared.lock();
         loop {
             if let Some(e) = state.failed.get(&id) {
-                return Err(e.clone().into());
+                return Err(e.clone());
             }
             match state.store.batch(id)? {
                 None => return Err(JournalError::NotFound(id)),
@@ -470,7 +475,7 @@ impl<C: Send + Sync + 'static> Shared<C> {
         let mut state = self.lock();
         if let Err(e) = state.store.append(&record) {
             tracing::error!(error = %e, batch = %batch_id, "the journal could not keep a record");
-            state.failed.entry(batch_id).or_insert(e);
+            state.failed.entry(batch_id).or_insert(e.into());
         }
     }
 
@@ -516,7 +521,7 @@ impl<C: Send + Sync + 'static> Shared<C> {
         let mut state = self.lock();
         if let Err(e) = state.store.append(&Record::End(end)) {
             tracing::error!(error = %e, batch = %batch_id, "the journal could not keep a record");
-            state.failed.entry(batch_id).or_insert(e);
+            state.failed.entry(batch_id).or_insert(e.into());
         }
         if let Some(t) = target {
             state.reserved.remove(&t);
@@ -527,25 +532,37 @@ impl<C: Send + Sync + 'static> Shared<C> {
 
     /// Runs a compensation: the inverses of the target's done operations, newest first.
     /// Their children are dropped.
+    ///
+    /// If the target cannot be read, or has left the store, the compensation ends at once,
+    /// cut short, and `wait` and `status` give [`JournalError::Store`] or
+    /// [`JournalError::Expired`].
     fn run_compensation(&self, batch_id: BatchId, target: BatchId) {
-        let records = self.lock().store.batch(target);
-        let inverses = match records {
-            Ok(Some(records)) => undo::inverses(&self.registry, &records),
-            Ok(None) => {
-                tracing::warn!(batch = %batch_id, target = %target, "the target left the store before its undo ran");
-                Vec::new()
-            }
-            Err(e) => {
-                tracing::error!(error = %e, batch = %batch_id, target = %target, "the target of an undo could not be read");
-                self.lock().failed.entry(batch_id).or_insert(e);
-                Vec::new()
-            }
-        };
         let mut end = BatchEnd {
             batch_id,
             done: 0,
             skipped: 0,
             interrupted: false,
+        };
+        let records = self.lock().store.batch(target);
+        let failure = match records {
+            Ok(Some(records)) => Ok(undo::inverses(&self.registry, &records)),
+            Ok(None) => {
+                tracing::warn!(batch = %batch_id, target = %target, "the target left the store before its undo ran");
+                Err(JournalError::Expired(target))
+            }
+            Err(e) => {
+                tracing::error!(error = %e, batch = %batch_id, target = %target, "the target of an undo could not be read");
+                Err(e.into())
+            }
+        };
+        let inverses = match failure {
+            Ok(inverses) => inverses,
+            Err(e) => {
+                self.lock().failed.entry(batch_id).or_insert(e);
+                end.interrupted = true;
+                self.end_batch(end, Some(target));
+                return;
+            }
         };
         for Inverse { kind, plan } in inverses {
             let p = match plan {
