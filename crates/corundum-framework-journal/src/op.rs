@@ -1,8 +1,5 @@
 //! Operations, and the registry that runs them by kind.
 
-// The crate-private registry calls are used by the journal, which comes in a later task.
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -92,6 +89,7 @@ type Inverting = Result<Result<Option<Value>, Skip>, Unparsed>;
 type Applying = Result<Result<(Value, Vec<Planned>), Skip>, Unparsed>;
 
 trait Erased<C>: Send + Sync {
+    fn parse(&self, plan: &Value) -> Result<(), Unparsed>;
     fn check(&self, ctx: &C, plan: &Value) -> Result<Result<(), Skip>, Unparsed>;
     fn apply(&self, ctx: &C, plan: &Value) -> Applying;
     fn inverse(&self, done: &Value) -> Inverting;
@@ -106,6 +104,10 @@ fn parse<T: DeserializeOwned>(v: &Value) -> Result<T, Unparsed> {
 }
 
 impl<C, O: Operation<C>> Erased<C> for O {
+    fn parse(&self, plan: &Value) -> Result<(), Unparsed> {
+        parse::<O::Plan>(plan).map(|_| ())
+    }
+
     fn check(&self, ctx: &C, plan: &Value) -> Result<Result<(), Skip>, Unparsed> {
         let plan: O::Plan = parse(plan)?;
         Ok(
@@ -177,6 +179,11 @@ impl<C> Registry<C> {
             .ok_or(Unparsed::UnknownKind)
     }
 
+    /// Whether the kind is registered and the plan parses, without running anything.
+    pub(crate) fn parse(&self, p: &Planned) -> Result<(), Unparsed> {
+        self.get(&p.kind)?.parse(&p.plan)
+    }
+
     pub(crate) fn check(&self, ctx: &C, p: &Planned) -> Result<Result<(), Skip>, Unparsed> {
         self.get(&p.kind)?.check(ctx, &p.plan)
     }
@@ -185,6 +192,8 @@ impl<C> Registry<C> {
         self.get(&p.kind)?.apply(ctx, &p.plan)
     }
 
+    // Used by undo, Task 5.
+    #[allow(dead_code)]
     pub(crate) fn inverse(&self, kind: &str, done: &Value) -> Inverting {
         self.get(kind)?.inverse(done)
     }
