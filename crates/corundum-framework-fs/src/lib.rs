@@ -8,9 +8,13 @@
 
 #![warn(missing_docs)]
 
+mod app;
 mod error;
 mod path;
+mod workspace;
 
+pub use app::WorkspaceApp;
 pub use corundum_framework_fs_api as api;
 pub use error::FsError;
 pub use path::WsPath;
+pub use workspace::Workspace;
