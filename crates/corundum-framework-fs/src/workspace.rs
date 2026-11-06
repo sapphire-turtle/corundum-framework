@@ -65,7 +65,41 @@ impl Workspace {
             full.push(segment);
             meta = self.metadata(&full, path)?;
         }
+        // On a file system that ignores case (or Unicode normalization), `P.JPG.XMP` reaches
+        // `p.jpg.xmp`: judge hiding on the names on disk too, not only on those asked for.
+        if !path.is_root() && self.is_hidden(app, &self.on_disk(&full, &meta, path)?) {
+            return Err(FsError::InvalidPath(format!("{path:?} is hidden")));
+        }
         Ok((full, meta))
+    }
+
+    /// The workspace path of `full` as the file system spells it. No segment of `full` is a
+    /// symlink but perhaps the last, so canonicalizing follows nothing but that one, and a
+    /// final symlink keeps its name as asked.
+    fn on_disk(&self, full: &Path, meta: &Metadata, path: &WsPath) -> Result<WsPath, FsError> {
+        let io = |source| FsError::Io {
+            path: path.to_string(),
+            source,
+        };
+        let real = if meta.file_type().is_symlink() {
+            let parent = full.parent().unwrap_or(&self.root);
+            let name = full.file_name().unwrap_or_default();
+            fs::canonicalize(parent).map_err(io)?.join(name)
+        } else {
+            fs::canonicalize(full).map_err(io)?
+        };
+        let rel = real
+            .strip_prefix(&self.root)
+            .map_err(|_| FsError::InvalidPath(format!("{path:?} leaves the workspace")))?;
+        let mut on_disk = WsPath::root();
+        for segment in rel.components() {
+            let name = segment
+                .as_os_str()
+                .to_str()
+                .ok_or_else(|| FsError::InvalidPath(format!("{path:?} is not UTF-8 on disk")))?;
+            on_disk = on_disk.join(name)?;
+        }
+        Ok(on_disk)
     }
 
     fn metadata(&self, full: &Path, path: &WsPath) -> Result<Metadata, FsError> {

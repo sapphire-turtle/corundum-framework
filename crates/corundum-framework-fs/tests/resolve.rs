@@ -87,3 +87,28 @@ fn opening_a_missing_root_fails() {
         Err(FsError::InvalidPath(_))
     ));
 }
+
+/// Whether the temporary folders are on a file system that ignores case (macOS, Windows).
+fn ignores_case() -> bool {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a"), b"").unwrap();
+    dir.path().join("A").exists()
+}
+
+#[test]
+fn hiding_holds_whatever_the_case_asked() {
+    if !ignores_case() {
+        eprintln!("skipped: this file system tells case apart");
+        return;
+    }
+    let (_dir, ws) = workspace(&["p.jpg.xmp", "meta/inner.txt"]);
+    for path in ["P.JPG.XMP", "p.jpg.Xmp", "META/inner.txt", "Meta"] {
+        assert!(
+            matches!(
+                ws.resolve(&HidesXmp, &p(path)),
+                Err(FsError::InvalidPath(_))
+            ),
+            "{path} was resolved"
+        );
+    }
+}
