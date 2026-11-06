@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::op::Unparsed;
 use crate::{
     Actor, BatchBegin, BatchEnd, BatchId, BatchRecords, BatchSummary, JournalError, JournalStore,
-    OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip,
+    OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip, StoreError,
 };
 
 /// How far back undo reaches.
@@ -81,6 +81,10 @@ struct State {
     // Used by undo, Task 5.
     #[allow(dead_code)]
     reserved: HashSet<BatchId>,
+    /// Batches queued whose begin could not be written: the worker drops them unrun.
+    cancelled: HashSet<BatchId>,
+    /// Batches a record of which could not be written, with the first error.
+    failed: HashMap<BatchId, StoreError>,
 }
 
 /// Work for the worker.
@@ -157,6 +161,8 @@ impl<C: Send + Sync + 'static> Journal<C> {
                 store: Box::new(store),
                 stacks: HashMap::new(),
                 reserved: HashSet::new(),
+                cancelled: HashSet::new(),
+                failed: HashMap::new(),
             }),
             ended: Condvar::new(),
         });
@@ -222,7 +228,11 @@ impl<C: Send + Sync + 'static> Journal<C> {
                 return Err(JournalError::Busy);
             }
         }
-        state.store.append(&Record::Begin(begin))?;
+        if let Err(e) = state.store.append(&Record::Begin(begin)) {
+            // The job is queued already; without its begin it must not run.
+            state.cancelled.insert(batch_id);
+            return Err(e.into());
+        }
         let stacks = state.stacks.entry(origin.clone()).or_default();
         stacks.undo.push(batch_id);
         stacks.redo.clear();
@@ -230,21 +240,27 @@ impl<C: Send + Sync + 'static> Journal<C> {
     }
 
     /// A batch with its operations so far, or [`JournalError::NotFound`].
+    ///
+    /// [`JournalError::Store`] if one of the batch's records could not be written.
     pub fn status(&self, id: BatchId) -> Result<BatchRecords, JournalError> {
-        self.shared()
-            .lock()
-            .store
-            .batch(id)?
-            .ok_or(JournalError::NotFound(id))
+        let state = self.shared().lock();
+        if let Some(e) = state.failed.get(&id) {
+            return Err(e.clone().into());
+        }
+        state.store.batch(id)?.ok_or(JournalError::NotFound(id))
     }
 
     /// Blocks until the batch has ended, and gives it with its operations.
     ///
-    /// [`JournalError::NotFound`] if the store has no such batch, or drops it while waiting.
+    /// [`JournalError::NotFound`] if the store has no such batch, or drops it while waiting;
+    /// [`JournalError::Store`] if one of the batch's records could not be written.
     pub fn wait(&self, id: BatchId) -> Result<BatchRecords, JournalError> {
         let shared = self.shared();
         let mut state = shared.lock();
         loop {
+            if let Some(e) = state.failed.get(&id) {
+                return Err(e.clone().into());
+            }
             match state.store.batch(id)? {
                 None => return Err(JournalError::NotFound(id)),
                 Some(b) if b.summary.complete => return Ok(b),
@@ -292,9 +308,12 @@ impl<C: Send + Sync + 'static> Shared<C> {
         self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn append(&self, record: Record) {
-        if let Err(e) = self.lock().store.append(&record) {
-            tracing::error!(error = %e, "the journal could not keep a record");
+    /// Writes a record of the batch `batch_id`; a failure is kept for `wait` and `status`.
+    fn append(&self, batch_id: BatchId, record: Record) {
+        let mut state = self.lock();
+        if let Err(e) = state.store.append(&record) {
+            tracing::error!(error = %e, batch = %batch_id, "the journal could not keep a record");
+            state.failed.entry(batch_id).or_insert(e);
         }
     }
 
@@ -302,7 +321,13 @@ impl<C: Send + Sync + 'static> Shared<C> {
     fn run(&self, queue: Receiver<Job>) {
         while let Ok(job) = queue.recv() {
             match job {
-                Job::Batch { batch_id, ops } => self.run_batch(batch_id, &ops),
+                Job::Batch { batch_id, ops } => {
+                    if self.lock().cancelled.remove(&batch_id) {
+                        tracing::debug!(batch = %batch_id, "batch dropped: its begin was not written");
+                        continue;
+                    }
+                    self.run_batch(batch_id, &ops);
+                }
             }
         }
     }
@@ -317,7 +342,7 @@ impl<C: Send + Sync + 'static> Shared<C> {
         for p in ops {
             self.run_op(&mut end, None, p);
         }
-        self.append(Record::End(end));
+        self.append(batch_id, Record::End(end));
         self.ended.notify_all();
     }
 
@@ -334,14 +359,17 @@ impl<C: Send + Sync + 'static> Shared<C> {
             Outcome::Skipped(_) => end.skipped += 1,
         }
         let op_id = OpId::random();
-        self.append(Record::Op(OpRecord {
-            op_id,
-            batch_id: end.batch_id,
-            parent,
-            kind: p.kind.clone(),
-            plan: p.plan.clone(),
-            outcome,
-        }));
+        self.append(
+            end.batch_id,
+            Record::Op(OpRecord {
+                op_id,
+                batch_id: end.batch_id,
+                parent,
+                kind: p.kind.clone(),
+                plan: p.plan.clone(),
+                outcome,
+            }),
+        );
         for child in &children {
             self.run_op(end, Some(op_id), child);
         }

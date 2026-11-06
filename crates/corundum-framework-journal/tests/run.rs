@@ -2,12 +2,15 @@
 
 mod common;
 
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
+use std::thread;
 use std::time::Duration;
 
 use common::*;
 use corundum_framework_journal::{
-    Journal, JournalConfig, JournalError, MemoryStore, OpKind, Outcome, Planned, Registry, Skip,
+    BatchId, BatchRecords, BatchSummary, Journal, JournalConfig, JournalError, JournalStore,
+    MemoryStore, OpKind, Outcome, Planned, Record, Registry, Skip, StoreError,
 };
 use serde_json::json;
 
@@ -217,4 +220,86 @@ fn the_worker_ends_with_the_last_handle() {
     // The worker drops the context as it ends; the timeout only guards against a hang.
     rx.recv_timeout(Duration::from_secs(30))
         .expect("the worker ended");
+}
+
+/// A `MemoryStore` that fails on demand.
+struct FlakyStore {
+    inner: MemoryStore,
+    /// Fail the next `Begin` append.
+    fail_begin: Arc<AtomicBool>,
+    /// Fail every `End` append.
+    fail_end: Arc<AtomicBool>,
+}
+
+impl JournalStore for FlakyStore {
+    fn append(&mut self, record: &Record) -> Result<(), StoreError> {
+        let fail = match record {
+            Record::Begin(_) => self.fail_begin.swap(false, Ordering::SeqCst),
+            Record::End(_) => self.fail_end.load(Ordering::SeqCst),
+            Record::Op(_) => false,
+        };
+        if fail {
+            return Err(StoreError::Io("disk full".into()));
+        }
+        self.inner.append(record)
+    }
+
+    fn batches_rev(
+        &self,
+        cursor: Option<BatchId>,
+        limit: usize,
+    ) -> Result<Vec<BatchSummary>, StoreError> {
+        self.inner.batches_rev(cursor, limit)
+    }
+
+    fn batch(&self, id: BatchId) -> Result<Option<BatchRecords>, StoreError> {
+        self.inner.batch(id)
+    }
+}
+
+fn flaky_journal() -> (Journal<Shared>, Shared, Arc<AtomicBool>, Arc<AtomicBool>) {
+    let ctx = Shared::default();
+    let fail_begin = Arc::new(AtomicBool::new(false));
+    let fail_end = Arc::new(AtomicBool::new(false));
+    let store = FlakyStore {
+        inner: MemoryStore::default(),
+        fail_begin: fail_begin.clone(),
+        fail_end: fail_end.clone(),
+    };
+    let j = Journal::new(registry(), ctx.clone(), store, JournalConfig::default());
+    (j, ctx, fail_begin, fail_end)
+}
+
+#[test]
+fn a_batch_whose_begin_failed_does_not_run() {
+    let (j, ctx, fail_begin, _) = flaky_journal();
+    fail_begin.store(true, Ordering::SeqCst);
+    assert!(matches!(
+        j.submit(vec![set("a", 1)], &gui(), &u1(), None),
+        Err(JournalError::Store(_))
+    ));
+    // The worker runs jobs in order, so once this one is done the first was handled.
+    let id = submit(&j, vec![set("b", 1)]);
+    assert!(j.wait(id).unwrap().summary.complete);
+    assert_eq!(ctx.value("b"), Some(1));
+    assert_eq!(ctx.value("a"), None);
+    assert_eq!(j.history(None, 10).unwrap().len(), 1);
+}
+
+#[test]
+fn a_failed_end_makes_wait_return_an_error() {
+    let (j, _ctx, _, fail_end) = flaky_journal();
+    fail_end.store(true, Ordering::SeqCst);
+    let id = submit(&j, vec![set("a", 1)]);
+    let (tx, rx) = mpsc::channel();
+    let j2 = j.clone();
+    thread::spawn(move || {
+        let _ = tx.send(j2.wait(id));
+    });
+    // The timeout only detects a hang.
+    let got = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("wait returned");
+    assert!(matches!(got, Err(JournalError::Store(_))), "{got:?}");
+    assert!(matches!(j.status(id), Err(JournalError::Store(_))));
 }
