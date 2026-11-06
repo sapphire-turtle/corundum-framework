@@ -1196,7 +1196,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "corundum-framework-audio",
  "corundum-framework-gui",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-audio"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "corundum-framework-audio",
  "cpal",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-build"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "corundum-framework-platform",
  "png 0.18.1",
@@ -1248,7 +1248,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-gui"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "alumina-code",
  "alumina-datetime",
@@ -1295,7 +1295,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-image"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "fast_image_resize",
  "image",
@@ -1309,7 +1309,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-keys"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -1331,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-package"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "cargo-packager-updater",
  "corundum-framework-platform",
@@ -1349,7 +1349,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-pdf"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "hayro",
  "thiserror 2.0.21",
@@ -1357,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-platform"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "block2 0.6.2",
  "dirs 7.0.0",
@@ -1389,7 +1389,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-service"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap",
  "corundum-framework-platform",
@@ -1401,7 +1401,7 @@ dependencies = [
 
 [[package]]
 name = "corundum-framework-update"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -3625,9 +3625,9 @@ dependencies = [
 
 [[package]]
 name = "mime"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+checksum = "d5848f5a9e8117cf94f2f90faac24a87ff81600ff8628c1e3deaab572e76bfa1"
 
 [[package]]
 name = "minisign"
