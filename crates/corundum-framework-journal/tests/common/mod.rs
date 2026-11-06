@@ -140,9 +140,12 @@ pub fn set_expect(key: &str, to: i64, expect: Option<i64>) -> Planned {
 pub struct WithChildPlan {
     /// The key.
     pub key: String,
+    /// The new value; `None` removes the key.
+    pub to: Option<i64>,
 }
 
-/// Sets `key` to 1, with the child `Set` of `{key}.side` to 1.
+/// Sets `key` to `to`, with the child `Set` of `{key}.side` to 1. Its inverse puts the
+/// previous value back, and so has a child too.
 pub struct WithChild;
 
 impl OpKind for WithChild {
@@ -153,25 +156,35 @@ impl OpKind for WithChild {
 
 impl Operation<Shared> for WithChild {
     fn apply(&self, ctx: &Shared, plan: &WithChildPlan) -> Result<Applied<SetDone>, Skip> {
-        let from = ctx.values.lock().unwrap().insert(plan.key.clone(), 1);
+        let mut values = ctx.values.lock().unwrap();
+        let from = match plan.to {
+            Some(v) => values.insert(plan.key.clone(), v),
+            None => values.remove(&plan.key),
+        };
         Ok(Applied {
             done: SetDone {
                 key: plan.key.clone(),
                 from,
-                to: Some(1),
+                to: plan.to,
             },
             children: vec![set(&format!("{}.side", plan.key), 1)],
         })
     }
 
-    fn inverse(&self, _done: &SetDone) -> Option<WithChildPlan> {
-        None
+    fn inverse(&self, done: &SetDone) -> Option<WithChildPlan> {
+        Some(WithChildPlan {
+            key: done.key.clone(),
+            to: done.from,
+        })
     }
 }
 
-/// A `WithChild` on `key`.
+/// A `WithChild` setting `key` to 1.
 pub fn with_child(key: &str) -> Planned {
-    Planned::new::<WithChild>(&WithChildPlan { key: key.into() })
+    Planned::new::<WithChild>(&WithChildPlan {
+        key: key.into(),
+        to: Some(1),
+    })
 }
 
 /// Panics.

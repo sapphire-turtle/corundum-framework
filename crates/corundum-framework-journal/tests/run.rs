@@ -303,3 +303,18 @@ fn a_failed_end_makes_wait_return_an_error() {
     assert!(matches!(got, Err(JournalError::Store(_))), "{got:?}");
     assert!(matches!(j.status(id), Err(JournalError::Store(_))));
 }
+
+#[test]
+fn an_undo_whose_begin_failed_leaves_its_target_to_undo() {
+    let (j, ctx, fail_begin, _) = flaky_journal();
+    let a = submit(&j, vec![set("a", 1)]);
+    j.wait(a).unwrap();
+    fail_begin.store(true, Ordering::SeqCst);
+    assert!(matches!(j.undo(&gui(), &u1()), Err(JournalError::Store(_))));
+    assert_eq!(ctx.value("a"), Some(1));
+    // Still on the stack, and not reserved.
+    let u = j.undo(&gui(), &u1()).unwrap();
+    assert_eq!(j.wait(u).unwrap().summary.begin.undo_of, Some(a));
+    assert_eq!(ctx.value("a"), None);
+    assert_eq!(j.history(None, 10).unwrap().len(), 2);
+}

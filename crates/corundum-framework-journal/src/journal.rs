@@ -6,7 +6,10 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use serde_json::Value;
+
 use crate::op::Unparsed;
+use crate::undo::{self, Inverse};
 use crate::{
     Actor, BatchBegin, BatchEnd, BatchId, BatchRecords, BatchSummary, JournalError, JournalStore,
     OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip, StoreError,
@@ -78,8 +81,7 @@ struct Stacks {
 struct State {
     store: Box<dyn JournalStore>,
     stacks: HashMap<Origin, Stacks>,
-    // Used by undo, Task 5.
-    #[allow(dead_code)]
+    /// Batches a compensation is queued or running for.
     reserved: HashSet<BatchId>,
     /// Batches queued whose begin could not be written: the worker drops them unrun.
     cancelled: HashSet<BatchId>,
@@ -94,6 +96,25 @@ enum Job {
         batch_id: BatchId,
         ops: Vec<Planned>,
     },
+    /// A compensation, its begin already written and its target reserved. Its plans are
+    /// built when it runs, so a target still queued has run by then.
+    Compensate { batch_id: BatchId, target: BatchId },
+}
+
+/// Which of an origin's stacks.
+#[derive(Debug, Clone, Copy)]
+enum Side {
+    Undo,
+    Redo,
+}
+
+impl Stacks {
+    fn get(&mut self, side: Side) -> &mut Vec<BatchId> {
+        match side {
+            Side::Undo => &mut self.undo,
+            Side::Redo => &mut self.redo,
+        }
+    }
 }
 
 /// What the handles and the worker share. It holds no sender, so the worker keeping it
@@ -220,7 +241,17 @@ impl<C: Send + Sync + 'static> Journal<C> {
         // The worker writes only under this lock, so the begin goes in before the batch's
         // first record even if the worker takes the job at once.
         let mut state = shared.lock();
-        match self.inner.jobs.try_send(Job::Batch { batch_id, ops }) {
+        self.queue(&mut state, Job::Batch { batch_id, ops }, begin)?;
+        let stacks = state.stacks.entry(origin.clone()).or_default();
+        stacks.undo.push(batch_id);
+        stacks.redo.clear();
+        Ok(batch_id)
+    }
+
+    /// Queues `job`, then writes its `begin`; call it under the lock. If the begin cannot be
+    /// written, the job is dropped unrun.
+    fn queue(&self, state: &mut State, job: Job, begin: BatchBegin) -> Result<(), JournalError> {
+        match self.inner.jobs.try_send(job) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => return Err(JournalError::Busy),
             Err(TrySendError::Disconnected(_)) => {
@@ -228,14 +259,139 @@ impl<C: Send + Sync + 'static> Journal<C> {
                 return Err(JournalError::Busy);
             }
         }
+        let batch_id = begin.batch_id;
         if let Err(e) = state.store.append(&Record::Begin(begin)) {
             // The job is queued already; without its begin it must not run.
             state.cancelled.insert(batch_id);
             return Err(e.into());
         }
-        let stacks = state.stacks.entry(origin.clone()).or_default();
-        stacks.undo.push(batch_id);
-        stacks.redo.clear();
+        Ok(())
+    }
+
+    /// Undoes the newest batch on the origin's undo stack, and gives the compensating
+    /// batch's id; [`Journal::wait`] works on it.
+    ///
+    /// Entries already undone, or with an undo under way, are dropped from the stack first.
+    /// [`JournalError::NothingToUndo`] if none is left. The target is refused, and stays on
+    /// the stack, if the store no longer has it or it is outside the undo window
+    /// ([`JournalError::Expired`]), or if `may_undo` does not allow the actor
+    /// ([`JournalError::Forbidden`]). Otherwise the compensation's begin is written, with the
+    /// caller's origin and actor, before this returns, and it goes on the redo stack.
+    pub fn undo(&self, origin: &Origin, actor: &Actor) -> Result<BatchId, JournalError> {
+        self.compensate_top(Side::Undo, origin, actor)
+    }
+
+    /// Redoes the newest undo on the origin's redo stack, and gives the new batch's id;
+    /// [`Journal::wait`] works on it.
+    ///
+    /// The rules are [`Journal::undo`]'s, with [`JournalError::NothingToRedo`] for an empty
+    /// stack; the new batch goes on the undo stack.
+    pub fn redo(&self, origin: &Origin, actor: &Actor) -> Result<BatchId, JournalError> {
+        self.compensate_top(Side::Redo, origin, actor)
+    }
+
+    /// Undoes the batch `target`, whatever its origin, and gives the compensating batch's
+    /// id; [`Journal::wait`] works on it. No stack changes.
+    ///
+    /// Refused with [`JournalError::NotFound`] if the store has no such batch,
+    /// [`JournalError::AlreadyUndone`] if it was undone or an undo of it is under way, and
+    /// otherwise as [`Journal::undo`] refuses. If the target undid a batch, the new batch
+    /// redoes that batch (its `redo_of` is the target).
+    pub fn undo_batch(
+        &self,
+        target: BatchId,
+        origin: &Origin,
+        actor: &Actor,
+    ) -> Result<BatchId, JournalError> {
+        let shared = self.shared();
+        let mut state = shared.lock();
+        let begin = undo::check(
+            state.store.as_ref(),
+            &state.reserved,
+            &shared.config,
+            target,
+            actor,
+            JournalError::NotFound(target),
+        )?;
+        self.compensate(&mut state, &begin, origin, actor)
+    }
+
+    fn compensate_top(
+        &self,
+        side: Side,
+        origin: &Origin,
+        actor: &Actor,
+    ) -> Result<BatchId, JournalError> {
+        let shared = self.shared();
+        let mut state = shared.lock();
+        loop {
+            let top = state
+                .stacks
+                .get_mut(origin)
+                .and_then(|s| s.get(side).last().copied());
+            let Some(target) = top else {
+                return Err(match side {
+                    Side::Undo => JournalError::NothingToUndo,
+                    Side::Redo => JournalError::NothingToRedo,
+                });
+            };
+            let checked = undo::check(
+                state.store.as_ref(),
+                &state.reserved,
+                &shared.config,
+                target,
+                actor,
+                JournalError::Expired(target),
+            );
+            let begin = match checked {
+                Ok(begin) => begin,
+                Err(JournalError::AlreadyUndone(_)) => {
+                    state
+                        .stacks
+                        .entry(origin.clone())
+                        .or_default()
+                        .get(side)
+                        .pop();
+                    continue;
+                }
+                Err(e) => return Err(e),
+            };
+            let id = self.compensate(&mut state, &begin, origin, actor)?;
+            let stacks = state.stacks.entry(origin.clone()).or_default();
+            stacks.get(side).pop();
+            let other = match side {
+                Side::Undo => Side::Redo,
+                Side::Redo => Side::Undo,
+            };
+            stacks.get(other).push(id);
+            return Ok(id);
+        }
+    }
+
+    /// Writes and queues a compensation for `target`, and reserves the target; call it
+    /// under the lock, once the target is checked.
+    fn compensate(
+        &self,
+        state: &mut State,
+        target: &BatchBegin,
+        origin: &Origin,
+        actor: &Actor,
+    ) -> Result<BatchId, JournalError> {
+        let batch_id = BatchId::random();
+        let begin = undo::begin_for(
+            batch_id,
+            target,
+            origin,
+            actor,
+            (self.shared().config.now)(),
+        );
+        let job = Job::Compensate {
+            batch_id,
+            target: target.batch_id,
+        };
+        self.queue(state, job, begin)?;
+        // Reserved only once its begin is written, so a failure leaves nothing to release.
+        state.reserved.insert(target.batch_id);
         Ok(batch_id)
     }
 
@@ -328,6 +484,13 @@ impl<C: Send + Sync + 'static> Shared<C> {
                     }
                     self.run_batch(batch_id, &ops);
                 }
+                Job::Compensate { batch_id, target } => {
+                    if self.lock().cancelled.remove(&batch_id) {
+                        tracing::debug!(batch = %batch_id, "compensation dropped: its begin was not written");
+                        continue;
+                    }
+                    self.run_compensation(batch_id, target);
+                }
             }
         }
     }
@@ -342,18 +505,93 @@ impl<C: Send + Sync + 'static> Shared<C> {
         for p in ops {
             self.run_op(&mut end, None, p);
         }
-        self.append(batch_id, Record::End(end));
+        self.end_batch(end, None);
+    }
+
+    /// Writes the batch's end, clears the reservation of its target if it compensates
+    /// one, and wakes the waiters.
+    fn end_batch(&self, end: BatchEnd, target: Option<BatchId>) {
+        let batch_id = end.batch_id;
+        let mut state = self.lock();
+        if let Err(e) = state.store.append(&Record::End(end)) {
+            tracing::error!(error = %e, batch = %batch_id, "the journal could not keep a record");
+            state.failed.entry(batch_id).or_insert(e);
+        }
+        if let Some(t) = target {
+            state.reserved.remove(&t);
+        }
+        drop(state);
         self.ended.notify_all();
+    }
+
+    /// Runs a compensation: the inverses of the target's done operations, newest first.
+    /// Their children are dropped.
+    fn run_compensation(&self, batch_id: BatchId, target: BatchId) {
+        let records = self.lock().store.batch(target);
+        let inverses = match records {
+            Ok(Some(records)) => undo::inverses(&self.registry, &records),
+            Ok(None) => {
+                tracing::warn!(batch = %batch_id, target = %target, "the target left the store before its undo ran");
+                Vec::new()
+            }
+            Err(e) => {
+                tracing::error!(error = %e, batch = %batch_id, target = %target, "the target of an undo could not be read");
+                self.lock().failed.entry(batch_id).or_insert(e);
+                Vec::new()
+            }
+        };
+        let mut end = BatchEnd {
+            batch_id,
+            done: 0,
+            skipped: 0,
+            interrupted: false,
+        };
+        for Inverse { kind, plan } in inverses {
+            let p = match plan {
+                Err(skip) => {
+                    let p = Planned {
+                        kind,
+                        plan: Value::Null,
+                    };
+                    self.record(&mut end, None, &p, Outcome::Skipped(skip));
+                    continue;
+                }
+                Ok(plan) => Planned { kind, plan },
+            };
+            // A compensation reverses exactly what was done: its children are dropped.
+            let (outcome, _children) = self.outcome(&p);
+            self.record(&mut end, None, &p, outcome);
+        }
+        self.end_batch(end, Some(target));
     }
 
     /// Applies one operation, outside the lock, records it, and then runs its children.
     fn run_op(&self, end: &mut BatchEnd, parent: Option<OpId>, p: &Planned) {
-        let (outcome, children) = match self.registry.apply(&self.ctx, p) {
+        let (outcome, children) = self.outcome(p);
+        let op_id = self.record(end, parent, p, outcome);
+        for child in &children {
+            self.run_op(end, Some(op_id), child);
+        }
+    }
+
+    /// Applies one operation, outside the lock, and gives what came of it with its children.
+    fn outcome(&self, p: &Planned) -> (Outcome, Vec<Planned>) {
+        match self.registry.apply(&self.ctx, p) {
             Ok(Ok((done, children))) => (Outcome::Done(done), children),
             Ok(Err(skip)) => (Outcome::Skipped(skip), Vec::new()),
             Err(Unparsed::UnknownKind) => (Outcome::Skipped(Skip::UnknownKind), Vec::new()),
             Err(Unparsed::InvalidPlan(m)) => (Outcome::Skipped(Skip::InvalidPlan(m)), Vec::new()),
-        };
+        }
+    }
+
+    /// Records an operation of the batch, counts it, and gives its id.
+    fn record(
+        &self,
+        end: &mut BatchEnd,
+        parent: Option<OpId>,
+        p: &Planned,
+        outcome: Outcome,
+    ) -> OpId {
         match outcome {
             Outcome::Done(_) => end.done += 1,
             Outcome::Skipped(_) => end.skipped += 1,
@@ -370,8 +608,6 @@ impl<C: Send + Sync + 'static> Shared<C> {
                 outcome,
             }),
         );
-        for child in &children {
-            self.run_op(end, Some(op_id), child);
-        }
+        op_id
     }
 }

@@ -192,8 +192,6 @@ impl<C> Registry<C> {
         self.get(&p.kind)?.apply(ctx, &p.plan)
     }
 
-    // Used by undo, Task 5.
-    #[allow(dead_code)]
     pub(crate) fn inverse(&self, kind: &str, done: &Value) -> Inverting {
         self.get(kind)?.inverse(done)
     }

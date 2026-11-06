@@ -15,6 +15,7 @@ mod journal;
 mod op;
 mod record;
 mod store;
+mod undo;
 
 pub use error::JournalError;
 pub use ids::{Actor, BatchId, OpId, Origin};
