@@ -46,8 +46,8 @@ pub(crate) fn check(
     Ok(begin)
 }
 
-/// Whether the batch is among the newest `max` batches of its own origin, counting every
-/// batch that began with that origin, compensations too.
+/// Whether the batch is among the newest `max` forward batches of its own origin.
+/// Compensations (undos and redos) are not counted, so undoing does not use up the window.
 fn in_window(store: &dyn JournalStore, begin: &BatchBegin, max: usize) -> Result<bool, StoreError> {
     let mut cursor = None;
     let mut newer = 0;
@@ -61,7 +61,7 @@ fn in_window(store: &dyn JournalStore, begin: &BatchBegin, max: usize) -> Result
             if s.begin.batch_id == begin.batch_id {
                 return Ok(newer < max);
             }
-            if s.begin.origin == begin.origin {
+            if s.begin.origin == begin.origin && !s.begin.is_compensation() {
                 newer += 1;
                 if newer >= max {
                     return Ok(false);

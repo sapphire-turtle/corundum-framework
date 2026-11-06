@@ -18,7 +18,8 @@ use crate::{
 /// How far back undo reaches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UndoPolicy {
-    /// How many of an origin's newest batches can be undone.
+    /// How many of an origin's newest forward batches can be undone; undos and redos are
+    /// not counted.
     pub max_batches: usize,
     /// How old a batch can be and still be undone.
     pub max_age: Duration,

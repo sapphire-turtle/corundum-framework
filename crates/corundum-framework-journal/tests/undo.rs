@@ -353,3 +353,17 @@ fn an_unknown_kind_in_the_target_is_skipped() {
     assert_eq!(c.ops[0].plan, serde_json::Value::Null);
     assert_eq!(c.ops[0].outcome, Outcome::Skipped(Skip::UnknownKind));
 }
+
+#[test]
+fn twenty_undos_in_a_row_all_work() {
+    let (j, ctx) = journal();
+    let keys: Vec<String> = (0..20).map(|i| format!("k{i}")).collect();
+    for k in &keys {
+        submit_done(&j, vec![set(k, 1)]);
+    }
+    for _ in 0..20 {
+        let u = j.undo(&gui(), &u1()).unwrap();
+        j.wait(u).unwrap();
+    }
+    assert!(keys.iter().all(|k| ctx.value(k).is_none()));
+}
