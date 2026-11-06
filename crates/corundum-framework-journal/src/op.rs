@@ -20,6 +20,10 @@ pub trait OpKind {
 }
 
 /// An operation that runs against a context `C`.
+///
+/// The journal's worker runs operations one at a time. An operation must not call
+/// [`Journal::wait`](crate::Journal::wait), or anything else that waits on the worker, on
+/// its own journal: the worker would wait on itself.
 pub trait Operation<C>: OpKind + Send + Sync + 'static {
     /// Whether the plan could be applied now. The default accepts every plan.
     fn check(&self, _ctx: &C, _plan: &Self::Plan) -> Result<(), Skip> {
@@ -27,9 +31,17 @@ pub trait Operation<C>: OpKind + Send + Sync + 'static {
     }
 
     /// Does what the plan says.
+    ///
+    /// The journal does not call [`Operation::check`] before `apply`, so `apply` must
+    /// enforce the plan's preconditions itself, and skip the plan with
+    /// [`Skip::PreconditionFailed`] when they do not hold. This is the only guard against
+    /// applying an inverse to state that changed since the operation it reverses.
     fn apply(&self, ctx: &C, plan: &Self::Plan) -> Result<Applied<Self::Done>, Skip>;
 
     /// The plan that reverses what was done, or `None` if it cannot be reversed.
+    ///
+    /// The returned plan's preconditions are the state `apply` left, so that it is skipped
+    /// if that state has changed since.
     fn inverse(&self, done: &Self::Done) -> Option<Self::Plan>;
 }
 
@@ -38,7 +50,12 @@ pub trait Operation<C>: OpKind + Send + Sync + 'static {
 pub struct Applied<D> {
     /// The value the operation left for its undo.
     pub done: D,
-    /// The operations it led to, to run after it.
+    /// The operations it led to.
+    ///
+    /// In a forward batch, the children run right after their parent, in order, and are
+    /// recorded with a link to it. In a compensating batch (an undo or a redo) the children
+    /// an inverse returns are dropped, because the original children are undone by their
+    /// own inverses.
     pub children: Vec<Planned>,
 }
 

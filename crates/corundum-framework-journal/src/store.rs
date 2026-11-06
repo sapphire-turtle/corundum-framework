@@ -17,6 +17,18 @@ pub enum StoreError {
 }
 
 /// A place to keep the journal's records and read them back.
+///
+/// What the journal relies on, for anyone writing a store:
+///
+/// - When a [`BatchBegin`] names a batch the store has in its `undo_of` or `redo_of`, the
+///   store sets that batch's [`BatchSummary::undone_by`] to the new batch. The journal's
+///   guarantee that a batch is not undone twice rests on it.
+/// - [`JournalStore::batches_rev`] orders batches by the order their begins were appended,
+///   newest first.
+/// - A store may drop old batches. It then takes [`Record::Op`] and [`Record::End`]
+///   records for a dropped batch without an error, and may ignore them.
+/// - The journal calls the store under its lock, so the calls do not overlap, and a slow
+///   store holds up every caller of the journal.
 pub trait JournalStore: Send {
     /// Keeps a record.
     fn append(&mut self, record: &Record) -> Result<(), StoreError>;

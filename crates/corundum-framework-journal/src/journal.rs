@@ -47,8 +47,12 @@ pub struct JournalConfig {
     /// How far back undo reaches.
     pub policy: UndoPolicy,
     /// Whether an actor may undo a batch. The default allows the batch's own principal.
+    ///
+    /// It runs under the journal's lock: it must not call back into the journal.
     pub may_undo: MayUndo,
     /// The clock. The default is the system's.
+    ///
+    /// It runs under the journal's lock: it must not call back into the journal.
     pub now: Clock,
     /// How many jobs can wait for the worker before the journal is `Busy`. The default is
     /// 64; the journal takes 0 as 1, since with no room at all nearly every call would be

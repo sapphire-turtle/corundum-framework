@@ -37,7 +37,11 @@ id! {
     OpId
 }
 
-/// What a batch came from, such as the name of the method or the app that made it.
+/// What a batch came from: a UI session, such as a GUI window or an MCP session.
+///
+/// Undo and redo stacks are kept per origin, so an origin must be unique per UI session,
+/// and per actor: two sessions, or two actors, sharing one origin would undo each other's
+/// batches.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Origin(String);

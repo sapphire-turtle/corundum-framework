@@ -3,7 +3,9 @@
 //! The journal records work in batches. A batch opens with a [`BatchBegin`], holds one
 //! [`OpRecord`] for each operation, with its plan and its [`Outcome`], and closes with a
 //! [`BatchEnd`]. A batch made by an undo or a redo names the batch it reverses, so the log
-//! tells the whole story. See the journal spec for the design.
+//! tells the whole story. Undo and redo are kept per [`Origin`], and reach back as far as the
+//! [`UndoPolicy`] allows. (In the repository, the design is in
+//! `docs/superpowers/specs/2026-11-06-workspace-fs-journal-design.md`.)
 //!
 //! [`Journal`] runs the batches on one worker thread, over a [`JournalStore`].
 
