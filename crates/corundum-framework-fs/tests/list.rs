@@ -122,7 +122,11 @@ fn non_utf8_names_are_skipped() {
     use std::os::unix::ffi::OsStrExt;
     let (dir, ws) = workspace(&["ok.txt"]);
     let bad = std::ffi::OsStr::from_bytes(b"bad\xff");
-    std::fs::write(dir.path().join(bad), b"").unwrap();
+    // APFS (macOS, iOS) refuses names that are not UTF-8, so there the case cannot arise.
+    if let Err(e) = std::fs::write(dir.path().join(bad), b"") {
+        eprintln!("skipped: this file system refuses the name ({e})");
+        return;
+    }
     let l = list(&ws, &(), &params("", None, None)).unwrap();
     assert_eq!(names(&l), ["ok.txt"]);
 }
