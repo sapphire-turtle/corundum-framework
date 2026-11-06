@@ -87,12 +87,14 @@ pub(crate) enum Unparsed {
     InvalidPlan(String),
 }
 
+type Inverting = Result<Result<Option<Value>, Skip>, Unparsed>;
+
 type Applying = Result<Result<(Value, Vec<Planned>), Skip>, Unparsed>;
 
 trait Erased<C>: Send + Sync {
     fn check(&self, ctx: &C, plan: &Value) -> Result<Result<(), Skip>, Unparsed>;
     fn apply(&self, ctx: &C, plan: &Value) -> Applying;
-    fn inverse(&self, done: &Value) -> Result<Option<Value>, Unparsed>;
+    fn inverse(&self, done: &Value) -> Inverting;
 }
 
 fn panicked() -> Skip {
@@ -123,9 +125,18 @@ impl<C, O: Operation<C>> Erased<C> for O {
         }))
     }
 
-    fn inverse(&self, done: &Value) -> Result<Option<Value>, Unparsed> {
+    fn inverse(&self, done: &Value) -> Inverting {
         let done: O::Done = parse(done)?;
-        Ok(Operation::inverse(self, &done).and_then(|p| serde_json::to_value(p).ok()))
+        let plan = match catch_unwind(AssertUnwindSafe(|| Operation::inverse(self, &done))) {
+            Ok(plan) => plan,
+            Err(_) => return Ok(Err(panicked())),
+        };
+        Ok(match plan {
+            None => Ok(None),
+            Some(p) => serde_json::to_value(p)
+                .map(Some)
+                .map_err(|e| Skip::Io(e.to_string())),
+        })
     }
 }
 
@@ -174,7 +185,7 @@ impl<C> Registry<C> {
         self.get(&p.kind)?.apply(ctx, &p.plan)
     }
 
-    pub(crate) fn inverse(&self, kind: &str, done: &Value) -> Result<Option<Value>, Unparsed> {
+    pub(crate) fn inverse(&self, kind: &str, done: &Value) -> Inverting {
         self.get(kind)?.inverse(done)
     }
 }
@@ -243,9 +254,26 @@ mod tests {
         }
     }
 
+    struct BoomInverse;
+
+    impl OpKind for BoomInverse {
+        const KIND: &'static str = "test.boom_inverse";
+        type Plan = ();
+        type Done = ();
+    }
+
+    impl Operation<Ctx> for BoomInverse {
+        fn apply(&self, _ctx: &Ctx, _plan: &()) -> Result<Applied<()>, Skip> {
+            Ok(Applied::new(()))
+        }
+        fn inverse(&self, _done: &()) -> Option<()> {
+            panic!("boom")
+        }
+    }
+
     fn registry() -> Registry<Ctx> {
         let mut r = Registry::new();
-        r.register(Add).register(Boom);
+        r.register(Add).register(Boom).register(BoomInverse);
         r
     }
 
@@ -302,7 +330,7 @@ mod tests {
         let ctx = Ctx::default();
         let r = registry();
         let (done, _) = r.apply(&ctx, &add("a", 2)).unwrap().unwrap();
-        let plan = r.inverse("test.add", &done).unwrap().unwrap();
+        let plan = r.inverse("test.add", &done).unwrap().unwrap().unwrap();
         let undo = Planned {
             kind: "test.add".into(),
             plan,
@@ -316,6 +344,14 @@ mod tests {
         let ctx = Ctx::default();
         let p = Planned::new::<Boom>(&());
         match registry().apply(&ctx, &p) {
+            Ok(Err(Skip::Io(m))) => assert_eq!(m, "the operation panicked"),
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_panicking_inverse_is_a_skip() {
+        match registry().inverse("test.boom_inverse", &json!(null)) {
             Ok(Err(Skip::Io(m))) => assert_eq!(m, "the operation panicked"),
             other => panic!("unexpected: {other:?}"),
         }
