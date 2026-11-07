@@ -66,6 +66,9 @@ audio-cpal = ["audio", "corundum-framework-audio/cpal"]
 fs-api = ["dep:corundum-framework-fs-api"]
 # The engine that serves them over the server's workspace folder (brings `fs-api`).
 fs = ["dep:corundum-framework-fs", "fs-api"]
+# An undo log for the server's changes: batches of the app's operations run on one writer
+# thread and recorded, undone and redone per UI session; no file system, no tokio.
+journal = ["dep:corundum-framework-journal"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.
@@ -162,3 +165,4 @@ corundum-framework-pdf = { version = "0.11.0", path = "../corundum-framework-pdf
 corundum-framework-audio = { version = "0.11.0", path = "../corundum-framework-audio", optional = true }
 corundum-framework-fs-api = { version = "0.11.0", path = "../corundum-framework-fs-api", optional = true }
 corundum-framework-fs = { version = "0.11.0", path = "../corundum-framework-fs", optional = true }
+corundum-framework-journal = { version = "0.11.0", path = "../corundum-framework-journal", optional = true }

@@ -23,6 +23,7 @@ desktops and on phones.
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | Without egui: audio files decoded (FLAC, MP3, AAC, ALAC, Vorbis, WAV, Ogg Opus), resampled and played from a queue; `cpal` (the real sound device) is off by default | unreleased |
 | [`corundum-framework-fs-api`](crates/corundum-framework-fs-api) | The `fs.*` methods an app's server serves over its workspace folder (`fs.list`, `fs.stat`, `fs.read`): their names, parameters, results and error codes, as plain serde data for a client | unreleased |
 | [`corundum-framework-fs`](crates/corundum-framework-fs) | Without egui: the engine that serves them, mounted on the server's own JSON-RPC router (`FsService::dispatch`). Paths are checked and never pass a symlink. Dot-names and the files the app keeps for itself (its sidecars) are hidden. Folders are listed a page at a time with the app's managed entries marked, and files are read in ranges of up to 1 MiB | unreleased |
+| [`corundum-framework-journal`](crates/corundum-framework-journal) | Without egui or tokio: an undo log for an app server's changes. Batches of the app's operations run on one writer thread and are recorded; each UI session (origin) can undo and redo its own batches by compensating batches, within a window (its last 20 batches, within an hour). `may_undo` decides who may undo (by default, the same principal). Over a `JournalStore`; `MemoryStore` keeps the last 200 batches. No file system | unreleased |
 | [`corundum-framework-build`](crates/corundum-framework-build) | For an app's `build.rs`: the app icon embedded in a Windows executable | unreleased |
 | [`corundum-framework`](crates/corundum-framework) | The facade over the crates above | unreleased |
 | `corundum-framework-demo` | A demo app showing every component | planned |
@@ -214,9 +215,10 @@ through to the gui crate.
 | `pdf` | `pdf`: corundum-framework-pdf | no |
 | `audio` | `audio`: corundum-framework-audio | no |
 | `audio-cpal` | `audio` with `CpalOutputs`, the real sound device (cpal) (brings `audio`) | no |
+| `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview`, a sound the app hands in (brings `gui`, `audio` and `audio-cpal`) | no |
 | `fs-api` | `fs_api`: corundum-framework-fs-api | no |
 | `fs` | `fs`: corundum-framework-fs (brings `fs-api`) | no |
-| `audio-preview` | The gui crate's `audio-preview`: `preview::AudioPreview`, a sound the app hands in (brings `gui`, `audio` and `audio-cpal`) | no |
+| `journal` | `journal`: corundum-framework-journal | no |
 | `code-editor` | The gui crate's `code-editor`: `gui::code`, alumina-code's editor (brings `gui`) | no |
 | `text-preview` | The gui crate's `text-preview`: `preview::TextPreview`, a text file the app hands in (brings `gui` and `code-editor`) | no |
 | `markdown-editor` | The gui crate's `markdown-editor`: `gui::markdown`, alumina-markdown's editor with a toolbar in corundum's icons and words (brings `gui`) | no |

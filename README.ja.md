@@ -19,6 +19,7 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | [`corundum-framework-audio`](crates/corundum-framework-audio) | egui に依存しない部分：音声ファイル（FLAC、MP3、AAC、ALAC、Vorbis、WAV、Ogg Opus）をデコードしてリサンプリングし、キューから再生する。`cpal`（実際のサウンドデバイス）は既定では無効 | 未リリース |
 | [`corundum-framework-fs-api`](crates/corundum-framework-fs-api) | アプリのサーバーがワークスペースのフォルダーについて提供する `fs.*` メソッド（`fs.list`、`fs.stat`、`fs.read`）の名前、パラメーター、結果、エラーコード。クライアント向けの serde データだけ | 未リリース |
 | [`corundum-framework-fs`](crates/corundum-framework-fs) | egui に依存しない部分：それを提供するエンジン。サーバー自身の JSON-RPC ルーターにマウントする（`FsService::dispatch`）。パスは検査され、シンボリックリンクはたどらない。ドットで始まる名前とアプリ自身のファイル（サイドカー）は隠す。フォルダーはページ単位で一覧し、アプリが管理するエントリーには印を付ける。ファイルは最大 1 MiB の範囲で読む | 未リリース |
+| [`corundum-framework-journal`](crates/corundum-framework-journal) | egui にも tokio にも依存しない部分：アプリのサーバーが行った変更の取り消しログ。アプリの操作をまとめたバッチを 1 本のライタースレッドで実行して記録し、UI セッション（origin）ごとに自分のバッチを、補償バッチによって取り消し・やり直しできる。対象は直近 20 バッチかつ 1 時間以内（既定）。誰が取り消せるかは `may_undo` で決まる（既定では同じプリンシパル）。保存先は `JournalStore` で、`MemoryStore` は直近 200 バッチを保持する。ファイルシステムは使わない | 未リリース |
 | [`corundum-framework-build`](crates/corundum-framework-build) | アプリの `build.rs` 用：アプリのアイコンを Windows の実行ファイルに埋め込む | 未リリース |
 | [`corundum-framework`](crates/corundum-framework) | 上記のクレートをまとめるファサード | 未リリース |
 | `corundum-framework-demo` | すべてのコンポーネントを見せるデモアプリ | 予定 |
@@ -95,9 +96,10 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `pdf` | `pdf`：corundum-framework-pdf | いいえ |
 | `audio` | `audio`：corundum-framework-audio | いいえ |
 | `audio-cpal` | 実際のサウンドデバイス `CpalOutputs`（cpal）も使える `audio`（`audio` も有効になる） | いいえ |
+| `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
 | `fs-api` | `fs_api`：corundum-framework-fs-api | いいえ |
 | `fs` | `fs`：corundum-framework-fs（`fs-api` も有効になる） | いいえ |
-| `audio-preview` | gui クレートの `audio-preview`：`preview::AudioPreview`、アプリが渡した音声（`gui`、`audio`、`audio-cpal` も有効になる） | いいえ |
+| `journal` | `journal`：corundum-framework-journal | いいえ |
 | `code-editor` | gui クレートの `code-editor`：`gui::code`、alumina-code のエディタ（`gui` も有効になる） | いいえ |
 | `text-preview` | gui クレートの `text-preview`：`preview::TextPreview`、アプリが渡したテキストファイル（`gui` と `code-editor` も有効になる） | いいえ |
 | `markdown-editor` | gui クレートの `markdown-editor`：`gui::markdown`、alumina-markdown のエディタと、corundum のアイコンと言語のツールバー `markdown::toolbar`（`gui` も有効になる） | いいえ |
