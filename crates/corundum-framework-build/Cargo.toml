@@ -1,7 +1,7 @@
 [package]
 name = "corundum-framework-build"
 # Versioned on its own, as corundum-framework-gui is.
-version = "0.11.0"
+version = "0.11.1"
 edition.workspace = true
 description = "Build-time helpers for corundum apps: the app icon embedded in a Windows executable, and rendered for the iOS and Android projects"
 license = "MIT OR Apache-2.0"
@@ -14,6 +14,6 @@ categories = ["development-tools::build-utils"]
 # and hands it to the Windows resource compiler, or writes it as PNGs for the phones (`png`
 # for iOS's, which has no alpha channel; the version resvg's tiny-skia uses).
 [dependencies]
-corundum-framework-platform = { version = "0.11.0", path = "../corundum-framework-platform", default-features = false, features = ["icon"] }
+corundum-framework-platform = { version = "0.11.1", path = "../corundum-framework-platform", default-features = false, features = ["icon"] }
 png = "0.18"
 winresource = "0.1"

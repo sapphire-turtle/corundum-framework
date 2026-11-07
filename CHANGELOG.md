@@ -8,6 +8,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.11.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.11.0...v0.11.1) - 2026-11-07
+
+### Added
+
+- *(corundum-framework)* the journal feature
+- *(corundum-framework-fs)* FsService::dispatch, and the facade's fs features
+
+### Other
+
+- put the fs and journal feature rows in the facade's table
+
 ## [0.11.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.10.0...v0.11.0) - 2026-11-06
 
 ### Added
