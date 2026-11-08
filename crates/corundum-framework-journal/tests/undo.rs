@@ -254,13 +254,62 @@ fn a_skipped_inverse_is_reported() {
 
 #[test]
 fn skipped_ops_are_not_undone() {
-    let (j, _ctx) = journal();
-    let a = submit_done(&j, vec![set_expect("a", 1, Some(5))]);
+    let (j, ctx) = journal();
+    let a = submit_done(&j, vec![set_expect("a", 1, Some(5)), set("b", 2)]);
     let u = j.undo(&gui(), &u1()).unwrap();
     let c = j.wait(u).unwrap();
     assert_eq!(c.summary.begin.undo_of, Some(a));
-    assert!(c.ops.is_empty());
+    assert_eq!(c.ops.len(), 1);
+    assert_eq!(c.ops[0].plan["key"], "b");
     assert!(c.summary.complete);
+    assert_eq!(ctx.value("b"), None);
+}
+
+#[test]
+fn an_all_skipped_batch_is_passed_over_by_undo() {
+    let (j, ctx) = journal();
+    let done = submit_done(&j, vec![set("a", 1)]);
+    let skipped = submit_done(&j, vec![set_expect("b", 1, Some(5))]);
+    let u = j.undo(&gui(), &u1()).unwrap();
+    let c = j.wait(u).unwrap();
+    assert_eq!(c.summary.begin.undo_of, Some(done));
+    assert_eq!(ctx.value("a"), None);
+    // The skipped batch stays in the store, not undone.
+    let s = j.status(skipped).unwrap();
+    assert_eq!(s.summary.undone_by, None);
+    assert_eq!(s.summary.skipped, 1);
+}
+
+#[test]
+fn undo_with_only_skipped_batches_is_nothing_to_undo() {
+    let (j, _ctx) = journal();
+    submit_done(&j, vec![set_expect("a", 1, Some(5))]);
+    submit_done(&j, vec![set_expect("b", 1, Some(5))]);
+    assert!(matches!(
+        j.undo(&gui(), &u1()),
+        Err(JournalError::NothingToUndo)
+    ));
+}
+
+#[test]
+fn an_all_skipped_undo_is_passed_over_by_redo() {
+    let (j, ctx) = journal();
+    submit_done(&j, vec![set("a", 1)]);
+    submit_done(&j, vec![set("b", 1)]);
+    let ub = j.undo(&gui(), &u1()).unwrap();
+    j.wait(ub).unwrap();
+    // The undo of `a` finds it changed, and does nothing.
+    ctx.values.lock().unwrap().insert("a".into(), 5);
+    let ua = j.undo(&gui(), &u1()).unwrap();
+    assert_eq!(j.wait(ua).unwrap().summary.done, 0);
+    let r = j.redo(&gui(), &u1()).unwrap();
+    let c = j.wait(r).unwrap();
+    assert_eq!(c.summary.begin.redo_of, Some(ub));
+    assert_eq!(ctx.value("b"), Some(1));
+    assert!(matches!(
+        j.redo(&gui(), &u1()),
+        Err(JournalError::NothingToRedo)
+    ));
 }
 
 #[test]

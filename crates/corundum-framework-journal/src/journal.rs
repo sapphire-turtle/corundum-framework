@@ -314,7 +314,10 @@ impl<C: Send + Sync + 'static> Journal<C> {
     /// Undoes the newest batch on the origin's undo stack, and gives the compensating
     /// batch's id; [`Journal::wait`] works on it.
     ///
-    /// Entries already undone, or with an undo under way, are dropped from the stack first.
+    /// Entries already undone, or with an undo under way, are dropped from the stack first,
+    /// and so are batches that ended with nothing done (every operation skipped), so one
+    /// undo reaches the newest batch that changed something; such a batch stays in the store
+    /// and in the history. A batch still running is never passed over.
     /// [`JournalError::NothingToUndo`] if none is left. The target is refused, and stays on
     /// the stack, if the store no longer has it or it is outside the undo window
     /// ([`JournalError::Expired`]), or if `may_undo` does not allow the actor
@@ -328,7 +331,8 @@ impl<C: Send + Sync + 'static> Journal<C> {
     /// [`Journal::wait`] works on it.
     ///
     /// The rules are [`Journal::undo`]'s, with [`JournalError::NothingToRedo`] for an empty
-    /// stack; the new batch goes on the undo stack.
+    /// stack: an undo that ended with nothing done is passed over too. The new batch goes on
+    /// the undo stack.
     pub fn redo(&self, origin: &Origin, actor: &Actor) -> Result<BatchId, JournalError> {
         self.compensate_top(Side::Redo, origin, actor)
     }
@@ -386,19 +390,22 @@ impl<C: Send + Sync + 'static> Journal<C> {
                 actor,
                 JournalError::Expired(target),
             );
-            let begin = match checked {
-                Ok(begin) => begin,
-                Err(JournalError::AlreadyUndone(_)) => {
-                    state
-                        .stacks
-                        .entry(origin.clone())
-                        .or_default()
-                        .get(side)
-                        .pop();
-                    continue;
-                }
-                Err(e) => return Err(e),
+            // Passed over: already undone, being undone, or ended with nothing done.
+            let pass_over = match &checked {
+                Err(JournalError::AlreadyUndone(_)) => true,
+                Err(_) => false,
+                Ok(_) => undo::did_nothing(state.store.as_ref(), target),
             };
+            if pass_over {
+                state
+                    .stacks
+                    .entry(origin.clone())
+                    .or_default()
+                    .get(side)
+                    .pop();
+                continue;
+            }
+            let begin = checked?;
             let id = self.compensate(&mut state, &begin, origin, actor)?;
             let stacks = state.stacks.entry(origin.clone()).or_default();
             stacks.get(side).pop();

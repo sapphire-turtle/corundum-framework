@@ -300,3 +300,14 @@ async fn a_folder_move_undoes_after_its_contents_changed() {
     assert!(matches!(u.ops[0].outcome, Outcome::Done(_)), "{u:?}");
     assert_eq!(names(dir.path(), ""), ["a"]);
 }
+
+#[tokio::test]
+async fn undo_passes_over_a_batch_that_did_nothing() {
+    let (dir, s) = service(&["a", "b", "c"]);
+    apply(&s, "gui", json!([mv("c", "d")])).await;
+    let skipped = apply(&s, "gui", json!([mv("a", "b")])).await;
+    assert_eq!(skipped.summary.done, 0, "{skipped:?}");
+    let u = undo(&s, "gui").await;
+    assert!(matches!(u.ops[0].outcome, Outcome::Done(_)), "{u:?}");
+    assert_eq!(names(dir.path(), ""), ["a", "b", "c"]);
+}

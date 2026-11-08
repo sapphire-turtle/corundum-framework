@@ -46,6 +46,12 @@ pub(crate) fn check(
     Ok(begin)
 }
 
+/// Whether `target` ended with nothing done, every operation skipped, so undoing it would
+/// change nothing. A batch still running, or one the store cannot give, did not.
+pub(crate) fn did_nothing(store: &dyn JournalStore, target: BatchId) -> bool {
+    matches!(store.batch(target), Ok(Some(r)) if r.summary.complete && r.summary.done == 0)
+}
+
 /// Whether the batch is among the newest `max` forward batches of its own origin.
 /// Compensations (undos and redos) are not counted, so undoing does not use up the window.
 fn in_window(store: &dyn JournalStore, begin: &BatchBegin, max: usize) -> Result<bool, StoreError> {
