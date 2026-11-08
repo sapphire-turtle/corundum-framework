@@ -405,3 +405,33 @@ fn an_undo_whose_target_was_evicted_before_it_ran_is_an_error() {
     assert!(summary.interrupted);
     assert_eq!((summary.done, summary.skipped), (0, 0));
 }
+
+#[test]
+fn an_origin_whose_batches_left_the_store_no_longer_holds_them() {
+    let (j, _) = journal_with_store(MemoryStore::new(1), JournalConfig::default());
+    let a = Origin::new("a");
+    let b = Origin::new("b");
+    let id = j.submit(vec![set("a", 1)], &a, &u1(), None).unwrap();
+    j.wait(id).unwrap();
+    let id = j.submit(vec![set("b", 1)], &b, &u1(), None).unwrap();
+    j.wait(id).unwrap();
+    assert_eq!(j.undo(&a, &u1()), Err(JournalError::NothingToUndo));
+}
+
+#[test]
+fn an_origin_whose_batches_aged_out_no_longer_holds_them() {
+    let clock = Arc::new(AtomicI64::new(0));
+    let now = clock.clone();
+    let config = JournalConfig {
+        now: Arc::new(move || now.load(Ordering::SeqCst)),
+        ..JournalConfig::default()
+    };
+    let (j, _) = journal_with(config);
+    submit_done(&j, vec![set("a", 1)]);
+    clock.store(2 * 60 * 60 * 1000, Ordering::SeqCst);
+    submit_done(&j, vec![set("b", 1)]);
+    // The first batch is trimmed; the second is the only one left to undo.
+    let comp = j.undo(&gui(), &u1()).unwrap();
+    j.wait(comp).unwrap();
+    assert_eq!(j.undo(&gui(), &u1()), Err(JournalError::NothingToUndo));
+}

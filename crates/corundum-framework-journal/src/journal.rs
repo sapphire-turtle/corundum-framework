@@ -15,6 +15,11 @@ use crate::{
     OpId, OpRecord, Origin, Outcome, Planned, Record, Registry, Skip,
 };
 
+/// How deep an operation's children can nest. The batch's own operations are at depth 0;
+/// a child of an operation at this depth is skipped, with [`Skip::InvalidPlan`], and its
+/// own children are not looked at.
+pub const MAX_CHILD_DEPTH: usize = 16;
+
 /// How far back undo reaches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UndoPolicy {
@@ -95,6 +100,27 @@ struct State {
     /// Batches that failed, with the first error: a record of theirs could not be written,
     /// or, for a compensation, its target could not be read or had left the store.
     failed: HashMap<BatchId, JournalError>,
+}
+
+impl State {
+    /// Drops, from the bottom of every stack, the entries the store no longer has or that
+    /// are older than `max_age_ms` at `now`; an origin left with both stacks empty is
+    /// removed. A batch the store cannot be read for is kept.
+    fn trim(&mut self, now: i64, max_age_ms: i64) {
+        let store = &self.store;
+        let gone = |id: &BatchId| match store.batch(*id) {
+            Ok(Some(b)) => now.saturating_sub(b.summary.begin.at) > max_age_ms,
+            Ok(None) => true,
+            Err(_) => false,
+        };
+        self.stacks.retain(|_, s| {
+            for stack in [&mut s.undo, &mut s.redo] {
+                let keep_from = stack.iter().position(|id| !gone(id)).unwrap_or(stack.len());
+                stack.drain(..keep_from);
+            }
+            !(s.undo.is_empty() && s.redo.is_empty())
+        });
+    }
 }
 
 /// Work for the worker.
@@ -254,7 +280,15 @@ impl<C: Send + Sync + 'static> Journal<C> {
         let stacks = state.stacks.entry(origin.clone()).or_default();
         stacks.undo.push(batch_id);
         stacks.redo.clear();
+        self.trim(&mut state);
         Ok(batch_id)
+    }
+
+    /// Trims the stacks by the store and the policy; call it under the lock.
+    fn trim(&self, state: &mut State) {
+        let config = &self.shared().config;
+        let max_age = i64::try_from(config.policy.max_age.as_millis()).unwrap_or(i64::MAX);
+        state.trim((config.now)(), max_age);
     }
 
     /// Queues `job`, then writes its `begin`; call it under the lock. If the begin cannot be
@@ -373,6 +407,7 @@ impl<C: Send + Sync + 'static> Journal<C> {
                 Side::Redo => Side::Undo,
             };
             stacks.get(other).push(id);
+            self.trim(&mut state);
             return Ok(id);
         }
     }
@@ -463,12 +498,24 @@ impl<C: Send + Sync + 'static> Journal<C> {
 
     /// Newest first, up to `limit` batches begun before `cursor` (from the newest when
     /// `None`).
+    ///
+    /// [`JournalError::NotFound`] if `cursor` names a batch the store no longer has, so a
+    /// caller paging can tell the end of the history from a cursor that was dropped. A
+    /// cursor at the oldest batch kept gives an empty page.
     pub fn history(
         &self,
         cursor: Option<BatchId>,
         limit: usize,
     ) -> Result<Vec<BatchSummary>, JournalError> {
-        Ok(self.shared().lock().store.batches_rev(cursor, limit)?)
+        let state = self.shared().lock();
+        let page = state.store.batches_rev(cursor, limit)?;
+        if page.is_empty()
+            && let Some(cursor) = cursor
+            && state.store.batch(cursor)?.is_none()
+        {
+            return Err(JournalError::NotFound(cursor));
+        }
+        Ok(page)
     }
 }
 
@@ -516,7 +563,7 @@ impl<C: Send + Sync + 'static> Shared<C> {
             interrupted: false,
         };
         for p in ops {
-            self.run_op(&mut end, None, p);
+            self.run_op(&mut end, None, p, 0);
         }
         self.end_batch(end, None);
     }
@@ -590,12 +637,18 @@ impl<C: Send + Sync + 'static> Shared<C> {
         self.end_batch(end, Some(target));
     }
 
-    /// Applies one operation, outside the lock, records it, and then runs its children.
-    fn run_op(&self, end: &mut BatchEnd, parent: Option<OpId>, p: &Planned) {
+    /// Applies one operation, at `depth`, outside the lock, records it, and then runs its
+    /// children. Past [`MAX_CHILD_DEPTH`] the operation is recorded skipped, unrun.
+    fn run_op(&self, end: &mut BatchEnd, parent: Option<OpId>, p: &Planned, depth: usize) {
+        if depth > MAX_CHILD_DEPTH {
+            let skip = Skip::InvalidPlan(format!("children nest deeper than {MAX_CHILD_DEPTH}"));
+            self.record(end, parent, p, Outcome::Skipped(skip));
+            return;
+        }
         let (outcome, children) = self.outcome(p);
         let op_id = self.record(end, parent, p, outcome);
         for child in &children {
-            self.run_op(end, Some(op_id), child);
+            self.run_op(end, Some(op_id), child, depth + 1);
         }
     }
 
