@@ -88,6 +88,7 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for TrashOp {
             TrashPlan::Restore { path, trash_id } => {
                 visible(ws, app, path)?;
                 let from = trashed_at(ctx, trash_id, path)?;
+                visible_folder(ws, app, path)?;
                 ws.move_entry(app, &from, path, Access::App, None, true)
                     .map(|_| ())
             }
@@ -131,6 +132,16 @@ fn visible(ws: &Workspace, app: &dyn WorkspaceApp, path: &WsPath) -> Result<(), 
         Err(Skip::InvalidPath)
     } else {
         Ok(())
+    }
+}
+
+/// [`Skip::InvalidPath`] if `path`'s folder is hidden as the disk spells it, which the moves
+/// with [`Access::App`] do not judge: on a file system that ignores case, `META/x` may be
+/// the hidden `meta/x`. [`Skip::NotFound`] if the folder is missing.
+fn visible_folder(ws: &Workspace, app: &dyn WorkspaceApp, path: &WsPath) -> Result<(), Skip> {
+    match path.parent() {
+        Some(parent) if !parent.is_root() => ws.entry(app, &parent, Access::Visible).map(|_| ()),
+        _ => Ok(()),
     }
 }
 
@@ -225,6 +236,7 @@ fn restore<A: WorkspaceApp>(
     visible(ws, app, path)?;
     let top = trash_dir(ctx, trash_id)?;
     let from = trashed_at(ctx, trash_id, path)?;
+    visible_folder(ws, app, path)?;
     let (size, modified) = ws.move_entry(app, &from, path, Access::App, None, false)?;
     // The folders it was in, from the deepest up to the id's own.
     let mut emptied = Vec::new();

@@ -309,3 +309,32 @@ fn a_symlinked_trash_folder_is_never_followed() {
     assert_eq!(names(dir.path(), "a"), ["b.txt"]);
     assert!(names(dir.path(), "elsewhere").is_empty());
 }
+
+/// Whether the file system under `root` ignores case.
+fn ignores_case(root: &Path) -> bool {
+    fs::write(root.join("probe"), b"").unwrap();
+    let ignores = root.join("PROBE").exists();
+    fs::remove_file(root.join("probe")).unwrap();
+    ignores
+}
+
+#[test]
+fn a_restore_never_reaches_a_hidden_folder_spelled_otherwise() {
+    let (dir, ws) = workspace(&["meta/", "a.txt"]);
+    if !ignores_case(dir.path()) {
+        eprintln!("skipped: the file system is case-sensitive");
+        return;
+    }
+    let j = journal(ws, HidesXmp);
+    let id = trashed_id(&run(&j, trash("a.txt", None)));
+    // A trashed copy as if it were trashed from `META/a.txt`.
+    let trashed = dir.path().join(format!(".corundum/trash/{id}"));
+    fs::create_dir(trashed.join("META")).unwrap();
+    fs::rename(trashed.join("a.txt"), trashed.join("META/a.txt")).unwrap();
+    assert_eq!(
+        run(&j, restore("META/a.txt", &id)),
+        Outcome::Skipped(Skip::InvalidPath)
+    );
+    assert!(names(dir.path(), "meta").is_empty());
+    assert!(trashed.join("META/a.txt").exists());
+}
