@@ -340,3 +340,35 @@ async fn an_op_replaced_with_nothing_vanishes_and_an_empty_batch_is_refused() {
     assert_eq!(h["batches"].as_array().unwrap().len(), 1);
     assert_eq!(names(dir.path(), ""), ["b"]);
 }
+
+/// Panics in every follow-up.
+struct PanicsInFollow;
+
+impl WorkspaceApp for PanicsInFollow {
+    fn follow(&self, _op: &FsOp, _done: &FsDone) -> Vec<Planned> {
+        panic!("the app's follow-up panicked")
+    }
+}
+
+#[tokio::test]
+async fn a_panic_in_follow_still_records_the_change() {
+    let (dir, ws) = workspace(&["a"]);
+    let s = FsService::new(ws, PanicsInFollow);
+    let b: BatchRecords = serde_json::from_value(
+        s.dispatch(
+            "fs.apply",
+            json!({"ops": [mv("a", "b")], "origin": "gui"}),
+            &person(),
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(b.ops.len(), 1, "{b:?}");
+    assert!(matches!(b.ops[0].outcome, Outcome::Done(_)), "{b:?}");
+    assert_eq!(names(dir.path(), ""), ["b"]);
+    s.dispatch("journal.undo", json!({"origin": "gui"}), &person())
+        .await
+        .unwrap();
+    assert_eq!(names(dir.path(), ""), ["a"]);
+}

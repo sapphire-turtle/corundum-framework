@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::{Expect, FsOp};
 use crate::expect::state_of;
-use crate::ops::FsDone;
+use crate::ops::{FsDone, follow};
 use crate::{Access, FsCtx, WorkspaceApp, WsPath};
 
 /// Moves or renames an entry, never replacing one (see [`Workspace::rename`]).
@@ -91,7 +91,7 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for MoveOp {
                 size,
                 modified,
             },
-            children: ctx.app().follow(&op, &moved),
+            children: follow(ctx.app(), &op, &moved),
         })
     }
 

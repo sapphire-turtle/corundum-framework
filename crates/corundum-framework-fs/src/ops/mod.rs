@@ -6,9 +6,12 @@ mod mkdir;
 mod move_;
 mod trash;
 
-use corundum_framework_journal::Registry;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
+use corundum_framework_journal::{Planned, Registry};
 use serde::{Deserialize, Serialize};
 
+use crate::api::FsOp;
 use crate::{FsCtx, WorkspaceApp, WsPath};
 
 pub use deny::{DenyOp, DenyPlan};
@@ -23,6 +26,16 @@ pub fn register_builtin<A: WorkspaceApp>(registry: &mut Registry<FsCtx<A>>) {
         .register(MkdirOp)
         .register(TrashOp)
         .register(DenyOp);
+}
+
+/// The app's follow-ups to `op`, done as `done` ([`WorkspaceApp::follow`]); none if the hook
+/// panics. The change is made by then, so a panic must not turn it into a skip, which would
+/// leave it unrecorded and beyond undo.
+fn follow(app: &dyn WorkspaceApp, op: &FsOp, done: &FsDone) -> Vec<Planned> {
+    catch_unwind(AssertUnwindSafe(|| app.follow(op, done))).unwrap_or_else(|_| {
+        tracing::error!("the app's follow-up hook panicked after {op:?}: no follow-ups");
+        Vec::new()
+    })
 }
 
 /// What a built-in operation did, as the app's follow-up hook is told.

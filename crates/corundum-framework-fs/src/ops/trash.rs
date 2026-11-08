@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::{Expect, FsOp};
 use crate::expect;
-use crate::ops::FsDone;
+use crate::ops::{FsDone, follow};
 use crate::{Access, FsCtx, Workspace, WorkspaceApp, WsPath};
 
 /// Moves an entry into the trash, `<own folder>/trash/<trash id>/<path>`; its undo moves it
@@ -231,7 +231,7 @@ fn trash<A: WorkspaceApp>(
         trash_id: trash_id.clone(),
     };
     Ok(Applied {
-        children: app.follow(&op, &trashed),
+        children: follow(app, &op, &trashed),
         done: TrashDone::Trashed {
             path: path.clone(),
             trash_id,

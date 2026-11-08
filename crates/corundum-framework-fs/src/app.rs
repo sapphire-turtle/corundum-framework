@@ -12,6 +12,12 @@ pub enum Route {
     /// The built-in kind (`fs.move`, `fs.mkdir` or `fs.trash`).
     Fs,
     /// The app's own operations instead, in place and in order; none drops the operation.
+    ///
+    /// Their kinds must be registered (see [`FsService::with_journal`]): an unregistered
+    /// kind refuses the whole batch as an internal error. `MAX_APPLY_OPS` bounds the
+    /// request, not the batch routing makes of it.
+    ///
+    /// [`FsService::with_journal`]: crate::FsService::with_journal
     Replace(Vec<Planned>),
     /// None: an `fs.deny` with this reason is recorded in its place, and skipped with
     /// `denied`.
@@ -47,8 +53,9 @@ pub trait WorkspaceApp: Send + Sync + 'static {
     /// submitted (and for a dry run too), off the async threads. The default is
     /// [`Route::Fs`].
     ///
-    /// An operation that names a hidden path is never routed: it goes to its built-in
-    /// kind, which skips it with `invalid_path`.
+    /// An operation that names a path hidden as the request spells it is never routed: it
+    /// goes to its built-in kind, which skips it with `invalid_path`. The built-in kind
+    /// still judges hiding again on disk, for a path hidden only as the disk spells it.
     fn route(&self, op: &FsOp) -> Route {
         let _ = op;
         Route::Fs

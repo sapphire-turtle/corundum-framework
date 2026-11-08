@@ -4,7 +4,7 @@ use corundum_framework_journal::{Applied, OpKind, Operation, Skip};
 use serde::{Deserialize, Serialize};
 
 use crate::api::FsOp;
-use crate::ops::FsDone;
+use crate::ops::{FsDone, follow};
 use crate::{Access, FsCtx, WorkspaceApp, WsPath};
 
 /// Makes a folder; its undo removes it if it is still empty.
@@ -69,7 +69,7 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for MkdirOp {
                 let made = FsDone::Made { path: path.clone() };
                 Applied {
                     done: MkdirDone::Made { path: path.clone() },
-                    children: app.follow(&op, &made),
+                    children: follow(app, &op, &made),
                 }
             }
             // Only an undo's: no follow-ups.
