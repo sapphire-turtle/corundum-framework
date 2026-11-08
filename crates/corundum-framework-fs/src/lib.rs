@@ -23,4 +23,4 @@ pub use list::list;
 pub use path::WsPath;
 pub use read::{read, stat};
 pub use service::FsService;
-pub use workspace::Workspace;
+pub use workspace::{Resolved, Workspace};

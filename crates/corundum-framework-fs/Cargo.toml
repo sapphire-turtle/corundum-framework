@@ -12,6 +12,8 @@ categories = ["filesystem"]
 
 [dependencies]
 base64 = "0.23"
+cap-fs-ext = "4"
+cap-std = "4"
 corundum-framework-fs-api = { version = "0.11.0", path = "../corundum-framework-fs-api" }
 serde.workspace = true
 serde_json.workspace = true
@@ -19,8 +21,9 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["rt"] }
 tracing.workspace = true
 
+
 [target.'cfg(unix)'.dependencies]
-# O_NOFOLLOW and O_NONBLOCK, to open a file without following a swapped-in symlink.
+# O_NONBLOCK, so opening a swapped-in FIFO does not block; mkfifo in the tests.
 libc = "0.2"
 
 [dev-dependencies]
