@@ -46,34 +46,13 @@ mod tests {
     use journal::{Actor, BatchBegin, BatchId, BatchSummary, OpId, OpRecord, Origin, Outcome};
     use serde_json::json;
 
-    fn op(batch_id: BatchId, outcome: Outcome) -> OpRecord {
-        OpRecord {
-            op_id: OpId::random(),
-            batch_id,
-            parent: None,
-            kind: "fs.move".into(),
-            plan: json!({"from": "a", "to": "b"}),
-            outcome,
-        }
-    }
-
-    /// Pins the journal's JSON to the mirror's: this fails if either drifts.
+    /// Pins the journal's JSON, every field set, to the mirror's: this fails if either
+    /// drifts, an optional field's name included.
     #[test]
     fn the_journals_records_parse_as_the_mirrors() {
-        let batch_id = BatchId::random();
-        let done = op(batch_id, Outcome::Done(json!({"x": 1})));
-        let skipped = op(
-            batch_id,
-            Outcome::Skipped(journal::Skip::Io("disk full".into())),
-        );
-        assert_eq!(
-            serde_json::to_value(&done.outcome).unwrap(),
-            json!({"outcome": "done", "value": {"x": 1}})
-        );
-        assert_eq!(
-            serde_json::to_value(&skipped.outcome).unwrap(),
-            json!({"outcome": "skipped", "value": {"reason": "io", "message": "disk full"}})
-        );
+        let (batch_id, redo_of, undone_by) =
+            (BatchId::random(), BatchId::random(), BatchId::random());
+        let (op1, op2) = (OpId::random(), OpId::random());
         let b = journal::BatchRecords {
             summary: BatchSummary {
                 begin: BatchBegin {
@@ -82,46 +61,122 @@ mod tests {
                     actor: Actor::agent("p"),
                     at: 7,
                     label: Some("l".into()),
-                    undo_of: Some(BatchId::random()),
-                    redo_of: None,
+                    undo_of: None,
+                    redo_of: Some(redo_of),
                 },
                 done: 1,
                 skipped: 1,
                 complete: true,
-                interrupted: false,
-                undone_by: None,
+                interrupted: true,
+                undone_by: Some(undone_by),
             },
-            ops: vec![done.clone(), skipped.clone()],
+            ops: vec![
+                OpRecord {
+                    op_id: op1,
+                    batch_id,
+                    parent: None,
+                    kind: "fs.move".into(),
+                    plan: json!({"from": "a", "to": "b"}),
+                    outcome: Outcome::Done(json!({"x": 1})),
+                },
+                OpRecord {
+                    op_id: op2,
+                    batch_id,
+                    parent: Some(op1),
+                    kind: "fs.trash".into(),
+                    plan: json!({"do": "trash", "path": "c"}),
+                    outcome: Outcome::Skipped(journal::Skip::Io("disk full".into())),
+                },
+            ],
         };
-        let m = records(&b).unwrap();
-        let begin = &m.summary.begin;
-        assert_eq!(begin.batch_id, batch_id.to_string());
-        assert_eq!(begin.origin, "gui");
+        let s = |id: &dyn std::fmt::Display| id.to_string();
         assert_eq!(
-            begin.actor,
-            api::Actor {
-                principal: "p".into(),
-                agent: true
-            }
-        );
-        assert_eq!(
-            begin.undo_of,
-            b.summary.begin.undo_of.map(|i| i.to_string())
-        );
-        assert_eq!((m.summary.done, m.summary.skipped), (1, 1));
-        assert!(m.summary.complete);
-        assert_eq!(m.ops[0].op_id, done.op_id.to_string());
-        assert_eq!(m.ops[0].batch_id, batch_id.to_string());
-        assert_eq!(m.ops[0].plan, done.plan);
-        assert_eq!(m.ops[0].outcome, api::Outcome::Done(json!({"x": 1})));
-        assert_eq!(
-            m.ops[1].outcome,
-            api::Outcome::Skipped(api::Skip {
-                reason: "io".into(),
-                message: Some("disk full".into())
+            serde_json::to_value(&b).unwrap(),
+            json!({
+                "summary": {
+                    "begin": {
+                        "batch_id": s(&batch_id),
+                        "origin": "gui",
+                        "actor": {"principal": "p", "agent": true},
+                        "at": 7,
+                        "label": "l",
+                        "undo_of": null,
+                        "redo_of": s(&redo_of),
+                    },
+                    "done": 1,
+                    "skipped": 1,
+                    "complete": true,
+                    "interrupted": true,
+                    "undone_by": s(&undone_by),
+                },
+                "ops": [
+                    {
+                        "op_id": s(&op1),
+                        "batch_id": s(&batch_id),
+                        "parent": null,
+                        "kind": "fs.move",
+                        "plan": {"from": "a", "to": "b"},
+                        "outcome": {"outcome": "done", "value": {"x": 1}},
+                    },
+                    {
+                        "op_id": s(&op2),
+                        "batch_id": s(&batch_id),
+                        "parent": s(&op1),
+                        "kind": "fs.trash",
+                        "plan": {"do": "trash", "path": "c"},
+                        "outcome": {
+                            "outcome": "skipped",
+                            "value": {"reason": "io", "message": "disk full"},
+                        },
+                    },
+                ],
             })
         );
-        assert_eq!(summary(&b.summary).unwrap(), m.summary);
+        let summary_mirror = api::BatchSummary {
+            begin: api::BatchBegin {
+                batch_id: s(&batch_id),
+                origin: "gui".into(),
+                actor: api::Actor {
+                    principal: "p".into(),
+                    agent: true,
+                },
+                at: 7,
+                label: Some("l".into()),
+                undo_of: None,
+                redo_of: Some(s(&redo_of)),
+            },
+            done: 1,
+            skipped: 1,
+            complete: true,
+            interrupted: true,
+            undone_by: Some(s(&undone_by)),
+        };
+        let expected = api::BatchRecords {
+            summary: summary_mirror.clone(),
+            ops: vec![
+                api::OpRecord {
+                    op_id: s(&op1),
+                    batch_id: s(&batch_id),
+                    parent: None,
+                    kind: "fs.move".into(),
+                    plan: json!({"from": "a", "to": "b"}),
+                    outcome: api::Outcome::Done(json!({"x": 1})),
+                },
+                api::OpRecord {
+                    op_id: s(&op2),
+                    batch_id: s(&batch_id),
+                    parent: Some(s(&op1)),
+                    kind: "fs.trash".into(),
+                    plan: json!({"do": "trash", "path": "c"}),
+                    outcome: api::Outcome::Skipped(api::Skip {
+                        reason: "io".into(),
+                        message: Some("disk full".into()),
+                    }),
+                },
+            ],
+        };
+        assert_eq!(records(&b).unwrap(), expected);
+        assert_eq!(summary(&b.summary).unwrap(), summary_mirror);
         assert_eq!(
             skip(&journal::Skip::Exists).unwrap(),
             api::Skip {
@@ -129,5 +184,34 @@ mod tests {
                 message: None
             }
         );
+    }
+
+    /// `undo_of` set too (the batch above leaves it `None`), through the mirror.
+    #[test]
+    fn an_undo_of_reaches_the_mirror() {
+        let undo_of = BatchId::random();
+        let begin = BatchBegin {
+            batch_id: BatchId::random(),
+            origin: Origin::new("gui"),
+            actor: Actor::person("p"),
+            at: 1,
+            label: None,
+            undo_of: Some(undo_of),
+            redo_of: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&begin).unwrap()["undo_of"],
+            json!(undo_of.to_string())
+        );
+        let b = summary(&BatchSummary {
+            begin,
+            done: 0,
+            skipped: 0,
+            complete: false,
+            interrupted: false,
+            undone_by: None,
+        })
+        .unwrap();
+        assert_eq!(b.begin.undo_of, Some(undo_of.to_string()));
     }
 }
