@@ -4,8 +4,9 @@ use corundum_framework_journal::{Applied, OpKind, Operation, Skip};
 use grain_id::GrainId;
 use serde::{Deserialize, Serialize};
 
-use crate::api::Expect;
+use crate::api::{Expect, FsOp};
 use crate::expect;
+use crate::ops::FsDone;
 use crate::{Access, FsCtx, Workspace, WorkspaceApp, WsPath};
 
 /// Moves an entry into the trash, `<own folder>/trash/<trash id>/<path>`; its undo moves it
@@ -96,10 +97,11 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for TrashOp {
     }
 
     fn apply(&self, ctx: &FsCtx<A>, plan: &TrashPlan) -> Result<Applied<TrashDone>, Skip> {
-        Ok(Applied::new(match plan {
+        Ok(match plan {
             TrashPlan::Trash { path, expect } => trash(ctx, path, expect.as_ref())?,
-            TrashPlan::Restore { path, trash_id } => restore(ctx, path, trash_id)?,
-        }))
+            // Only an undo's: no follow-ups.
+            TrashPlan::Restore { path, trash_id } => Applied::new(restore(ctx, path, trash_id)?),
+        })
     }
 
     fn inverse(&self, done: &TrashDone) -> Option<TrashPlan> {
@@ -171,11 +173,12 @@ fn trashed_at<A: WorkspaceApp>(
     Ok(at)
 }
 
+/// Trashes the entry at `path`, with the app's follow-ups as the children.
 fn trash<A: WorkspaceApp>(
     ctx: &FsCtx<A>,
     path: &WsPath,
     expect: Option<&Expect>,
-) -> Result<TrashDone, Skip> {
+) -> Result<Applied<TrashDone>, Skip> {
     let (ws, app) = (ctx.workspace(), ctx.app());
     visible(ws, app, path)?;
     // Before making any folder; the move checks it again.
@@ -219,11 +222,22 @@ fn trash<A: WorkspaceApp>(
             return Err(e);
         }
     };
-    Ok(TrashDone::Trashed {
+    let op = FsOp::Trash {
+        path: path.as_str().to_owned(),
+        expect: expect.cloned(),
+    };
+    let trashed = FsDone::Trashed {
         path: path.clone(),
-        trash_id,
-        size,
-        modified,
+        trash_id: trash_id.clone(),
+    };
+    Ok(Applied {
+        children: app.follow(&op, &trashed),
+        done: TrashDone::Trashed {
+            path: path.clone(),
+            trash_id,
+            size,
+            modified,
+        },
     })
 }
 

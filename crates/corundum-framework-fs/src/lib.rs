@@ -25,13 +25,13 @@ mod wire;
 mod workspace;
 
 pub use access::Access;
-pub use app::WorkspaceApp;
+pub use app::{Route, WorkspaceApp};
 pub use corundum_framework_fs_api as api;
 pub use corundum_framework_journal as journal;
 pub use ctx::FsCtx;
 pub use error::FsError;
 pub use list::list;
-pub use ops::register_builtin;
+pub use ops::{DenyOp, DenyPlan, register_builtin};
 pub use path::WsPath;
 pub use read::{read, stat};
 pub use service::FsService;

@@ -3,8 +3,9 @@
 use corundum_framework_journal::{Applied, OpKind, Operation, Skip};
 use serde::{Deserialize, Serialize};
 
-use crate::api::Expect;
+use crate::api::{Expect, FsOp};
 use crate::expect::state_of;
+use crate::ops::FsDone;
 use crate::{Access, FsCtx, WorkspaceApp, WsPath};
 
 /// Moves or renames an entry, never replacing one (see [`Workspace::rename`]).
@@ -74,12 +75,24 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for MoveOp {
             .entry(ctx.app(), &plan.to, Access::Visible)
             .map(|r| state_of(&r))
             .unwrap_or(before);
-        Ok(Applied::new(MoveDone {
+        let op = FsOp::Move {
+            from: plan.from.as_str().to_owned(),
+            to: plan.to.as_str().to_owned(),
+            expect: plan.expect.clone(),
+        };
+        let moved = FsDone::Moved {
             from: plan.from.clone(),
             to: plan.to.clone(),
-            size,
-            modified,
-        }))
+        };
+        Ok(Applied {
+            done: MoveDone {
+                from: plan.from.clone(),
+                to: plan.to.clone(),
+                size,
+                modified,
+            },
+            children: ctx.app().follow(&op, &moved),
+        })
     }
 
     fn inverse(&self, done: &MoveDone) -> Option<MovePlan> {

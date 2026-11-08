@@ -17,3 +17,9 @@ A server mounts `FsService::dispatch` on its own JSON-RPC router, over HTTP or a
 socket, and passes it the caller's actor. `FsService::new` keeps the journal in memory;
 `FsService::with_journal` takes the app's own kinds, its store and its undo policy, and
 `FsService::journal` runs the app's own batches.
+
+The app's `WorkspaceApp` hooks shape each apply. `route` decides, per requested operation,
+whether the built-in kind runs, the app's own kinds run instead, or the operation is denied
+(recorded as an `fs.deny`, skipped with its reason); an operation on a hidden path is never
+routed. `follow` adds the app's follow-ups after each built-in change, such as moving a
+photo's sidecar with it, as undoable children. `may_undo` decides who may undo a batch.

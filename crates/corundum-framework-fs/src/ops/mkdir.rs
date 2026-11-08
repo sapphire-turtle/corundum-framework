@@ -3,6 +3,8 @@
 use corundum_framework_journal::{Applied, OpKind, Operation, Skip};
 use serde::{Deserialize, Serialize};
 
+use crate::api::FsOp;
+use crate::ops::FsDone;
 use crate::{Access, FsCtx, WorkspaceApp, WsPath};
 
 /// Makes a folder; its undo removes it if it is still empty.
@@ -58,17 +60,24 @@ impl<A: WorkspaceApp> Operation<FsCtx<A>> for MkdirOp {
 
     fn apply(&self, ctx: &FsCtx<A>, plan: &MkdirPlan) -> Result<Applied<MkdirDone>, Skip> {
         let (ws, app) = (ctx.workspace(), ctx.app());
-        let done = match plan {
+        Ok(match plan {
             MkdirPlan::Make { path } => {
                 ws.make_dir(app, path, Access::Visible)?;
-                MkdirDone::Made { path: path.clone() }
+                let op = FsOp::Mkdir {
+                    path: path.as_str().to_owned(),
+                };
+                let made = FsDone::Made { path: path.clone() };
+                Applied {
+                    done: MkdirDone::Made { path: path.clone() },
+                    children: app.follow(&op, &made),
+                }
             }
+            // Only an undo's: no follow-ups.
             MkdirPlan::Remove { path } => {
                 ws.remove_empty_dir(app, path, Access::Visible)?;
-                MkdirDone::Removed { path: path.clone() }
+                Applied::new(MkdirDone::Removed { path: path.clone() })
             }
-        };
-        Ok(Applied::new(done))
+        })
     }
 
     fn inverse(&self, done: &MkdirDone) -> Option<MkdirPlan> {
