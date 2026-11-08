@@ -1308,10 +1308,14 @@ name = "corundum-framework-fs"
 version = "0.11.0"
 dependencies = [
  "base64 0.23.1",
+ "blake3",
  "cap-fs-ext",
  "cap-std",
  "corundum-framework-fs-api",
+ "corundum-framework-journal",
+ "grain-id",
  "libc",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "tempfile",

@@ -8,18 +8,26 @@
 
 #![warn(missing_docs)]
 
+mod access;
 mod app;
+mod ctx;
 mod error;
+mod expect;
 mod list;
+pub mod ops;
 mod path;
 mod read;
+mod rename;
 mod service;
 mod workspace;
 
+pub use access::Access;
 pub use app::WorkspaceApp;
 pub use corundum_framework_fs_api as api;
+pub use ctx::FsCtx;
 pub use error::FsError;
 pub use list::list;
+pub use ops::register_builtin;
 pub use path::WsPath;
 pub use read::{read, stat};
 pub use service::FsService;

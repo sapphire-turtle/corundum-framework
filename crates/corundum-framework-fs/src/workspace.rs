@@ -56,7 +56,18 @@ impl Workspace {
     /// result keeps the handle of the last segment's folder, so opening it later cannot be
     /// redirected by a symlink swapped into the path in between.
     pub fn resolve(&self, app: &dyn WorkspaceApp, path: &WsPath) -> Result<Resolved, FsError> {
-        if self.is_hidden(app, path) {
+        self.resolve_with(app, path, true)
+    }
+
+    /// [`Workspace::resolve`], judging hiding only if `hide`: without it a hidden entry is
+    /// reached, still never through a symlink.
+    pub(crate) fn resolve_with(
+        &self,
+        app: &dyn WorkspaceApp,
+        path: &WsPath,
+        hide: bool,
+    ) -> Result<Resolved, FsError> {
+        if hide && self.is_hidden(app, path) {
             return Err(FsError::InvalidPath(format!("{path:?} is hidden")));
         }
         let (parent, name) = self.walk_parent(path)?;
@@ -72,7 +83,7 @@ impl Workspace {
         };
         // On a file system that ignores case (or Unicode normalization), `P.JPG.XMP` reaches
         // `p.jpg.xmp`: judge hiding on the names on disk too, not only on those asked for.
-        if !path.is_root() && self.is_hidden(app, &self.on_disk(&resolved)?) {
+        if hide && !path.is_root() && self.is_hidden(app, &self.on_disk(&resolved)?) {
             return Err(FsError::InvalidPath(format!("{path:?} is hidden")));
         }
         Ok(resolved)
@@ -223,14 +234,11 @@ impl Resolved {
         Ok(file)
     }
 
-    // Used by the moves and the trash, built on `resolve` next.
-    #[allow(dead_code)]
     /// The folder holding the last segment (the root itself for the root).
     pub(crate) fn parent(&self) -> &Dir {
         &self.parent
     }
 
-    #[allow(dead_code)]
     /// The last segment's name, `None` for the root.
     pub(crate) fn name(&self) -> Option<&str> {
         self.name.as_deref()

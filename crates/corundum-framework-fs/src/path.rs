@@ -6,6 +6,8 @@ use crate::FsError;
 
 /// A path inside the workspace: `/` between segments, the root `""`.
 ///
+/// It serializes as its string, and deserializing one runs [`WsPath::parse`].
+///
 /// It is checked when it is made, so one that exists is already normalized: not absolute,
 /// no `.`, `..` or empty segment, no `\` or NUL (and on Windows no `:`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -87,6 +89,20 @@ impl WsPath {
 impl fmt::Display for WsPath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl serde::Serialize for WsPath {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&self.0)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for WsPath {
+    /// Deserializes a string, checked by [`WsPath::parse`].
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<WsPath, D::Error> {
+        let s = String::deserialize(d)?;
+        WsPath::parse(&s).map_err(serde::de::Error::custom)
     }
 }
 

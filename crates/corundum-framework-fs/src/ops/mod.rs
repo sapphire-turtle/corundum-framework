@@ -1,0 +1,42 @@
+//! The built-in kinds the journal runs: `fs.move` and `fs.mkdir`.
+
+mod mkdir;
+mod move_;
+
+use corundum_framework_journal::Registry;
+use serde::{Deserialize, Serialize};
+
+use crate::{FsCtx, WorkspaceApp, WsPath};
+
+pub use mkdir::{MkdirDone, MkdirOp, MkdirPlan};
+pub use move_::{MoveDone, MoveOp, MovePlan};
+
+/// Registers the built-in kinds in `registry`.
+pub fn register_builtin<A: WorkspaceApp>(registry: &mut Registry<FsCtx<A>>) {
+    registry.register(MoveOp).register(MkdirOp);
+}
+
+/// What a built-in operation did, as the app's follow-up hook is told.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "done", rename_all = "snake_case")]
+pub enum FsDone {
+    /// An entry was moved.
+    Moved {
+        /// Where it was.
+        from: WsPath,
+        /// Where it is now.
+        to: WsPath,
+    },
+    /// A folder was made.
+    Made {
+        /// The folder.
+        path: WsPath,
+    },
+    /// An entry was moved to the trash.
+    Trashed {
+        /// Where it was.
+        path: WsPath,
+        /// Its trash id.
+        trash_id: String,
+    },
+}
