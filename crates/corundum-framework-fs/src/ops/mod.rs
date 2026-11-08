@@ -1,7 +1,8 @@
-//! The built-in kinds the journal runs: `fs.move` and `fs.mkdir`.
+//! The built-in kinds the journal runs: `fs.move`, `fs.mkdir` and `fs.trash`.
 
 mod mkdir;
 mod move_;
+mod trash;
 
 use corundum_framework_journal::Registry;
 use serde::{Deserialize, Serialize};
@@ -10,10 +11,14 @@ use crate::{FsCtx, WorkspaceApp, WsPath};
 
 pub use mkdir::{MkdirDone, MkdirOp, MkdirPlan};
 pub use move_::{MoveDone, MoveOp, MovePlan};
+pub use trash::{TrashDone, TrashOp, TrashPlan};
 
 /// Registers the built-in kinds in `registry`.
 pub fn register_builtin<A: WorkspaceApp>(registry: &mut Registry<FsCtx<A>>) {
-    registry.register(MoveOp).register(MkdirOp);
+    registry
+        .register(MoveOp)
+        .register(MkdirOp)
+        .register(TrashOp);
 }
 
 /// What a built-in operation did, as the app's follow-up hook is told.
