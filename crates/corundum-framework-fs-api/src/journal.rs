@@ -34,7 +34,7 @@ pub struct OriginParams {
 pub struct UndoBatchParams {
     /// The batch to undo.
     pub batch_id: String,
-    /// The origin asking; the batch must be its own.
+    /// The origin asking, recorded as the undo's origin; the batch may be of any origin.
     pub origin: String,
 }
 

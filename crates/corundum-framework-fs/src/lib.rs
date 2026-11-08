@@ -7,6 +7,15 @@
 //! a [`journal`], which the `journal.*` methods undo and redo (see [`FsService`]).
 //!
 //! See `docs/superpowers/specs/2026-11-06-workspace-fs-journal-design.md`.
+//!
+//! # Known limitations
+//!
+//! On Linux, hiding is judged on the name as the request spells it, and on the name
+//! `canonicalize` returns, which on Linux is the spelling asked for. So on a mount that
+//! ignores case (ext4 or f2fs with casefold, vfat, exFAT, CIFS/SMB), a name spelled
+//! differently from a hidden entry can still reach it, FAT 8.3 short names such as
+//! `CORUND~1` for `.corundum` among them. Clients should send only names they listed. On
+//! macOS and Windows, hiding is judged on the disk's spelling.
 
 #![warn(missing_docs)]
 

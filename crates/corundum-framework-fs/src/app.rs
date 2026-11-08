@@ -56,6 +56,10 @@ pub trait WorkspaceApp: Send + Sync + 'static {
     /// An operation that names a path hidden as the request spells it is never routed: it
     /// goes to its built-in kind, which skips it with `invalid_path`. The built-in kind
     /// still judges hiding again on disk, for a path hidden only as the disk spells it.
+    ///
+    /// The paths in `op` are as the request spelled them, not as the disk does. On a file
+    /// system that ignores case, an app that looks entries up by path must match them
+    /// without regard to case.
     fn route(&self, op: &FsOp) -> Route {
         let _ = op;
         Route::Fs
@@ -68,6 +72,10 @@ pub trait WorkspaceApp: Send + Sync + 'static {
     /// An undo or a redo drops what this returns, and undoes the original follow-ups by
     /// their own inverses instead: a follow-up's kind must be undoable, its inverse redoing
     /// its work.
+    ///
+    /// The paths in `op` and `done` are as the request spelled them, not as the disk does.
+    /// On a file system that ignores case, an app that looks entries up by path must match
+    /// them without regard to case.
     fn follow(&self, op: &FsOp, done: &FsDone) -> Vec<Planned> {
         let _ = (op, done);
         Vec::new()
