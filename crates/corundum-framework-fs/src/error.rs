@@ -1,6 +1,7 @@
 //! What can go wrong with a request.
 
 use corundum_framework_fs_api::codes;
+use corundum_framework_journal::JournalError;
 
 /// An error answering one of the `fs.*` methods. [`FsError::code`] is its JSON-RPC code.
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +29,10 @@ pub enum FsError {
         /// What the OS said.
         source: std::io::Error,
     },
+    /// The journal refused or failed the call: nothing to undo, an expired batch, a busy
+    /// worker and so on.
+    #[error(transparent)]
+    Journal(#[from] JournalError),
 }
 
 impl FsError {
@@ -40,6 +45,17 @@ impl FsError {
             FsError::InvalidParams(_) => codes::INVALID_PARAMS,
             FsError::MethodNotFound(_) => codes::METHOD_NOT_FOUND,
             FsError::Io { .. } => codes::INTERNAL_ERROR,
+            FsError::Journal(e) => match e {
+                JournalError::NothingToUndo => codes::NOTHING_TO_UNDO,
+                JournalError::NothingToRedo => codes::NOTHING_TO_REDO,
+                JournalError::AlreadyUndone(_) => codes::ALREADY_UNDONE,
+                JournalError::Expired(_) => codes::EXPIRED,
+                JournalError::Forbidden(_) => codes::FORBIDDEN,
+                JournalError::Busy => codes::BUSY,
+                JournalError::NotFound(_) => codes::NOT_FOUND,
+                // UnknownKind, InvalidPlan, Stopped, Store, and any later variant.
+                _ => codes::INTERNAL_ERROR,
+            },
         }
     }
 }

@@ -1,8 +1,10 @@
-//! An app server's workspace folder over the `fs.*` methods of `corundum-framework-fs-api`.
+//! An app server's workspace folder over the `fs.*` and `journal.*` methods of
+//! `corundum-framework-fs-api`.
 //!
 //! Paths are checked ([`WsPath`]), and symlinks are never followed. Every dot-name is
 //! hidden, and so are the files the app keeps for itself. Folders are listed a page at a
-//! time, and files are read in ranges.
+//! time, and files are read in ranges. `fs.apply` runs the built-in [`ops`] as one batch of
+//! a [`journal`], which the `journal.*` methods undo and redo (see [`FsService`]).
 //!
 //! See `docs/superpowers/specs/2026-11-06-workspace-fs-journal-design.md`.
 
@@ -19,11 +21,13 @@ mod path;
 mod read;
 mod rename;
 mod service;
+mod wire;
 mod workspace;
 
 pub use access::Access;
 pub use app::WorkspaceApp;
 pub use corundum_framework_fs_api as api;
+pub use corundum_framework_journal as journal;
 pub use ctx::FsCtx;
 pub use error::FsError;
 pub use list::list;
