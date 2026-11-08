@@ -285,3 +285,18 @@ async fn status_gives_a_batch_and_history_clamps_its_limit() {
     assert_eq!(h.batches.len(), 1);
     assert_eq!(h.next_cursor, Some(b.summary.begin.batch_id));
 }
+
+#[tokio::test]
+async fn a_folder_move_undoes_after_its_contents_changed() {
+    let (dir, s) = service(&["a/"]);
+    apply(&s, "gui", json!([mv("a", "b")])).await;
+    // Past the mtime's resolution, so adding and removing `b/c` shows on `b`.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    apply(&s, "gui", json!([{"kind": "fs.mkdir", "path": "b/c"}])).await;
+    let u = undo(&s, "gui").await;
+    assert!(matches!(u.ops[0].outcome, Outcome::Done(_)), "{u:?}");
+    assert_eq!(names(dir.path(), "b"), Vec::<String>::new());
+    let u = undo(&s, "gui").await;
+    assert!(matches!(u.ops[0].outcome, Outcome::Done(_)), "{u:?}");
+    assert_eq!(names(dir.path(), ""), ["a"]);
+}

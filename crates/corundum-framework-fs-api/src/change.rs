@@ -11,7 +11,9 @@ pub const MAX_APPLY_OPS: usize = 10_000;
 
 /// What a caller saw of a file, to be checked before the file is changed.
 ///
-/// The operation is skipped when the file is no longer so.
+/// The operation is skipped when the file is no longer so. A folder's expect checks only that
+/// it is still a folder: its `size` and `modified` are ignored, as a folder's `modified` moves
+/// whenever an entry is added to it or taken from it. A folder with a `hash` never passes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Expect {
     /// The `size` an [`Entry`](crate::Entry) showed.
