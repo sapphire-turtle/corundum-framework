@@ -55,6 +55,7 @@
 mod client;
 #[cfg(feature = "fs-local")]
 mod local;
+mod reader;
 #[cfg(all(test, feature = "fs-local"))]
 mod tests;
 mod transport;
@@ -62,4 +63,5 @@ mod transport;
 pub use client::FsClient;
 #[cfg(feature = "fs-local")]
 pub use local::LocalTransport;
+pub use reader::FsReader;
 pub use transport::{FsError, FsTransport};

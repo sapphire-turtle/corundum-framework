@@ -6,7 +6,7 @@ use corundum_framework_fs_api::{API_VERSION, EntryKind, FsOp, codes};
 use corundum_framework_platform::pending::Pending;
 use serde_json::{Value, json};
 
-use super::{FsClient, FsError, FsTransport, LocalTransport};
+use super::{FsClient, FsError, FsReader, FsTransport, LocalTransport};
 
 /// The answer, polled every 5 ms for up to 5 s.
 fn done<T>(mut p: Pending<T>) -> T {
@@ -171,4 +171,141 @@ fn a_request_lost_with_its_runtime_is_a_transport_error() {
     } = s;
     runtime.shutdown_background();
     assert_eq!(done(client.stat("a.txt")), Err(FsError::default()));
+}
+
+/// The bytes of the test's big file: a pattern that shows a misplaced chunk.
+fn pattern(len: usize) -> Vec<u8> {
+    (0..len)
+        .map(|i| (i % 251) as u8 ^ (i / 251) as u8)
+        .collect()
+}
+
+#[test]
+fn the_reader_reads_and_seeks() {
+    use std::io::{Read, Seek, SeekFrom};
+
+    let s = Served::new();
+    let big = pattern(3 * 1024 * 1024);
+    std::fs::write(s.dir.path().join("big.bin"), &big).unwrap();
+    let mut reader = FsReader::open(s.client(), "big.bin".into()).unwrap();
+
+    let mut all = Vec::new();
+    reader.read_to_end(&mut all).unwrap();
+    assert!(all == big, "read_to_end differs");
+
+    assert_eq!(
+        reader.seek(SeekFrom::End(-10)).unwrap(),
+        big.len() as u64 - 10
+    );
+    let mut tail = [0u8; 10];
+    reader.read_exact(&mut tail).unwrap();
+    assert_eq!(tail, big[big.len() - 10..]);
+
+    // Back across a chunk boundary, relative to the current position.
+    reader.seek(SeekFrom::Start(1_048_570)).unwrap();
+    assert_eq!(reader.seek(SeekFrom::Current(-5)).unwrap(), 1_048_565);
+    let mut middle = [0u8; 20];
+    reader.read_exact(&mut middle).unwrap();
+    assert_eq!(middle, big[1_048_565..1_048_585]);
+
+    assert_eq!(reader.seek(SeekFrom::Start(0)).unwrap(), 0);
+    let err = reader.seek(SeekFrom::Current(-1)).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    // A failed seek leaves the position.
+    let mut first = [0u8; 4];
+    reader.read_exact(&mut first).unwrap();
+    assert_eq!(first, big[..4]);
+}
+
+#[test]
+fn a_missing_file_is_not_found() {
+    let s = Served::new();
+    let err = FsReader::open(s.client(), "nope".into()).err().unwrap();
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+}
+
+/// A server that stats `a.txt` as a 4-byte file and fails every other call: `fs.read`
+/// answers `Transport("gone")`.
+struct Gone;
+
+impl FsTransport for Gone {
+    fn call(&self, method: &str, _params: Value) -> Pending<Result<Value, FsError>> {
+        Pending::ready(if method == "fs.stat" {
+            Ok(json!({"name": "a.txt", "kind": "file", "size": 4, "modified": 7}))
+        } else {
+            Err(FsError::Transport("gone".into()))
+        })
+    }
+}
+
+#[test]
+fn the_content_is_keyed_by_what_stat_says() {
+    let s = Served::new();
+    let client = s.client();
+    let entry = done(client.stat("a.txt")).unwrap();
+    let content = client.content("a.txt", &entry);
+    assert_eq!(
+        content.key,
+        format!("a.txt\0{}\0{}", entry.size, entry.modified.unwrap())
+    );
+    assert_eq!(content.name, "a.txt");
+    let mut text = String::new();
+    std::io::Read::read_to_string(&mut content.open().unwrap(), &mut text).unwrap();
+    assert_eq!(text, "abcd");
+}
+
+#[cfg(feature = "text-preview")]
+#[test]
+fn a_read_that_fails_reaches_the_preview_as_failed() {
+    use crate::preview::{FileInfo, FilePreview, State};
+    use std::io::Read;
+
+    fn collect(shape: &egui::Shape, texts: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, texts)),
+            egui::Shape::Text(t) => texts.push(t.galley.text().to_owned()),
+            _ => {}
+        }
+    }
+
+    let client = FsClient::new(Gone);
+    let entry = done(client.stat("a.txt")).unwrap();
+    let content = client.content("a.txt", &entry);
+    let err = content.open().unwrap().read(&mut [0u8; 4]).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::Other);
+    assert_eq!(err.to_string(), "gone");
+
+    let ctx = egui::Context::default();
+    let file = FileInfo::new("a.txt");
+    let mut preview = FilePreview::new();
+    let start = Instant::now();
+    let mut slowest = Duration::ZERO;
+    loop {
+        let frame_start = Instant::now();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(400.0, 300.0),
+            )),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
+                let _ = preview.ui(ui, &file, State::Ready(&content), false);
+            });
+        });
+        output.textures_delta.clear();
+        slowest = slowest.max(frame_start.elapsed());
+        let mut texts = Vec::new();
+        for clipped in &output.shapes {
+            collect(&clipped.shape, &mut texts);
+        }
+        // Retry is what a failed text shows.
+        if texts.iter().any(|t| t == "Retry") {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(10), "{texts:?}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(slowest < Duration::from_millis(100), "{slowest:?}");
 }
