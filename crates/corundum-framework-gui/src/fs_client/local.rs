@@ -20,6 +20,10 @@ pub struct LocalTransport {
 impl LocalTransport {
     /// Calls `service` as `actor`, on `runtime`; `wake` runs when an answer comes, to draw
     /// the window again.
+    ///
+    /// The calls are only spawned on `runtime`: it must run them on threads of its own (a
+    /// multi-thread runtime, or one driven elsewhere), not be driven only by the UI thread,
+    /// whose frames never wait for an answer.
     pub fn new<A: WorkspaceApp>(
         service: FsService<A>,
         actor: Actor,

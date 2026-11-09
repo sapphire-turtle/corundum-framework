@@ -45,7 +45,9 @@ impl FsClient {
     }
 
     /// Asks the server's API version (`fs.version`). A server without the method, or with
-    /// another version, answers [`FsError::ApiMismatch`], and so does every call after.
+    /// another version, answers [`FsError::ApiMismatch`], and so does every call after. The
+    /// mismatch is latched when this answer is taken in (polled or waited for), not when the
+    /// server answers: calls made before that still go out.
     pub fn check_version(&self) -> Pending<Result<(), FsError>> {
         let mismatch = Arc::clone(&self.mismatch);
         self.call::<VersionInfo>(FS_VERSION, json!({}))
@@ -90,12 +92,17 @@ impl FsClient {
     }
 
     /// At most `len` bytes of the file `path` from `offset`.
+    ///
+    /// The bytes are decoded from base64 where the [`Pending`] is polled or waited for: poll a
+    /// large read off the UI thread, or read through an [`FsReader`](super::FsReader) on a
+    /// worker.
     pub fn read(&self, path: &str, offset: u64, len: u32) -> Pending<Result<Vec<u8>, FsError>> {
         self.read_with_total(path, offset, len)
             .map(|answer| answer.map(|(bytes, _)| bytes))
     }
 
-    /// As [`read`](Self::read), with the file's whole length.
+    /// As [`read`](Self::read), with the file's whole length; decoded, as there, where the
+    /// [`Pending`] is polled or waited for.
     pub fn read_with_total(
         &self,
         path: &str,
