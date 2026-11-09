@@ -4,6 +4,8 @@ use corundum_framework_fs_api::codes;
 use corundum_framework_platform::pending::Pending;
 use serde_json::Value;
 
+use crate::tr;
+
 /// Why a call failed.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,7 +40,38 @@ impl FsError {
             FsError::Transport(_) | FsError::Decode(_) => codes::INTERNAL_ERROR,
         }
     }
+
+    /// The error for a person, in the context's language: the server's message, this
+    /// side's text, or that the versions differ (`corundum-fs-api-mismatch`).
+    pub fn text(&self, ctx: &egui::Context) -> String {
+        match self {
+            FsError::ApiMismatch { server, client } => tr!(
+                ctx,
+                "corundum-fs-api-mismatch",
+                server = *server,
+                client = *client
+            ),
+            other => other.to_string(),
+        }
+    }
 }
+
+/// The server's message, this side's text, or that the versions differ, in English (see
+/// [`FsError::text`] for the person's language).
+impl std::fmt::Display for FsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FsError::Rpc { message, .. } => f.write_str(message),
+            FsError::Transport(text) | FsError::Decode(text) => f.write_str(text),
+            FsError::ApiMismatch { server, client } => write!(
+                f,
+                "This app's file API (version {client}) does not match the server's (version {server})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for FsError {}
 
 /// A call whose sender went away without answering.
 impl Default for FsError {

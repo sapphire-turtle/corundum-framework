@@ -226,8 +226,10 @@ fn a_missing_file_is_not_found() {
 
 /// A server that stats `a.txt` as a 4-byte file and fails every other call: `fs.read`
 /// answers `Transport("gone")`.
+#[cfg(feature = "text-preview")]
 struct Gone;
 
+#[cfg(feature = "text-preview")]
 impl FsTransport for Gone {
     fn call(&self, method: &str, _params: Value) -> Pending<Result<Value, FsError>> {
         Pending::ready(if method == "fs.stat" {

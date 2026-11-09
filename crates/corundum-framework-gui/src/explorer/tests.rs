@@ -571,3 +571,15 @@ fn a_right_click_picks_the_entry_and_a_menu_item_says_so() {
         }]
     );
 }
+
+#[test]
+fn is_focused_follows_the_focus() {
+    let mut explorer = explorer(music());
+    let mut screen = Screen::new(600.0);
+    screen.settle(&mut explorer);
+    assert!(!explorer.is_focused(&screen.ctx));
+    let focus = explorer.focus_id();
+    screen.ctx.memory_mut(|m| m.request_focus(focus));
+    screen.settle(&mut explorer);
+    assert!(explorer.is_focused(&screen.ctx));
+}

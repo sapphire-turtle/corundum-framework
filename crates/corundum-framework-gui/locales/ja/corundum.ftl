@@ -292,3 +292,14 @@ corundum-datetime-am = 午前
 corundum-datetime-pm = 午後
 corundum-datetime-none = —
 corundum-datetime-period-hint = 2026-11-03, 2026-W45, 2026-11, 2026 …
+
+# fs-client で操作するワークスペース（`fs_client::ExplorerDriver`）：項目のメニュー、適用する変更の
+# ラベル、変更後のお知らせ、バージョンの違うサーバー。
+corundum-fs-trash = ゴミ箱に移動
+corundum-fs-label-rename = 「{ $name }」の名前を変更
+corundum-fs-label-move = { $count } 項目を移動
+corundum-fs-label-trash = { $count } 項目をゴミ箱に移動
+corundum-fs-done = { $label }しました
+corundum-fs-skipped = （{ $count } 件をスキップ）
+corundum-fs-close = 閉じる
+corundum-fs-api-mismatch = このアプリのファイル API（バージョン { $client }）がサーバーのもの（バージョン { $server }）と一致しません

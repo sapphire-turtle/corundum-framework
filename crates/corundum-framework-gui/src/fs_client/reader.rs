@@ -39,17 +39,12 @@ impl FsReader {
 
 /// `error` as an I/O error: `NotFound` for a missing path, else `Other`, with its message.
 fn io_error(error: FsError) -> io::Error {
-    let message = match &error {
-        FsError::Rpc { message, .. } => message.clone(),
-        FsError::Transport(message) | FsError::Decode(message) => message.clone(),
-        other => format!("{other:?}"),
-    };
     let kind = if error.code() == codes::NOT_FOUND {
         io::ErrorKind::NotFound
     } else {
         io::ErrorKind::Other
     };
-    io::Error::new(kind, message)
+    io::Error::new(kind, error.to_string())
 }
 
 impl Read for FsReader {

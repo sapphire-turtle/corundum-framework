@@ -304,3 +304,22 @@ corundum-datetime-am = AM
 corundum-datetime-pm = PM
 corundum-datetime-none = —
 corundum-datetime-period-hint = 2026-11-03, 2026-W45, 2026-11, 2026 …
+
+# A workspace driven over fs-client (`fs_client::ExplorerDriver`): the entry's menu item, the
+# labels of the changes it applies, the notice after one, and a server of another version.
+corundum-fs-trash = Move to the trash
+corundum-fs-label-rename = Rename “{ $name }”
+corundum-fs-label-move =
+    { $count ->
+        [one] Move { $count } item
+       *[other] Move { $count } items
+    }
+corundum-fs-label-trash =
+    { $count ->
+        [one] Move { $count } item to the trash
+       *[other] Move { $count } items to the trash
+    }
+corundum-fs-done = { $label }
+corundum-fs-skipped = {" "}({ $count } skipped)
+corundum-fs-close = Close
+corundum-fs-api-mismatch = This app's file API (version { $client }) does not match the server's (version { $server })
