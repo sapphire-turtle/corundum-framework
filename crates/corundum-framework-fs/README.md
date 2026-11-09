@@ -12,8 +12,10 @@ rename leaves a short window). Each apply is one batch of a
 `corundum-framework-journal` journal, so one apply is one undo. `journal.undo` and
 `journal.redo` reverse batches per origin, and `journal.undo_batch` a chosen batch; they
 skip an operation whose place has changed since rather than overwrite anything.
-`journal.history` and `journal.status` show what was done. A dry run checks a batch without changing or recording
-anything.
+`journal.history` and `journal.status` show what was done, and `journal.history` says per
+batch whether the caller may undo it now (`undoable`). `fs.version` answers the API's
+version, for a client to compare with its own. A dry run checks a batch without changing or
+recording anything.
 
 A server mounts `FsService::dispatch` on its own JSON-RPC router, over HTTP or a local
 socket, and passes it the caller's actor. `FsService::new` keeps the journal in memory;

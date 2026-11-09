@@ -17,6 +17,16 @@
 /// crate is versioned with the rest of corundum, so its version cannot stand for the API's.
 pub const API_VERSION: u32 = 1;
 
+/// The version of this API, whatever the params: `Value` → [`VersionInfo`].
+pub const FS_VERSION: &str = "fs.version";
+
+/// Result of [`FS_VERSION`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct VersionInfo {
+    /// The server's [`API_VERSION`].
+    pub api: u32,
+}
+
 mod change;
 mod journal;
 mod read;
@@ -48,6 +58,11 @@ pub mod codes {
     pub const FORBIDDEN: i32 = -32108;
     /// The workspace is busy with another change; try again.
     pub const BUSY: i32 = -32109;
+    /// The client and the server speak different versions of the API.
+    ///
+    /// Not answered by the server: a client raises it on comparing `fs.version`'s answer
+    /// with its own [`API_VERSION`](crate::API_VERSION).
+    pub const API_MISMATCH: i32 = -32110;
     /// JSON-RPC's: no such method.
     pub const METHOD_NOT_FOUND: i32 = -32601;
     /// JSON-RPC's: the parameters do not parse.
@@ -195,7 +210,10 @@ mod tests {
             }],
         });
         round_trip(&History {
-            batches: vec![summary],
+            batches: vec![HistoryBatch {
+                summary,
+                undoable: true,
+            }],
             next_cursor: None,
         });
     }

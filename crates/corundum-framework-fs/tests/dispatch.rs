@@ -82,3 +82,12 @@ async fn errors_keep_their_codes() {
         .unwrap_err();
     assert_eq!(e.code(), -32101);
 }
+
+#[tokio::test]
+async fn fs_version_answers_the_api_version() {
+    let (_dir, s) = service();
+    for params in [Value::Null, json!({})] {
+        let v = s.dispatch("fs.version", params, &actor()).await.unwrap();
+        assert_eq!(v, json!({"api": 1}));
+    }
+}

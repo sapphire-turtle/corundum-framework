@@ -203,7 +203,11 @@ async fn history_pages_newest_first() {
             .unwrap(),
     )
     .unwrap();
-    let got: Vec<_> = h.batches.iter().map(|b| b.begin.batch_id.clone()).collect();
+    let got: Vec<_> = h
+        .batches
+        .iter()
+        .map(|b| b.summary.begin.batch_id.clone())
+        .collect();
     assert_eq!(got, [ids[2].clone(), ids[1].clone()]);
     assert_eq!(h.next_cursor.as_deref(), Some(ids[1].as_str()));
     let h: History = serde_json::from_value(
@@ -216,7 +220,11 @@ async fn history_pages_newest_first() {
         .unwrap(),
     )
     .unwrap();
-    let got: Vec<_> = h.batches.iter().map(|b| b.begin.batch_id.clone()).collect();
+    let got: Vec<_> = h
+        .batches
+        .iter()
+        .map(|b| b.summary.begin.batch_id.clone())
+        .collect();
     assert_eq!(got, [ids[0].clone()]);
     assert_eq!(h.next_cursor, None);
 }
@@ -310,4 +318,42 @@ async fn undo_passes_over_a_batch_that_did_nothing() {
     let u = undo(&s, "gui").await;
     assert!(matches!(u.ops[0].outcome, Outcome::Done(_)), "{u:?}");
     assert_eq!(names(dir.path(), ""), ["a", "b", "c"]);
+}
+
+#[tokio::test]
+async fn history_says_which_batches_the_caller_may_undo() {
+    let (_dir, s) = service(&[]);
+    let b = apply(&s, "gui", json!([{"kind": "fs.mkdir", "path": "d"}])).await;
+    let id = b.summary.begin.batch_id;
+    let history = |who: &'static str| {
+        let s = &s;
+        async move {
+            s.dispatch("journal.history", json!({}), &Actor::person(who))
+                .await
+                .unwrap()
+        }
+    };
+    let p = history("p").await;
+    assert_eq!(p["batches"][0]["undoable"], json!(true));
+    // The summary's fields sit beside `undoable`, not under it.
+    assert_eq!(p["batches"][0]["begin"]["batch_id"], json!(id));
+    assert_eq!(p["batches"][0]["done"], json!(1));
+    assert_eq!(history("q").await["batches"][0]["undoable"], json!(false));
+    let h: History = serde_json::from_value(history("p").await).unwrap();
+    assert!(h.batches[0].undoable);
+
+    records(
+        &s,
+        "journal.undo_batch",
+        json!({"batch_id": id, "origin": "history"}),
+    )
+    .await;
+    let after = history("p").await;
+    let undone = after["batches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["begin"]["batch_id"] == json!(id))
+        .unwrap();
+    assert_eq!(undone["undoable"], json!(false));
 }

@@ -3,10 +3,10 @@
 use std::sync::Arc;
 
 use corundum_framework_fs_api::{
-    ApplyParams, Check, DEFAULT_HISTORY_LIMIT, DryRun, FS_APPLY, FS_LIST, FS_READ, FS_STAT, FsOp,
-    History, HistoryParams, JOURNAL_HISTORY, JOURNAL_REDO, JOURNAL_STATUS, JOURNAL_UNDO,
-    JOURNAL_UNDO_BATCH, MAX_APPLY_OPS, MAX_HISTORY_LIMIT, OriginParams, StatusParams,
-    UndoBatchParams,
+    API_VERSION, ApplyParams, Check, DEFAULT_HISTORY_LIMIT, DryRun, FS_APPLY, FS_LIST, FS_READ,
+    FS_STAT, FS_VERSION, FsOp, History, HistoryBatch, HistoryParams, JOURNAL_HISTORY, JOURNAL_REDO,
+    JOURNAL_STATUS, JOURNAL_UNDO, JOURNAL_UNDO_BATCH, MAX_APPLY_OPS, MAX_HISTORY_LIMIT,
+    OriginParams, StatusParams, UndoBatchParams,
 };
 use corundum_framework_journal::{
     Actor, BatchId, Journal, JournalConfig, JournalStore, MemoryStore, Origin, Planned, Registry,
@@ -14,7 +14,7 @@ use corundum_framework_journal::{
 use grain_id::GrainId;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::ops::{DenyOp, DenyPlan, MkdirOp, MkdirPlan, MoveOp, MovePlan, TrashOp, TrashPlan};
 use crate::wire::{self, internal};
@@ -112,6 +112,7 @@ impl<A: WorkspaceApp> FsService<A> {
         actor: &Actor,
     ) -> Result<Value, FsError> {
         match method {
+            FS_VERSION => Ok(json!({"api": API_VERSION})),
             FS_LIST => self.run(params, list).await,
             FS_STAT => self.run(params, stat).await,
             FS_READ => self.run(params, read).await,
@@ -136,7 +137,7 @@ impl<A: WorkspaceApp> FsService<A> {
                 self.compensate(move |j| j.undo_batch(target, &origin, &actor))
                     .await
             }
-            JOURNAL_HISTORY => self.history(parse(params)?).await,
+            JOURNAL_HISTORY => self.history(parse(params)?, actor.clone()).await,
             JOURNAL_STATUS => {
                 let p: StatusParams = parse(params)?;
                 let id = batch_id("batch_id", &p.batch_id)?;
@@ -241,7 +242,7 @@ impl<A: WorkspaceApp> FsService<A> {
         .await
     }
 
-    async fn history(&self, p: HistoryParams) -> Result<Value, FsError> {
+    async fn history(&self, p: HistoryParams, actor: Actor) -> Result<Value, FsError> {
         let limit = p
             .limit
             .unwrap_or(DEFAULT_HISTORY_LIMIT)
@@ -256,7 +257,15 @@ impl<A: WorkspaceApp> FsService<A> {
             let next_cursor = (page.len() == limit)
                 .then(|| page.last().map(|b| b.begin.batch_id.to_string()))
                 .flatten();
-            let batches = page.iter().map(wire::summary).collect::<Result<_, _>>()?;
+            let batches = page
+                .iter()
+                .map(|b| {
+                    Ok(HistoryBatch {
+                        summary: wire::summary(b)?,
+                        undoable: j.check_undo(b.begin.batch_id, &actor).is_ok(),
+                    })
+                })
+                .collect::<Result<_, FsError>>()?;
             Ok(History {
                 batches,
                 next_cursor,

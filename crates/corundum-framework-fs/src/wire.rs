@@ -177,6 +177,22 @@ mod tests {
         };
         assert_eq!(records(&b).unwrap(), expected);
         assert_eq!(summary(&b.summary).unwrap(), summary_mirror);
+        // A history batch is the summary's JSON with `undoable` beside its fields.
+        let mut flat = serde_json::to_value(&b.summary).unwrap();
+        flat["undoable"] = json!(true);
+        assert_eq!(
+            serde_json::from_value::<api::HistoryBatch>(flat.clone()).unwrap(),
+            api::HistoryBatch {
+                summary: summary_mirror.clone(),
+                undoable: true,
+            }
+        );
+        flat.as_object_mut().unwrap().remove("undoable");
+        assert!(
+            !serde_json::from_value::<api::HistoryBatch>(flat)
+                .unwrap()
+                .undoable
+        );
         assert_eq!(
             skip(&journal::Skip::Exists).unwrap(),
             api::Skip {
