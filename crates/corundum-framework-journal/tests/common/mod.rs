@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, mpsc};
 
 use corundum_framework_journal::{
-    Actor, Applied, Journal, JournalConfig, MemoryStore, OpKind, Operation, Origin, Planned,
-    Registry, Skip,
+    Actor, Applied, Journal, JournalConfig, JournalStore, MemoryStore, OpKind, Operation, Origin,
+    Planned, Registry, Skip,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -229,6 +229,33 @@ impl Operation<Shared> for Wait {
     }
 }
 
+/// Returns one `Recurse` child of itself, forever.
+pub struct Recurse;
+
+impl OpKind for Recurse {
+    const KIND: &'static str = "test.recurse";
+    type Plan = ();
+    type Done = ();
+}
+
+impl Operation<Shared> for Recurse {
+    fn apply(&self, _ctx: &Shared, _plan: &()) -> Result<Applied<()>, Skip> {
+        Ok(Applied {
+            done: (),
+            children: vec![recurse()],
+        })
+    }
+
+    fn inverse(&self, _done: &()) -> Option<()> {
+        None
+    }
+}
+
+/// A `Recurse`.
+pub fn recurse() -> Planned {
+    Planned::new::<Recurse>(&())
+}
+
 /// The GUI's origin.
 pub fn gui() -> Origin {
     Origin::new("gui")
@@ -245,14 +272,23 @@ pub fn registry() -> Registry<Shared> {
     r.register(Set)
         .register(WithChild)
         .register(Boom)
-        .register(Wait);
+        .register(Wait)
+        .register(Recurse);
     r
 }
 
 /// A journal over a `MemoryStore`, with this config, and its context.
 pub fn journal_with(config: JournalConfig) -> (Journal<Shared>, Shared) {
+    journal_with_store(MemoryStore::default(), config)
+}
+
+/// A journal over `store`, with this config, and its context.
+pub fn journal_with_store(
+    store: impl JournalStore + 'static,
+    config: JournalConfig,
+) -> (Journal<Shared>, Shared) {
     let ctx = Shared::default();
-    let j = Journal::new(registry(), ctx.clone(), MemoryStore::default(), config);
+    let j = Journal::new(registry(), ctx.clone(), store, config);
     (j, ctx)
 }
 

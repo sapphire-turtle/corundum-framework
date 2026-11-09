@@ -58,3 +58,55 @@ impl WorkspaceApp for ManagesJpg {
         }
     }
 }
+
+use corundum_framework_fs::{FsCtx, register_builtin};
+use corundum_framework_journal::{
+    Actor, Journal, JournalConfig, MemoryStore, Origin, Outcome, Planned, Registry,
+};
+use std::sync::Arc;
+
+/// A journal running the built-in kinds over `ws`, for `app`, in memory.
+pub fn journal<A: WorkspaceApp>(ws: Workspace, app: A) -> Journal<FsCtx<A>> {
+    let mut registry = Registry::new();
+    register_builtin(&mut registry);
+    Journal::new(
+        registry,
+        FsCtx::new(Arc::new(ws), Arc::new(app)),
+        MemoryStore::default(),
+        JournalConfig::default(),
+    )
+}
+
+pub fn origin() -> Origin {
+    Origin::new("test")
+}
+
+pub fn actor() -> Actor {
+    Actor::person("u1")
+}
+
+/// Runs `op` as a batch of its own, and gives its outcome.
+pub fn run<A: WorkspaceApp>(j: &Journal<FsCtx<A>>, op: Planned) -> Outcome {
+    let id = j.submit(vec![op], &origin(), &actor(), None).unwrap();
+    let b = j.wait(id).unwrap();
+    assert_eq!(b.ops.len(), 1);
+    b.ops[0].outcome.clone()
+}
+
+/// Undoes the newest batch, and gives the outcome of its one operation.
+pub fn undo<A: WorkspaceApp>(j: &Journal<FsCtx<A>>) -> Outcome {
+    let id = j.undo(&origin(), &actor()).unwrap();
+    let b = j.wait(id).unwrap();
+    assert_eq!(b.ops.len(), 1);
+    b.ops[0].outcome.clone()
+}
+
+/// The names in the folder `rel` under `root`, sorted, straight from the file system.
+pub fn names(root: &Path, rel: &str) -> Vec<String> {
+    let mut v: Vec<String> = fs::read_dir(root.join(rel))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    v.sort();
+    v
+}

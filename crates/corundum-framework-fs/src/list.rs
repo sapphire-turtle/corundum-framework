@@ -1,7 +1,8 @@
 //! `fs.list`: a folder, a page at a time.
 
-use std::fs::{self, Metadata};
 use std::time::UNIX_EPOCH;
+
+use cap_std::fs::Metadata;
 
 use corundum_framework_fs_api::{
     DEFAULT_LIST_LIMIT, Entry, EntryKind, ListParams, Listing, MAX_LIST_LIMIT,
@@ -20,10 +21,8 @@ pub fn list(
     params: &ListParams,
 ) -> Result<Listing, FsError> {
     let dir = WsPath::parse(&params.path)?;
-    let (full, meta) = ws.resolve(app, &dir)?;
-    if !meta.is_dir() {
-        return Err(FsError::InvalidPath(format!("{dir:?} is not a folder")));
-    }
+    let resolved = ws.resolve(app, &dir)?;
+    let handle = resolved.open_dir()?;
     let io = |source| FsError::Io {
         path: dir.to_string(),
         source,
@@ -31,7 +30,7 @@ pub fn list(
     // Names first, without a stat each: only the page's entries are stat'ed, so a large
     // folder costs a sort of its names, not a stat of every entry.
     let mut names = Vec::new();
-    for item in fs::read_dir(&full).map_err(io)? {
+    for item in handle.entries().map_err(io)? {
         let item = item.map_err(io)?;
         let Ok(name) = item.file_name().into_string() else {
             tracing::debug!(folder = %dir, name = ?item.file_name(), "skipped a name that is not UTF-8");
@@ -57,7 +56,7 @@ pub fn list(
     let mut entries: Vec<Entry> = Vec::with_capacity(limit.min(rest.len()));
     for name in rest.by_ref() {
         // Gone since `read_dir` saw it: leave it out, and take the next.
-        let Ok(meta) = full.join(&name).symlink_metadata() else {
+        let Ok(meta) = handle.symlink_metadata(&name) else {
             continue;
         };
         entries.push(entry_for(name, &meta));
@@ -93,7 +92,7 @@ pub(crate) fn entry_for(name: String, meta: &Metadata) -> Entry {
     let modified = meta
         .modified()
         .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .and_then(|t| t.into_std().duration_since(UNIX_EPOCH).ok())
         .and_then(|d| i64::try_from(d.as_millis()).ok());
     Entry {
         name,

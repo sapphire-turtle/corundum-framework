@@ -10,7 +10,7 @@ use std::time::Duration;
 use common::*;
 use corundum_framework_journal::{
     BatchId, BatchRecords, BatchSummary, Journal, JournalConfig, JournalError, JournalStore,
-    MemoryStore, OpKind, Outcome, Planned, Record, Registry, Skip, StoreError,
+    MAX_CHILD_DEPTH, MemoryStore, OpKind, Outcome, Planned, Record, Registry, Skip, StoreError,
 };
 use serde_json::json;
 
@@ -399,4 +399,17 @@ fn a_dead_worker_is_stopped() {
         Err(JournalError::Stopped)
     );
     assert_eq!(j.undo(&gui(), &u1()), Err(JournalError::Stopped));
+}
+
+#[test]
+fn children_past_the_depth_limit_are_skipped() {
+    let (j, _) = journal();
+    let id = submit(&j, vec![recurse()]);
+    let b = j.wait(id).unwrap();
+    assert_eq!(b.summary.done as usize, MAX_CHILD_DEPTH + 1);
+    assert_eq!(b.summary.skipped, 1);
+    assert!(matches!(
+        &b.ops.last().unwrap().outcome,
+        Outcome::Skipped(Skip::InvalidPlan(m)) if m == "children nest deeper than 16"
+    ));
 }
