@@ -55,7 +55,6 @@ pub mod media;
 #[cfg(feature = "media-session")]
 pub mod media_session;
 pub mod package;
-#[cfg(any(feature = "media-picker", feature = "qr-scan"))]
 pub mod pending;
 #[cfg(feature = "qr-scan")]
 pub mod qr;

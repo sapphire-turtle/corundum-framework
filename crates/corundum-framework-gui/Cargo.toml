@@ -112,6 +112,21 @@ text-preview = ["code-editor"]
 # `preview::MarkdownPreview`: a Markdown file decoded like a TextPreview and shown formatted and
 # read-only by alumina-markdown; a link clicked is reported in `PreviewResponse::link`.
 markdown-preview = ["markdown-editor", "text-preview"]
+# `fs_client`: a workspace driven over the `fs.*` and `journal.*` methods of
+# corundum-framework-fs-api, through a transport the app brings (`fs_client::FsTransport`):
+# the typed calls of `fs_client::FsClient`, each answering in a `Pending` polled each frame.
+# The API's types only, never the engine.
+fs-client = [
+    "dep:corundum-framework-fs-api",
+    "dep:base64",
+    "dep:grain-id",
+    "dep:serde",
+    "dep:serde_json",
+]
+# `fs_client::LocalTransport`: the methods answered in this process by
+# corundum-framework-fs's `FsService`, on the app's tokio runtime, for an app that keeps its
+# workspace on the device.
+fs-local = ["fs-client", "dep:corundum-framework-fs", "dep:tokio"]
 
 [dependencies]
 # The system's languages, and the clipboard and insets on Android: the JNI lives there.
@@ -156,6 +171,16 @@ fluent-syntax = "0.12"
 fontdb = "0.24"
 # The QR codes `qr` draws (`qr-code`); the encoder alone, without its image renderers.
 qrcode = { version = "0.14", optional = true, default-features = false }
+# The fs.* and journal.* methods' names, parameters and results (`fs-client`).
+corundum-framework-fs-api = { version = "0.11.0", path = "../corundum-framework-fs-api", optional = true }
+# The workspace's engine, answering in this process (`fs-local`).
+corundum-framework-fs = { version = "0.11.0", path = "../corundum-framework-fs", optional = true }
+# fs.read's bytes, in standard base64 (`fs-client`).
+base64 = { version = "0.23", optional = true }
+# The id in each `FsClient`'s origin (`fs-client`).
+grain-id = { version = "0.15", optional = true }
+# The params and results of the fs.* calls, as JSON (`fs-client`).
+serde_json = { workspace = true, optional = true }
 # The update panel's HTTP client, made by corundum-framework-update and named by its
 # worker's install (`self-update`).
 reqwest = { workspace = true, optional = true }
@@ -177,6 +202,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 corundum-framework-package = { path = "../corundum-framework-package", features = ["test-support"] }
 serde_json.workspace = true
 tempfile = "3"
+# The runtime fs_client's tests serve a workspace on (`fs-local`).
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # The system's dialogs to pick files and folders (platform::FilePicker, pick_folder): the
 # desktops have them; a phone's are still to come.

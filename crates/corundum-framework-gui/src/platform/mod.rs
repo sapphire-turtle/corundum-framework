@@ -165,9 +165,9 @@ impl FilePicker {
 /// What a [`MediaPicker`] offers: images, videos, or both.
 #[cfg(feature = "media-picker")]
 pub use corundum_framework_platform::media::MediaKind;
-/// A request the system answers later, polled each frame: a `MediaPicker`'s, or
-/// `scan_qr`'s.
-#[cfg(any(feature = "media-picker", feature = "qr-scan"))]
+/// A request the system answers later, polled each frame: a `MediaPicker`'s, `scan_qr`'s,
+/// or an `FsClient`'s.
+#[cfg(any(feature = "media-picker", feature = "qr-scan", feature = "fs-client"))]
 pub use corundum_framework_platform::pending::Pending;
 
 /// Can the person pick photos and videos with [`MediaPicker`] here? On the desktops, and on
