@@ -23,9 +23,20 @@ pub struct Pending<T> {
 enum Source<T> {
     /// A channel's end, or an answer given already.
     Shared(Arc<Shared<T>>),
-    /// Another request's answer, turned into this one's as it is taken.
-    Mapped(Box<dyn Mapped<T> + Send>),
+    /// Another request's answer, turned into this one's as it is taken. The mutex makes
+    /// the request `Sync` without asking more of the function; `&mut self` and `self`
+    /// reach the inside without locking.
+    Mapped(Mutex<Box<dyn Mapped<T> + Send>>),
 }
+
+// A request crosses threads, and is shared between them, for any answer that can be sent.
+const _: () = {
+    fn send_and_sync<P: Send + Sync>() {}
+    #[allow(dead_code)]
+    fn pending_is_send_and_sync<T: Send>() {
+        send_and_sync::<Pending<T>>();
+    }
+};
 
 /// The platform's end, kept until the system answers.
 pub struct Sender<T: Default> {
@@ -109,7 +120,10 @@ impl<T> Pending<T> {
     pub fn poll(&mut self) -> Option<T> {
         match &mut self.source {
             Source::Shared(shared) => shared.lock().take(),
-            Source::Mapped(mapped) => mapped.poll(),
+            Source::Mapped(mapped) => mapped
+                .get_mut()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .poll(),
         }
     }
 
@@ -133,7 +147,10 @@ impl<T> Pending<T> {
                         .unwrap_or_else(|poisoned| poisoned.into_inner());
                 }
             }
-            Source::Mapped(mapped) => mapped.wait(),
+            Source::Mapped(mapped) => mapped
+                .into_inner()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .wait(),
         }
     }
 
@@ -144,10 +161,10 @@ impl<T> Pending<T> {
         T: Send + 'static,
     {
         Pending {
-            source: Source::Mapped(Box::new(Map {
+            source: Source::Mapped(Mutex::new(Box::new(Map {
                 from: self,
                 f: Some(f),
-            })),
+            }))),
         }
     }
 }
