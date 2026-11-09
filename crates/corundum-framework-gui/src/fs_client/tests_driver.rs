@@ -223,7 +223,7 @@ fn frame(
     drawn
 }
 
-fn collect(shape: &egui::Shape, drawn: &mut Vec<(String, egui::Rect)>) {
+pub(super) fn collect(shape: &egui::Shape, drawn: &mut Vec<(String, egui::Rect)>) {
     match shape {
         egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, drawn)),
         egui::Shape::Text(text) => {
@@ -632,7 +632,7 @@ fn a_picked_file_is_previewed_over_fs_read() {
     assert!(!rig.shows("hello"));
 }
 
-fn pending_done<T>(mut p: Pending<T>) -> T {
+pub(super) fn pending_done<T>(mut p: Pending<T>) -> T {
     let start = Instant::now();
     loop {
         if let Some(answer) = p.poll() {

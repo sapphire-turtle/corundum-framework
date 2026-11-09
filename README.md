@@ -134,6 +134,8 @@ desktops and on phones.
 | `keys` | `keys::KeysPage`, the API keys page, over a store on this machine (`LocalKeys`) or the app's own `KeysBackend`; each key is added with one of the app's profiles (brings corundum-framework-keys) | no |
 | `media-session` | `media_session`: the platform crate's media session, and `media_session::start`, which makes one for an eframe window and repaints it when the OS sends an event | no |
 | `single-instance` | `WindowOptions::single_instance`: the desktop app runs once; `window::run` of a second start brings the first's window to the front (unminimized and focused) and returns without opening one. `WindowOptions::instance` takes a lock the app took itself, before applying an update at start | no |
+| `fs-client` | `fs_client`: a workspace driven over corundum-framework-fs-api's `fs.*` and `journal.*` methods, through the app's `FsTransport`: the typed calls of `FsClient`, each a `Pending` polled each frame; `ExplorerDriver`, a `FileExplorer` that lists folders, applies renames, moves and Move to the trash as one batch each, undoes with Ctrl+Z and previews files over `fs.read`; and `HistoryPage`, the journal's batches with who made them, their operations and Undo, asking first for another window's or an agent's (brings corundum-framework-fs-api, never the engine) | no |
+| `fs-local` | `fs_client::LocalTransport`: those methods answered in this process by corundum-framework-fs's `FsService` on the app's tokio runtime, for a workspace kept on the device (brings `fs-client`, corundum-framework-fs and tokio) | no |
 
 The components depend on egui alone. An app that renders egui without eframe turns
 default features off; an Android app turns on `android` (eframe's default window does not

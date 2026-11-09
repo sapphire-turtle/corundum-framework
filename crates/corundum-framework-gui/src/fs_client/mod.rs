@@ -54,17 +54,22 @@
 
 mod client;
 mod driver;
+mod history;
 #[cfg(feature = "fs-local")]
 mod local;
+mod notice;
 mod reader;
 #[cfg(all(test, feature = "fs-local"))]
 mod tests;
 #[cfg(all(test, feature = "fs-local"))]
 mod tests_driver;
+#[cfg(all(test, feature = "fs-local"))]
+mod tests_history;
 mod transport;
 
 pub use client::FsClient;
 pub use driver::{DriverEvent, ExplorerDriver};
+pub use history::HistoryPage;
 #[cfg(feature = "fs-local")]
 pub use local::LocalTransport;
 pub use reader::FsReader;

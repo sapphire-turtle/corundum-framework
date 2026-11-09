@@ -331,3 +331,25 @@ corundum-fs-reason-not-undoable = 元に戻せない操作です
 corundum-fs-reason-with-message = { $reason }：{ $message }
 corundum-fs-close = 閉じる
 corundum-fs-api-mismatch = このアプリのファイル API（バージョン { $client }）がサーバーのもの（バージョン { $server }）と一致しません
+
+# ワークスペースの履歴（`fs_client::HistoryPage`）：1 行に 1 バッチ。誰がいつ行ったか、件数、開いたときの
+# 操作の一覧、元に戻すボタン、ほかの変更を元に戻す前の確認。
+corundum-fs-refresh = 更新
+corundum-fs-history-empty = まだ変更はありません
+corundum-fs-show-ops = 操作を表示
+corundum-fs-hide-ops = 操作を隠す
+corundum-fs-agent = エージェント
+corundum-fs-this-session = このセッション
+corundum-fs-counts =
+    { $skipped ->
+        [0] { $done } 件完了
+       *[other] { $done } 件完了、{ $skipped } 件をスキップ
+    }
+corundum-fs-undone = 元に戻し済み
+corundum-fs-op-done = 完了
+corundum-fs-undo = 元に戻す
+corundum-fs-cancel = キャンセル
+corundum-fs-load-more = さらに読み込む
+corundum-fs-confirm-agent = この変更は { $time } にエージェントが行いました。元に戻しますか？
+corundum-fs-confirm-other = この変更は { $time } に別のウィンドウで行われました。元に戻しますか？
+corundum-fs-already-undone = この変更はすでに元に戻されています

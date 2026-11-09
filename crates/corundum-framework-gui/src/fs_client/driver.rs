@@ -4,12 +4,11 @@ use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, SystemTime};
 
 use corundum_framework_fs_api::{
-    BatchRecords, Entry as FsEntry, EntryKind as FsKind, Expect, FsOp, Listing, Managed, OpRecord,
-    Outcome, Skip, codes,
+    BatchRecords, Entry as FsEntry, EntryKind as FsKind, Expect, FsOp, Listing, Managed, codes,
 };
 use corundum_framework_platform::pending::Pending;
-use serde_json::Value;
 
+use super::notice::{Notice, notice_ui};
 use super::{FsClient, FsError};
 use crate::explorer::{self, ExplorerEvent, FileExplorer, MenuItem};
 use crate::preview::{FileInfo, FilePreview, PreviewResponse, State};
@@ -70,39 +69,6 @@ enum Stepping {
         records: Box<BatchRecords>,
         answer: Pending<Result<BatchRecords, FsError>>,
     },
-}
-
-/// The one-line notice above the explorer, and the operations it can list.
-struct Notice {
-    text: String,
-    /// The batch's operations that were skipped, listed when the notice is open.
-    skipped: Vec<OpRecord>,
-    open: bool,
-}
-
-impl Notice {
-    /// A notice of `text` alone.
-    fn plain(text: String) -> Notice {
-        Notice {
-            text,
-            skipped: Vec::new(),
-            open: false,
-        }
-    }
-
-    /// A notice of `text` about `batch`, listing its skipped operations.
-    fn of(text: String, batch: BatchRecords) -> Notice {
-        let skipped = batch
-            .ops
-            .into_iter()
-            .filter(|op| matches!(op.outcome, Outcome::Skipped(_)))
-            .collect();
-        Notice {
-            text,
-            skipped,
-            open: false,
-        }
-    }
 }
 
 /// A [`FileExplorer`] over a workspace: it lists each folder the person goes to with
@@ -204,7 +170,7 @@ impl ExplorerDriver {
             self.version = Some(self.client.check_version());
         }
         let came = self.poll(&ctx);
-        self.notice_ui(ui);
+        notice_ui(ui, &mut self.notice, self.client.origin());
         let said: Vec<DriverEvent> = self
             .explorer
             .ui(ui)
@@ -244,59 +210,6 @@ impl ExplorerDriver {
             self.retries += 1;
         }
         response
-    }
-
-    /// The one-line notice, with a button to close it; when something was skipped, a click
-    /// opens it to list what and why.
-    fn notice_ui(&mut self, ui: &mut egui::Ui) {
-        let Some(notice) = &mut self.notice else {
-            return;
-        };
-        let mut close = false;
-        let mut toggle = false;
-        let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
-        ui.allocate_ui_with_layout(
-            size,
-            egui::Layout::right_to_left(egui::Align::Center),
-            |ui| {
-                close = ui
-                    .add(icons::button(icons::x(), 14.0))
-                    .on_hover_text(tr!(ui, "corundum-fs-close"))
-                    .clicked();
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    if notice.skipped.is_empty() {
-                        ui.add(egui::Label::new(notice.text.as_str()).truncate());
-                        return;
-                    }
-                    let (icon, hint) = if notice.open {
-                        (icons::chevron_down(), "corundum-fs-hide-skipped")
-                    } else {
-                        (icons::chevron_right(), "corundum-fs-show-skipped")
-                    };
-                    toggle |= ui
-                        .add(icons::button(icon, 14.0))
-                        .on_hover_text(tr!(ui, hint))
-                        .clicked();
-                    let label = egui::Label::new(notice.text.as_str())
-                        .truncate()
-                        .sense(egui::Sense::click());
-                    toggle |= ui
-                        .add(label)
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .clicked();
-                });
-            },
-        );
-        if toggle {
-            notice.open = !notice.open;
-        }
-        if notice.open {
-            skipped_ui(ui, self.client.origin(), &notice.skipped);
-        }
-        ui.separator();
-        if close {
-            self.notice = None;
-        }
     }
 
     /// Take in the answers that came; `true` if any did.
@@ -631,60 +544,6 @@ impl ExplorerDriver {
     }
 }
 
-/// The skipped operations, one row each: its kind, the path it was for, and why; in a grid
-/// told apart by the client's `origin`.
-fn skipped_ui(ui: &mut egui::Ui, origin: &str, skipped: &[OpRecord]) {
-    egui::Grid::new(("corundum_fs_skipped", origin))
-        .num_columns(3)
-        .striped(true)
-        .show(ui, |ui| {
-            for op in skipped {
-                ui.label(op.kind.as_str());
-                ui.label(plan_path(ui.ctx(), &op.plan));
-                if let Outcome::Skipped(skip) = &op.outcome {
-                    ui.label(reason_text(ui.ctx(), skip));
-                }
-                ui.end_row();
-            }
-        });
-}
-
-/// The path an operation's plan is for: its `path`, or where it moves `from` and `to`.
-fn plan_path(ctx: &egui::Context, plan: &Value) -> String {
-    let field = |name: &str| plan.get(name).and_then(Value::as_str);
-    match (field("path"), field("from"), field("to")) {
-        (Some(path), _, _) => path.to_owned(),
-        (None, Some(from), Some(to)) => tr!(ctx, "corundum-fs-plan-move", from = from, to = to),
-        (None, from, to) => from.or(to).unwrap_or_default().to_owned(),
-    }
-}
-
-/// Why an operation was skipped, for a person: the spec's reasons in words, another as the
-/// server named it; with the server's message, if any.
-fn reason_text(ctx: &egui::Context, skip: &Skip) -> String {
-    let id = match skip.reason.as_str() {
-        "precondition_failed" => Some("corundum-fs-reason-precondition-failed"),
-        "exists" => Some("corundum-fs-reason-exists"),
-        "not_found" => Some("corundum-fs-reason-not-found"),
-        "invalid_path" => Some("corundum-fs-reason-invalid-path"),
-        "denied" => Some("corundum-fs-reason-denied"),
-        "io" => Some("corundum-fs-reason-io"),
-        "unknown_kind" => Some("corundum-fs-reason-unknown-kind"),
-        "not_undoable" => Some("corundum-fs-reason-not-undoable"),
-        _ => None,
-    };
-    let reason = id.map_or_else(|| skip.reason.clone(), |id| tr!(ctx, id));
-    match &skip.message {
-        Some(message) => tr!(
-            ctx,
-            "corundum-fs-reason-with-message",
-            reason = reason,
-            message = message.as_str()
-        ),
-        None => reason,
-    }
-}
-
 /// The workspace path of `name` in the folder at `location` (of the folder itself, without
 /// a name): its names joined by `/`, `""` for the root.
 fn path(location: &[String], name: Option<&str>) -> String {
@@ -694,7 +553,7 @@ fn path(location: &[String], name: Option<&str>) -> String {
 }
 
 /// `ms` milliseconds from the Unix epoch, if a `SystemTime` can hold it.
-fn time_of(ms: i64) -> Option<SystemTime> {
+pub(super) fn time_of(ms: i64) -> Option<SystemTime> {
     let offset = Duration::from_millis(ms.unsigned_abs());
     if ms >= 0 {
         SystemTime::UNIX_EPOCH.checked_add(offset)
