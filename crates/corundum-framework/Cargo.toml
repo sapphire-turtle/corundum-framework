@@ -125,6 +125,12 @@ datetime = ["gui", "corundum-framework-gui/datetime"]
 # `gui::preview::MarkdownPreview`: a Markdown file the app hands in, formatted and read-only in
 # the detail pane (brings `markdown-editor` and `text-preview`).
 markdown-preview = ["gui", "markdown-editor", "text-preview", "corundum-framework-gui/markdown-preview"]
+# `gui::fs_client`: the fs.* and journal.* calls typed, through the app's own transport, with
+# `ExplorerDriver` and `HistoryPage` over them (brings `fs-api`, never the engine).
+fs-client = ["gui", "fs-api", "corundum-framework-gui/fs-client"]
+# `gui::fs_client::LocalTransport`: those methods answered in this process by the engine, on
+# the app's tokio runtime (brings `fs`).
+fs-local = ["fs-client", "fs", "corundum-framework-gui/fs-local"]
 
 # ── platform passthrough ─────────────────────────────────────────────────────
 # `platform::media_session`: the OS's media keys and its "now playing", for a music player,
