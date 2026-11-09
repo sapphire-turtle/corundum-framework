@@ -127,7 +127,7 @@ impl FileExplorer {
     }
 
     /// The id the explorer takes the keyboard's focus with.
-    pub(super) fn focus_id(&self) -> egui::Id {
+    pub(crate) fn focus_id(&self) -> egui::Id {
         self.id.with("focus")
     }
 

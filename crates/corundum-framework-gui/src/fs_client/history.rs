@@ -56,6 +56,8 @@ pub struct HistoryPage {
     /// Whether the first frame asked the server's version.
     started: bool,
     version: Option<Pending<Result<(), FsError>>>,
+    /// Whether the server's version was confirmed: until then nothing else is sent.
+    verified: bool,
     /// The page in flight; a newer one replaces it.
     loading: Option<Load>,
     batches: Vec<HistoryBatch>,
@@ -81,6 +83,7 @@ impl HistoryPage {
             time: Box::new(explorer::format_time),
             started: false,
             version: None,
+            verified: false,
             loading: None,
             batches: Vec::new(),
             cursor: None,
@@ -100,15 +103,24 @@ impl HistoryPage {
         self
     }
 
-    /// Load the history's first page again, in place of any page in flight.
+    /// Load the history's first page again, in place of any page in flight. Until the
+    /// server's version is confirmed, ask it (again, after a failed check) instead: the page
+    /// is loaded once it is.
     pub fn refresh(&mut self) {
-        // Before the first frame, that frame loads it, after the version.
-        if self.started && self.version.is_none() {
-            self.loading = Some(Load {
-                append: false,
-                answer: self.client.history(None),
-            });
+        // Before the first frame, that frame asks the version.
+        if !self.started {
+            return;
         }
+        if !self.verified {
+            if self.version.is_none() {
+                self.version = Some(self.client.check_version());
+            }
+            return;
+        }
+        self.loading = Some(Load {
+            append: false,
+            answer: self.client.history(None),
+        });
     }
 
     /// Draw the page filling `ui`: a bar with Refresh, the notice, the rows, and the
@@ -342,7 +354,10 @@ impl HistoryPage {
             self.version = None;
             came = true;
             match answer {
-                Ok(()) => self.refresh(),
+                Ok(()) => {
+                    self.verified = true;
+                    self.refresh();
+                }
                 Err(e) => self.failed = Some(e.text(ctx)),
             }
         }

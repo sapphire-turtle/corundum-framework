@@ -1,10 +1,11 @@
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use corundum_framework_fs::journal::Actor;
 use corundum_framework_fs::{FsService, Workspace};
 use corundum_framework_fs_api::{FsOp, HistoryBatch};
 
-use super::tests_driver::{collect, pending_done};
+use super::tests_driver::{Wire, collect, pending_done};
 use super::{FsClient, HistoryPage, LocalTransport};
 
 /// A workspace on a tempdir, served on a runtime of its own, and a history page over it as
@@ -22,13 +23,18 @@ struct Rig {
 
 impl Rig {
     fn new() -> Rig {
+        Rig::with(FsClient::new)
+    }
+
+    /// A rig whose page's client has the transport `wrap` makes.
+    fn with(wrap: impl FnOnce(LocalTransport) -> FsClient) -> Rig {
         let dir = tempfile::tempdir().unwrap();
         let service = FsService::new(Workspace::open(dir.path()).unwrap(), ());
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .build()
             .unwrap();
-        let client = client_over(&service, &runtime, Actor::person("p"));
+        let client = wrap(transport_over(&service, &runtime, Actor::person("p")));
         let page = HistoryPage::new(client.clone()).time_format(|_| "14:02".to_owned());
         Rig {
             dir,
@@ -153,12 +159,33 @@ fn client_over(
     runtime: &tokio::runtime::Runtime,
     actor: Actor,
 ) -> FsClient {
-    FsClient::new(LocalTransport::new(
-        service.clone(),
-        actor,
-        runtime.handle().clone(),
-        || {},
-    ))
+    FsClient::new(transport_over(service, runtime, actor))
+}
+
+fn transport_over(
+    service: &FsService<()>,
+    runtime: &tokio::runtime::Runtime,
+    actor: Actor,
+) -> LocalTransport {
+    LocalTransport::new(service.clone(), actor, runtime.handle().clone(), || {})
+}
+
+/// A rig over a [`Wire`], and the methods it was called with.
+fn wired(
+    late: &'static [&'static str],
+    fail_first_version: bool,
+) -> (Rig, Arc<Mutex<Vec<String>>>) {
+    let mut calls = None;
+    let rig = Rig::with(|t| {
+        let wire = Wire::new(t, late, fail_first_version);
+        calls = Some(Arc::clone(&wire.calls));
+        FsClient::new(wire)
+    });
+    (rig, calls.expect("wired"))
+}
+
+fn calls_of(calls: &Mutex<Vec<String>>) -> Vec<String> {
+    calls.lock().unwrap().clone()
 }
 
 const CONFIRM_AGENT: &str = "This change was made by the agent at 14:02. Undo it?";
@@ -295,4 +322,33 @@ fn load_more_fetches_the_next_page() {
     assert_eq!(rig.count("1 done"), 60);
     assert!(rig.shows("Make d00"));
     assert!(!rig.shows("Load more"));
+}
+
+#[test]
+fn a_version_check_that_failed_is_asked_again_before_loading() {
+    let (mut rig, calls) = wired(&[], true);
+    rig.mkdir(&rig.client, "a", "Tidy up");
+    calls.lock().unwrap().clear();
+    rig.settle();
+    assert!(rig.shows("the line dropped"), "{:?}", rig.drawn);
+    assert_eq!(calls_of(&calls), ["fs.version"]);
+    // Refresh asks the version again, and loads once it is confirmed.
+    rig.page.refresh();
+    rig.settle();
+    assert_eq!(
+        calls_of(&calls),
+        ["fs.version", "fs.version", "journal.history"]
+    );
+    assert!(rig.shows("Tidy up"), "{:?}", rig.drawn);
+}
+
+#[test]
+fn nothing_is_loaded_before_the_version_answers() {
+    let (mut rig, calls) = wired(&["fs.version"], false);
+    rig.frame();
+    rig.page.refresh();
+    rig.frame();
+    assert_eq!(calls_of(&calls), ["fs.version"]);
+    rig.settle();
+    assert_eq!(calls_of(&calls), ["fs.version", "journal.history"]);
 }

@@ -94,6 +94,8 @@ pub struct ExplorerDriver {
     /// Whether the first frame asked the server's version.
     started: bool,
     version: Option<Pending<Result<(), FsError>>>,
+    /// Whether the server's version was confirmed: until then nothing else is sent.
+    verified: bool,
     /// The listing in flight; a newer one replaces it, so a late answer is dropped.
     listing: Option<ListRequest>,
     /// The next page's cursor of the folder shown.
@@ -128,6 +130,7 @@ impl ExplorerDriver {
             decorate: None,
             started: false,
             version: None,
+            verified: false,
             listing: None,
             cursor: None,
             listed: HashMap::new(),
@@ -219,7 +222,10 @@ impl ExplorerDriver {
             self.version = None;
             came = true;
             match answer {
-                Ok(()) => self.list(self.explorer.location().to_vec()),
+                Ok(()) => {
+                    self.verified = true;
+                    self.list(self.explorer.location().to_vec());
+                }
                 Err(e) => {
                     let location = self.explorer.location().to_vec();
                     self.explorer.set_failed(&location, e.text(ctx));
@@ -276,9 +282,11 @@ impl ExplorerDriver {
         self.steps.extend(steps);
     }
 
-    /// Send the next undo or redo queued, unless one is in flight.
+    /// Send the next undo or redo queued, unless one, or a change, is in flight (an undo
+    /// sent before a change's answer could undo the batch before it), or the server's
+    /// version is not confirmed yet. The presses wait in the queue.
     fn send_step(&mut self) {
-        if self.stepping.is_some() {
+        if !self.verified || self.stepping.is_some() || !self.changes.is_empty() {
             return;
         }
         let Some(step) = self.steps.pop_front() else {
@@ -361,6 +369,18 @@ impl ExplorerDriver {
         ctx: &egui::Context,
         event: ExplorerEvent,
     ) -> Option<DriverEvent> {
+        if !self.verified {
+            // Nothing is sent before the server's version is confirmed. Refresh (Retry after
+            // a failed check) asks it again; the folder gone to is listed once it is.
+            match event {
+                ExplorerEvent::Opened(name) => return Some(self.opened(&name)),
+                ExplorerEvent::Refresh if self.started && self.version.is_none() => {
+                    self.version = Some(self.client.check_version());
+                }
+                _ => {}
+            }
+            return None;
+        }
         match event {
             ExplorerEvent::Navigated(location) => self.list(location),
             ExplorerEvent::Refresh => self.list(self.explorer.location().to_vec()),

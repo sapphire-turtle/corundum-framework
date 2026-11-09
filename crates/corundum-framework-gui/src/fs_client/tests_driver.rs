@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use corundum_framework_fs::journal::Actor;
@@ -290,6 +292,69 @@ impl FsTransport for SlowA {
     }
 }
 
+/// A transport that writes down each method called, in order, and passes it on: the
+/// methods in `late` sent 300 ms after they are called (on a thread), and the first
+/// `fs.version` failed as a transport error if `fail_first_version`.
+pub(super) struct Wire {
+    inner: Arc<LocalTransport>,
+    pub(super) calls: Arc<Mutex<Vec<String>>>,
+    late: &'static [&'static str],
+    fail_first_version: AtomicBool,
+}
+
+impl Wire {
+    pub(super) fn new(
+        inner: LocalTransport,
+        late: &'static [&'static str],
+        fail_first_version: bool,
+    ) -> Wire {
+        Wire {
+            inner: Arc::new(inner),
+            calls: Arc::new(Mutex::new(Vec::new())),
+            late,
+            fail_first_version: AtomicBool::new(fail_first_version),
+        }
+    }
+}
+
+impl FsTransport for Wire {
+    fn call(&self, method: &str, params: Value) -> Pending<Result<Value, FsError>> {
+        self.calls.lock().unwrap().push(method.to_owned());
+        if method == "fs.version" && self.fail_first_version.swap(false, Ordering::SeqCst) {
+            return Pending::ready(Err(FsError::Transport("the line dropped".into())));
+        }
+        if !self.late.contains(&method) {
+            return self.inner.call(method, params);
+        }
+        let (late, sender) = pending::channel(|| {});
+        let (inner, method) = (Arc::clone(&self.inner), method.to_owned());
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            sender.send(Some(inner.call(&method, params).wait()));
+        });
+        late.map(|answer| answer.unwrap_or_else(|| Err(FsError::default())))
+    }
+}
+
+/// A rig whose transport is a [`Wire`], and the methods it was called with.
+fn wired(
+    names: &[&str],
+    late: &'static [&'static str],
+    fail_first_version: bool,
+) -> (Rig, Arc<Mutex<Vec<String>>>) {
+    let mut calls = None;
+    let rig = Rig::with(names, (), |t| {
+        let wire = Wire::new(t, late, fail_first_version);
+        calls = Some(Arc::clone(&wire.calls));
+        FsClient::new(wire)
+    });
+    (rig, calls.expect("wired"))
+}
+
+fn calls_of(calls: &Mutex<Vec<String>>) -> Vec<String> {
+    calls.lock().unwrap().clone()
+}
+
 #[test]
 fn a_late_listing_for_a_left_folder_is_dropped() {
     let mut rig = Rig::with(&["a/x.txt", "b/y.txt"], (), |t| FsClient::new(SlowA(t)));
@@ -548,6 +613,63 @@ fn two_quick_undos_undo_two_batches() {
         rig.driver.notice(),
         Some("Undid 'Rename \u{201c}a.txt\u{201d}'")
     );
+}
+
+#[test]
+fn ctrl_z_waits_for_the_change_in_flight() {
+    let (mut rig, _calls) = wired(&["a.txt", "b.txt"], &["fs.apply"], false);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    rig.click_on("c.txt");
+    // Ctrl+Z pressed while the rename of b.txt is still to be answered.
+    rig.feed(ExplorerEvent::Rename {
+        name: "b.txt".into(),
+        to: "d.txt".into(),
+    });
+    rig.press(egui::Key::Z, egui::Modifiers::COMMAND, 1);
+    rig.settle();
+    // That rename is the one undone; the one before stays.
+    assert!(rig.dir.path().join("b.txt").exists());
+    assert!(!rig.dir.path().join("d.txt").exists());
+    assert!(rig.dir.path().join("c.txt").exists());
+    assert_eq!(
+        rig.driver.notice(),
+        Some("Undid 'Rename \u{201c}b.txt\u{201d}'")
+    );
+}
+
+#[test]
+fn a_version_check_that_failed_is_asked_again_before_listing() {
+    let (mut rig, calls) = wired(&["a.txt"], &[], true);
+    rig.settle();
+    let failed = rig.driver.explorer().failed().expect("failed");
+    assert_eq!(failed, "the line dropped");
+    assert_eq!(calls_of(&calls), ["fs.version"]);
+    // Retry (or Refresh) asks the version again, and lists once it is confirmed.
+    rig.feed(ExplorerEvent::Refresh);
+    rig.settle();
+    assert_eq!(calls_of(&calls), ["fs.version", "fs.version", "fs.list"]);
+    assert_eq!(rig.names(), ["a.txt"]);
+}
+
+#[test]
+fn nothing_is_sent_before_the_version_answers() {
+    let (mut rig, calls) = wired(&["a.txt", "b/c.txt"], &["fs.version"], false);
+    rig.frame();
+    rig.feed(ExplorerEvent::Refresh);
+    rig.navigate(&["b"]);
+    // The explorer given the keyboard for the press (it has no entry to click yet).
+    let focus = rig.driver.explorer().focus_id();
+    rig.ctx.memory_mut(|m| m.request_focus(focus));
+    rig.press(egui::Key::Z, egui::Modifiers::COMMAND, 1);
+    rig.frame();
+    assert_eq!(calls_of(&calls), ["fs.version"]);
+    // Once it answers: the folder gone to is listed, and the press is sent.
+    rig.settle();
+    let calls = calls_of(&calls);
+    assert_eq!(calls[..3], ["fs.version", "fs.list", "journal.undo"]);
+    assert_eq!(rig.names(), ["c.txt"]);
+    assert_eq!(rig.driver.notice(), Some("Nothing to undo"));
 }
 
 #[test]
