@@ -484,3 +484,25 @@ fn an_origin_whose_batches_aged_out_no_longer_holds_them() {
     j.wait(comp).unwrap();
     assert_eq!(j.undo(&gui(), &u1()), Err(JournalError::NothingToUndo));
 }
+
+#[test]
+fn check_undo_agrees_with_undo_batch() {
+    let (j, ctx) = journal();
+    let a = submit_done(&j, vec![set("a", 1)]);
+    assert_eq!(j.check_undo(a, &u1()), Ok(()));
+    assert_eq!(
+        j.check_undo(a, &Actor::person("u2")),
+        Err(JournalError::Forbidden(a))
+    );
+    let missing = BatchId::random();
+    assert_eq!(
+        j.check_undo(missing, &u1()),
+        Err(JournalError::NotFound(missing))
+    );
+    // Checking changed nothing: the batch is still undoable, and the history is as it was.
+    assert_eq!(j.history(None, 10).unwrap().len(), 1);
+    assert_eq!(ctx.value("a"), Some(1));
+    let u = j.undo_batch(a, &gui(), &u1()).unwrap();
+    j.wait(u).unwrap();
+    assert_eq!(j.check_undo(a, &u1()), Err(JournalError::AlreadyUndone(a)));
+}

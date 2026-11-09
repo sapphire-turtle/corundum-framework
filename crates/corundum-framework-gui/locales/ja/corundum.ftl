@@ -292,3 +292,64 @@ corundum-datetime-am = 午前
 corundum-datetime-pm = 午後
 corundum-datetime-none = —
 corundum-datetime-period-hint = 2026-11-03, 2026-W45, 2026-11, 2026 …
+
+# fs-client で操作するワークスペース（`fs_client::ExplorerDriver`）：項目のメニュー、適用する変更の
+# ラベル、変更後や Ctrl+Z 後のお知らせ、スキップした操作の一覧とその理由、バージョンの違うサーバー。
+corundum-fs-trash = ゴミ箱に移動
+corundum-fs-label-rename = 「{ $name }」の名前を変更
+corundum-fs-label-move = { $count } 項目を移動
+corundum-fs-label-trash = { $count } 項目をゴミ箱に移動
+corundum-fs-done =
+    { $skipped ->
+        [0] { $label }しました
+       *[other] { $label }しました（{ $skipped } 件をスキップ）
+    }
+corundum-fs-undid =
+    { $skipped ->
+        [0] 元に戻しました：{ $label }
+       *[other] 元に戻しました：{ $label }（{ $skipped } 件をスキップ）
+    }
+corundum-fs-redid =
+    { $skipped ->
+        [0] やり直しました：{ $label }
+       *[other] やり直しました：{ $label }（{ $skipped } 件をスキップ）
+    }
+corundum-fs-unnamed = 名前のない変更
+corundum-fs-nothing-to-undo = 元に戻す操作はありません
+corundum-fs-nothing-to-redo = やり直す操作はありません
+corundum-fs-show-skipped = スキップした操作を表示
+corundum-fs-hide-skipped = スキップした操作を隠す
+corundum-fs-plan-move = { $from } → { $to }
+corundum-fs-reason-precondition-failed = 一覧を表示した後に変更されています
+corundum-fs-reason-exists = 同じ場所にすでに項目があります
+corundum-fs-reason-not-found = 見つかりません
+corundum-fs-reason-invalid-path = 使えないパスです
+corundum-fs-reason-denied = 許可されていません
+corundum-fs-reason-io = ディスクの操作に失敗しました
+corundum-fs-reason-unknown-kind = サーバーが対応していない操作です
+corundum-fs-reason-not-undoable = 元に戻せない操作です
+corundum-fs-reason-with-message = { $reason }：{ $message }
+corundum-fs-close = 閉じる
+corundum-fs-api-mismatch = このアプリのファイル API（バージョン { $client }）がサーバーのもの（バージョン { $server }）と一致しません
+
+# ワークスペースの履歴（`fs_client::HistoryPage`）：1 行に 1 バッチ。誰がいつ行ったか、件数、開いたときの
+# 操作の一覧、元に戻すボタン、ほかの変更を元に戻す前の確認。
+corundum-fs-refresh = 更新
+corundum-fs-history-empty = まだ変更はありません
+corundum-fs-show-ops = 操作を表示
+corundum-fs-hide-ops = 操作を隠す
+corundum-fs-agent = エージェント
+corundum-fs-this-session = このセッション
+corundum-fs-counts =
+    { $skipped ->
+        [0] { $done } 件完了
+       *[other] { $done } 件完了、{ $skipped } 件をスキップ
+    }
+corundum-fs-undone = 元に戻し済み
+corundum-fs-op-done = 完了
+corundum-fs-undo = 元に戻す
+corundum-fs-cancel = キャンセル
+corundum-fs-load-more = さらに読み込む
+corundum-fs-confirm-agent = この変更は { $time } にエージェントが行いました。元に戻しますか？
+corundum-fs-confirm-other = この変更は { $time } に別のウィンドウで行われました。元に戻しますか？
+corundum-fs-already-undone = この変更はすでに元に戻されています

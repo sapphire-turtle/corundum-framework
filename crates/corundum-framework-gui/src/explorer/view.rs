@@ -78,7 +78,7 @@ impl FileExplorer {
         let compact = ui.available_width() < COMPACT_WIDTH;
         // The background under the entries holds the focus (`entries_ui`).
         let focus = self.focus_id();
-        let focused = ui.ctx().memory(|m| m.has_focus(focus));
+        let focused = self.is_focused(ui.ctx());
         if focused {
             ui.ctx().memory_mut(|m| {
                 m.set_focus_lock_filter(
@@ -127,7 +127,7 @@ impl FileExplorer {
     }
 
     /// The id the explorer takes the keyboard's focus with.
-    fn focus_id(&self) -> egui::Id {
+    pub(crate) fn focus_id(&self) -> egui::Id {
         self.id.with("focus")
     }
 

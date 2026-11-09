@@ -27,6 +27,10 @@
 //! opens a desktop window on wgpu the same way for every app, set up by [`gpu`]; an app that
 //! renders egui without eframe turns default features off.
 //!
+//! With the `fs-client` feature, [`fs_client`] drives a workspace over the `fs.*` and
+//! `journal.*` methods, through a transport the app brings, each call a `Pending` polled
+//! each frame; `fs-local` adds a transport to a workspace served in this process.
+//!
 //! With the `media-session` feature, `media_session` puts a music player under the OS's
 //! media keys and in its "now playing", and `media_session::start` makes one for an eframe
 //! window. With the `single-instance` feature, `WindowOptions::single_instance` keeps a
@@ -49,6 +53,8 @@ pub mod explorer;
 #[cfg(feature = "serde")]
 pub mod first_run;
 pub mod fonts;
+#[cfg(feature = "fs-client")]
+pub mod fs_client;
 #[cfg(feature = "eframe")]
 pub mod gpu;
 pub mod i18n;

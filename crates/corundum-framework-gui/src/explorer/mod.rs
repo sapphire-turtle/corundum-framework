@@ -391,6 +391,27 @@ impl FileExplorer {
             .collect()
     }
 
+    /// Whether the explorer has the keyboard's focus, so that its keys (and an app's own,
+    /// such as Ctrl+Z) are for it.
+    pub fn is_focused(&self, ctx: &egui::Context) -> bool {
+        ctx.memory(|m| m.has_focus(self.focus_id()))
+    }
+
+    /// Whether an entry's name is being edited in place, so that the keys are the field's.
+    #[cfg(feature = "fs-client")]
+    pub(crate) fn is_renaming(&self) -> bool {
+        self.renaming.is_some()
+    }
+
+    /// Why the folder shown could not be listed, if it could not.
+    #[cfg(all(test, feature = "fs-local"))]
+    pub(crate) fn failed(&self) -> Option<&str> {
+        match &self.status {
+            Status::Failed(error) => Some(error),
+            _ => None,
+        }
+    }
+
     /// Whether the folder shown is still being listed.
     pub fn is_loading(&self) -> bool {
         self.status == Status::Loading

@@ -363,6 +363,25 @@ impl<C: Send + Sync + 'static> Journal<C> {
         self.compensate(&mut state, &begin, origin, actor)
     }
 
+    /// Whether `actor` could undo the batch `id` now, by the checks of
+    /// [`Journal::undo_batch`], which it runs under the same lock; nothing changes.
+    ///
+    /// `Ok` if it would be accepted, otherwise the error `undo_batch` would give
+    /// ([`JournalError::NotFound`], [`JournalError::AlreadyUndone`], and the rest).
+    pub fn check_undo(&self, id: BatchId, actor: &Actor) -> Result<(), JournalError> {
+        let shared = self.shared();
+        let state = shared.lock();
+        undo::check(
+            state.store.as_ref(),
+            &state.reserved,
+            &shared.config,
+            id,
+            actor,
+            JournalError::NotFound(id),
+        )
+        .map(|_| ())
+    }
+
     fn compensate_top(
         &self,
         side: Side,

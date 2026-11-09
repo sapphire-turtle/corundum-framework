@@ -60,6 +60,8 @@ sapphire の各アプリと asteria が共有するアプリケーションフ�
 | `datetime` | `datetime`：alumina-datetime の日付・期間・時刻・日時ピッカーの再エクスポートと、`datetime::config`（ボタンは corundum の Lucide アイコン、文言は表示言語、週は月曜始まり）（alumina-datetime も有効になる） | 無効 |
 | `media-session` | `media_session`：platform クレートのメディアセッションと、eframe のウィンドウ用に作り、OS からイベントが来たら再描画させる `media_session::start` | 無効 |
 | `single-instance` | `WindowOptions::single_instance`：デスクトップのアプリを1つだけ動かします。2つ目に起動したときの `window::run` は、1つ目のウィンドウを前面に出し（最小化を戻してフォーカスする）、ウィンドウを開かずに戻ります。`WindowOptions::instance` は、起動時に更新を適用する前などに、アプリが自分で取ったロックを受け取ります | 無効 |
+| `fs-client` | `fs_client`：corundum-framework-fs-api の `fs.*` と `journal.*` のメソッドで、アプリの `FsTransport` を通してワークスペースを操作する。`FsClient` は型付きの呼び出しで、どれも毎フレーム調べる `Pending` で答える。`ExplorerDriver` は、フォルダーを一覧し、名前の変更・移動・ゴミ箱への移動をそれぞれ 1 バッチとして適用し、Ctrl+Z で元に戻し、`fs.read` でファイルをプレビューする `FileExplorer`。`HistoryPage` はジャーナルのバッチの一覧で、誰が行ったか、その操作、元に戻すボタンを表示し、別のウィンドウやエージェントの変更は確認してから元に戻す（corundum-framework-fs-api も有効になる。エンジンには依存しない） | 無効 |
+| `fs-local` | `fs_client::LocalTransport`：これらのメソッドに、このプロセスで corundum-framework-fs の `FsService` がアプリの tokio ランタイム上で答える。デバイスにワークスペースを置くアプリ向け（`fs-client`、corundum-framework-fs、tokio も有効になる） | 無効 |
 
 コンポーネントは egui だけに依存します。eframe を使わずに egui を描くアプリはデフォルト機能を無効にします。Android アプリは `android` を有効にします（eframe のデフォルトのウィンドウは Android ではビルドできません）。
 

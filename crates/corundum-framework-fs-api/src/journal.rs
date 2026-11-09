@@ -170,11 +170,23 @@ pub struct DryRun {
     pub checks: Vec<Check>,
 }
 
+/// A batch of the history: the batch in brief, and whether the caller may undo it now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HistoryBatch {
+    /// The batch in brief; its fields sit beside `undoable` in the JSON.
+    #[serde(flatten)]
+    pub summary: BatchSummary,
+    /// Whether [`JOURNAL_UNDO_BATCH`] would be accepted from the caller now: not undone
+    /// already, not expired, and the caller allowed. `false` when a server does not say.
+    #[serde(default)]
+    pub undoable: bool,
+}
+
 /// Result of [`JOURNAL_HISTORY`]: batches, newest first.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct History {
     /// This page's batches.
-    pub batches: Vec<BatchSummary>,
+    pub batches: Vec<HistoryBatch>,
     /// The cursor of the next page; `None` when this one is the last.
     pub next_cursor: Option<String>,
 }

@@ -53,13 +53,15 @@ pub trait WorkspaceApp: Send + Sync + 'static {
     /// submitted (and for a dry run too), off the async threads. The default is
     /// [`Route::Fs`].
     ///
-    /// An operation that names a path hidden as the request spells it is never routed: it
-    /// goes to its built-in kind, which skips it with `invalid_path`. The built-in kind
-    /// still judges hiding again on disk, for a path hidden only as the disk spells it.
+    /// The paths in `op` are as the disk spells them where the entry exists, and as the
+    /// request spelled them for a name that does not exist yet (a move's last `to` name is
+    /// always as requested, so that a case-only rename keeps its new spelling). So on a file
+    /// system that ignores case, an app can look up the entries it knows by the disk's
+    /// spelling. On Linux they stay as requested (see the crate's known limitations).
     ///
-    /// The paths in `op` are as the request spelled them, not as the disk does. On a file
-    /// system that ignores case, an app that looks entries up by path must match them
-    /// without regard to case.
+    /// An operation that names a hidden path is never routed: it goes to its built-in kind,
+    /// which skips it with `invalid_path`. The built-in kind still judges hiding again on
+    /// disk when it runs.
     fn route(&self, op: &FsOp) -> Route {
         let _ = op;
         Route::Fs
@@ -73,9 +75,9 @@ pub trait WorkspaceApp: Send + Sync + 'static {
     /// their own inverses instead: a follow-up's kind must be undoable, its inverse redoing
     /// its work.
     ///
-    /// The paths in `op` and `done` are as the request spelled them, not as the disk does.
-    /// On a file system that ignores case, an app that looks entries up by path must match
-    /// them without regard to case.
+    /// The paths in `op` and `done` are spelled as [`WorkspaceApp::route`] saw them: as the
+    /// disk spells them where the entry existed, and as requested for a new name. On Linux
+    /// they stay as requested.
     fn follow(&self, op: &FsOp, done: &FsDone) -> Vec<Planned> {
         let _ = (op, done);
         Vec::new()

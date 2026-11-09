@@ -304,3 +304,73 @@ corundum-datetime-am = AM
 corundum-datetime-pm = PM
 corundum-datetime-none = —
 corundum-datetime-period-hint = 2026-11-03, 2026-W45, 2026-11, 2026 …
+
+# A workspace driven over fs-client (`fs_client::ExplorerDriver`): the entry's menu item, the
+# labels of the changes it applies, the notice after one or after Ctrl+Z, the skipped
+# operations it lists and why each was skipped, and a server of another version.
+corundum-fs-trash = Move to the trash
+corundum-fs-label-rename = Rename “{ $name }”
+corundum-fs-label-move =
+    { $count ->
+        [one] Move { $count } item
+       *[other] Move { $count } items
+    }
+corundum-fs-label-trash =
+    { $count ->
+        [one] Move { $count } item to the trash
+       *[other] Move { $count } items to the trash
+    }
+corundum-fs-done =
+    { $skipped ->
+        [0] { $label }
+       *[other] { $label } ({ $skipped } skipped)
+    }
+corundum-fs-undid =
+    { $skipped ->
+        [0] Undid '{ $label }'
+       *[other] Undid '{ $label }' ({ $skipped } skipped)
+    }
+corundum-fs-redid =
+    { $skipped ->
+        [0] Redid '{ $label }'
+       *[other] Redid '{ $label }' ({ $skipped } skipped)
+    }
+corundum-fs-unnamed = Unnamed change
+corundum-fs-nothing-to-undo = Nothing to undo
+corundum-fs-nothing-to-redo = Nothing to redo
+corundum-fs-show-skipped = Show what was skipped
+corundum-fs-hide-skipped = Hide what was skipped
+corundum-fs-plan-move = { $from } → { $to }
+corundum-fs-reason-precondition-failed = It changed since it was listed
+corundum-fs-reason-exists = Something is already there
+corundum-fs-reason-not-found = It is no longer there
+corundum-fs-reason-invalid-path = The path is not allowed
+corundum-fs-reason-denied = Not allowed
+corundum-fs-reason-io = The disk could not do it
+corundum-fs-reason-unknown-kind = The server does not know this operation
+corundum-fs-reason-not-undoable = It cannot be undone
+corundum-fs-reason-with-message = { $reason }: { $message }
+corundum-fs-close = Close
+corundum-fs-api-mismatch = This app's file API (version { $client }) does not match the server's (version { $server })
+
+# The workspace's history (`fs_client::HistoryPage`): a batch a row, with who made it and when,
+# its counts, its operations opened, Undo, and the question before undoing another's.
+corundum-fs-refresh = Refresh
+corundum-fs-history-empty = No changes yet
+corundum-fs-show-ops = Show its operations
+corundum-fs-hide-ops = Hide its operations
+corundum-fs-agent = Agent
+corundum-fs-this-session = This session
+corundum-fs-counts =
+    { $skipped ->
+        [0] { $done } done
+       *[other] { $done } done, { $skipped } skipped
+    }
+corundum-fs-undone = Undone
+corundum-fs-op-done = Done
+corundum-fs-undo = Undo
+corundum-fs-cancel = Cancel
+corundum-fs-load-more = Load more
+corundum-fs-confirm-agent = This change was made by the agent at { $time }. Undo it?
+corundum-fs-confirm-other = This change was made in another window at { $time }. Undo it?
+corundum-fs-already-undone = This change was already undone
