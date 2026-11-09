@@ -1,15 +1,18 @@
 //! A [`FileExplorer`] showing a workspace, its changes applied over an [`FsClient`].
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::{Duration, SystemTime};
 
 use corundum_framework_fs_api::{
-    BatchRecords, Entry as FsEntry, EntryKind as FsKind, Expect, FsOp, Listing, Managed,
+    BatchRecords, Entry as FsEntry, EntryKind as FsKind, Expect, FsOp, Listing, Managed, OpRecord,
+    Outcome, Skip, codes,
 };
 use corundum_framework_platform::pending::Pending;
+use serde_json::Value;
 
 use super::{FsClient, FsError};
 use crate::explorer::{self, ExplorerEvent, FileExplorer, MenuItem};
+use crate::preview::{FileInfo, FilePreview, PreviewResponse, State};
 use crate::{icons, tr};
 
 /// The id of the entry's menu item that moves it to the trash.
@@ -47,15 +50,77 @@ struct Change {
     answer: Pending<Result<BatchRecords, FsError>>,
 }
 
+/// A press of Ctrl+Z or Ctrl+Shift+Z.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Undo,
+    Redo,
+}
+
+/// Where the undo or redo in flight is.
+enum Stepping {
+    /// Sent; its answer is awaited.
+    Sent {
+        step: Step,
+        answer: Pending<Result<BatchRecords, FsError>>,
+    },
+    /// Done, as `records` say; the batch it undid or redid is asked for its label.
+    Naming {
+        step: Step,
+        records: Box<BatchRecords>,
+        answer: Pending<Result<BatchRecords, FsError>>,
+    },
+}
+
+/// The one-line notice above the explorer, and the operations it can list.
+struct Notice {
+    text: String,
+    /// The batch's operations that were skipped, listed when the notice is open.
+    skipped: Vec<OpRecord>,
+    open: bool,
+}
+
+impl Notice {
+    /// A notice of `text` alone.
+    fn plain(text: String) -> Notice {
+        Notice {
+            text,
+            skipped: Vec::new(),
+            open: false,
+        }
+    }
+
+    /// A notice of `text` about `batch`, listing its skipped operations.
+    fn of(text: String, batch: BatchRecords) -> Notice {
+        let skipped = batch
+            .ops
+            .into_iter()
+            .filter(|op| matches!(op.outcome, Outcome::Skipped(_)))
+            .collect();
+        Notice {
+            text,
+            skipped,
+            open: false,
+        }
+    }
+}
+
 /// A [`FileExplorer`] over a workspace: it lists each folder the person goes to with
 /// `fs.list`, a page at a time, and applies what they do — a rename, a drag into a folder,
 /// Move to the trash from the menu — as one `fs.apply` batch each, each operation expecting
 /// the entry as listed, so that a file changed since is skipped rather than overwritten.
 /// After a change it lists the folder again; a skip or an error shows in a notice above the
-/// explorer.
+/// explorer, which opens to list what was skipped and why.
+///
+/// With the explorer focused (and no name being edited), Ctrl+Z (⌘Z) undoes this driver's
+/// latest change with `journal.undo`, and Ctrl+Shift+Z (⌘⇧Z) redoes it with `journal.redo`:
+/// each press one step, sent one at a time in order. The notice says what was undone or
+/// redone.
 ///
 /// Hold one for the view and draw it with [`ui`](Self::ui) each frame; act on the
-/// [`DriverEvent`]s it returns. Every call is polled, so the UI thread never waits.
+/// [`DriverEvent`]s it returns. [`detail_ui`](Self::detail_ui) draws a preview of the file
+/// picked, read over `fs.read`, for the detail pane. Every call is polled, so the UI thread
+/// never waits.
 pub struct ExplorerDriver {
     client: FsClient,
     explorer: FileExplorer,
@@ -70,8 +135,15 @@ pub struct ExplorerDriver {
     /// The folder's entries as listed, by name, for each operation's `expect`.
     listed: HashMap<String, FsEntry>,
     changes: Vec<Change>,
-    /// The one-line notice above the explorer.
-    notice: Option<String>,
+    /// The presses of Ctrl+Z and Ctrl+Shift+Z not yet sent, in order.
+    steps: VecDeque<Step>,
+    /// The undo or redo in flight.
+    stepping: Option<Stepping>,
+    notice: Option<Notice>,
+    preview: FilePreview,
+    /// How many times the preview's Retry was pressed: a part of the content's key, so that
+    /// each retry reads the file afresh.
+    retries: u32,
 }
 
 impl ExplorerDriver {
@@ -94,8 +166,18 @@ impl ExplorerDriver {
             cursor: None,
             listed: HashMap::new(),
             changes: Vec::new(),
+            steps: VecDeque::new(),
+            stepping: None,
             notice: None,
+            preview: FilePreview::new(),
+            retries: 0,
         }
+    }
+
+    /// Preview the file picked with `preview`: one made with the app's player, say.
+    pub fn with_preview(mut self, preview: FilePreview) -> ExplorerDriver {
+        self.preview = preview;
+        self
     }
 
     /// Let the app dress each entry it manages — a photo's icon or thumbnail, say — as it
@@ -121,7 +203,7 @@ impl ExplorerDriver {
             self.started = true;
             self.version = Some(self.client.check_version());
         }
-        self.poll(&ctx);
+        let came = self.poll(&ctx);
         self.notice_ui(ui);
         let said: Vec<DriverEvent> = self
             .explorer
@@ -129,19 +211,49 @@ impl ExplorerDriver {
             .into_iter()
             .filter_map(|event| self.handle(&ctx, event))
             .collect();
-        // An answer ready at once (after a version mismatch, say) is drawn next frame.
-        if self.poll(&ctx) {
+        self.take_steps(&ctx);
+        // What came, or was asked, in this frame may have left something to do: a call to
+        // send, or an answer ready at once (after a version mismatch, say) to draw.
+        if self.poll(&ctx) || came {
             ctx.request_repaint();
         }
         said
     }
 
-    /// The one-line notice, with a button to close it.
+    /// Draw a preview of the file picked, for the detail pane: its content read over
+    /// `fs.read`, its details as listed. Nothing is drawn unless one file is picked, and one
+    /// the app manages is the app's to show. Retry reads the file again; act on the rest of
+    /// the response as the app would.
+    pub fn detail_ui(&mut self, ui: &mut egui::Ui) -> PreviewResponse {
+        let picked = self.explorer.selected();
+        let [entry] = picked.as_slice() else {
+            return PreviewResponse::default();
+        };
+        let listed = self.listed.get(&entry.name);
+        let Some(listed) = listed.filter(|l| !entry.is_folder() && l.managed.is_none()) else {
+            return PreviewResponse::default();
+        };
+        let file = FileInfo::from(*entry);
+        let path = path(self.explorer.location(), Some(&entry.name));
+        let mut content = self.client.content(&path, listed);
+        if self.retries > 0 {
+            content.key = format!("{}\0{}", content.key, self.retries);
+        }
+        let response = self.preview.ui(ui, &file, State::Ready(&content), false);
+        if response.retry {
+            self.retries += 1;
+        }
+        response
+    }
+
+    /// The one-line notice, with a button to close it; when something was skipped, a click
+    /// opens it to list what and why.
     fn notice_ui(&mut self, ui: &mut egui::Ui) {
-        let Some(text) = &self.notice else {
+        let Some(notice) = &mut self.notice else {
             return;
         };
         let mut close = false;
+        let mut toggle = false;
         let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
         ui.allocate_ui_with_layout(
             size,
@@ -152,10 +264,35 @@ impl ExplorerDriver {
                     .on_hover_text(tr!(ui, "corundum-fs-close"))
                     .clicked();
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.add(egui::Label::new(text.as_str()).truncate());
+                    if notice.skipped.is_empty() {
+                        ui.add(egui::Label::new(notice.text.as_str()).truncate());
+                        return;
+                    }
+                    let (icon, hint) = if notice.open {
+                        (icons::chevron_down(), "corundum-fs-hide-skipped")
+                    } else {
+                        (icons::chevron_right(), "corundum-fs-show-skipped")
+                    };
+                    toggle |= ui
+                        .add(icons::button(icon, 14.0))
+                        .on_hover_text(tr!(ui, hint))
+                        .clicked();
+                    let label = egui::Label::new(notice.text.as_str())
+                        .truncate()
+                        .sense(egui::Sense::click());
+                    toggle |= ui
+                        .add(label)
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked();
                 });
             },
         );
+        if toggle {
+            notice.open = !notice.open;
+        }
+        if notice.open {
+            skipped_ui(ui, self.client.origin(), &notice.skipped);
+        }
         ui.separator();
         if close {
             self.notice = None;
@@ -191,7 +328,118 @@ impl ExplorerDriver {
                 i += 1;
             }
         }
+        came |= self.poll_step(ctx);
+        self.send_step();
         came
+    }
+
+    /// Queue the presses of Ctrl+Z and Ctrl+Shift+Z in this frame's input, in order, taking
+    /// them from it; only while the explorer is focused and no name is being edited, the
+    /// keys being another's (a text field's own undo) otherwise.
+    fn take_steps(&mut self, ctx: &egui::Context) {
+        if !self.explorer.is_focused(ctx) || self.explorer.is_renaming() {
+            return;
+        }
+        let steps = ctx.input_mut(|input| {
+            let mut steps = Vec::new();
+            input.events.retain(|event| match event {
+                egui::Event::Key {
+                    key: egui::Key::Z,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if modifiers.command && !modifiers.alt => {
+                    steps.push(if modifiers.shift {
+                        Step::Redo
+                    } else {
+                        Step::Undo
+                    });
+                    false
+                }
+                _ => true,
+            });
+            steps
+        });
+        self.steps.extend(steps);
+    }
+
+    /// Send the next undo or redo queued, unless one is in flight.
+    fn send_step(&mut self) {
+        if self.stepping.is_some() {
+            return;
+        }
+        let Some(step) = self.steps.pop_front() else {
+            return;
+        };
+        let answer = match step {
+            Step::Undo => self.client.undo(),
+            Step::Redo => self.client.redo(),
+        };
+        self.stepping = Some(Stepping::Sent { step, answer });
+    }
+
+    /// Take in the undo or redo's answer, or its target's label; `true` if either came. An
+    /// answer lists the folder again; a label (or an error) sets the notice.
+    fn poll_step(&mut self, ctx: &egui::Context) -> bool {
+        let answer = match &mut self.stepping {
+            Some(Stepping::Sent { answer, .. } | Stepping::Naming { answer, .. }) => answer.poll(),
+            None => None,
+        };
+        let Some(answer) = answer else {
+            return false;
+        };
+        match self.stepping.take().expect("polled above") {
+            Stepping::Sent { step, .. } => {
+                self.list(self.explorer.location().to_vec());
+                match answer {
+                    Ok(records) => {
+                        let begin = &records.summary.begin;
+                        match begin.undo_of.as_ref().or(begin.redo_of.as_ref()) {
+                            Some(target) => {
+                                let answer = self.client.status(target);
+                                self.stepping = Some(Stepping::Naming {
+                                    step,
+                                    records: Box::new(records),
+                                    answer,
+                                });
+                            }
+                            None => self.stepped(ctx, step, records, None),
+                        }
+                    }
+                    Err(e) => {
+                        let text = match e.code() {
+                            codes::NOTHING_TO_UNDO => tr!(ctx, "corundum-fs-nothing-to-undo"),
+                            codes::NOTHING_TO_REDO => tr!(ctx, "corundum-fs-nothing-to-redo"),
+                            _ => e.text(ctx),
+                        };
+                        self.notice = Some(Notice::plain(text));
+                    }
+                }
+            }
+            Stepping::Naming { step, records, .. } => {
+                let label = answer.ok().and_then(|target| target.summary.begin.label);
+                self.stepped(ctx, step, *records, label);
+            }
+        }
+        true
+    }
+
+    /// Say that `step` was done, as `records` say, to the batch called `label`.
+    fn stepped(
+        &mut self,
+        ctx: &egui::Context,
+        step: Step,
+        records: BatchRecords,
+        label: Option<String>,
+    ) {
+        let label = label.unwrap_or_else(|| tr!(ctx, "corundum-fs-unnamed"));
+        let id = match step {
+            Step::Undo => "corundum-fs-undid",
+            Step::Redo => "corundum-fs-redid",
+        };
+        let skipped = records.summary.skipped;
+        let text = tr!(ctx, id, label = label, skipped = skipped);
+        self.notice = Some(Notice::of(text, records));
     }
 
     /// Act on what the person did in the explorer.
@@ -351,14 +599,12 @@ impl ExplorerDriver {
     fn changed(&mut self, ctx: &egui::Context, label: &str, answer: Result<BatchRecords, FsError>) {
         match answer {
             Ok(batch) if batch.summary.skipped > 0 => {
-                self.notice = Some(format!(
-                    "{}{}",
-                    tr!(ctx, "corundum-fs-done", label = label),
-                    tr!(ctx, "corundum-fs-skipped", count = batch.summary.skipped)
-                ));
+                let skipped = batch.summary.skipped;
+                let text = tr!(ctx, "corundum-fs-done", label = label, skipped = skipped);
+                self.notice = Some(Notice::of(text, batch));
             }
             Ok(_) => {}
-            Err(e) => self.notice = Some(e.text(ctx)),
+            Err(e) => self.notice = Some(Notice::plain(e.text(ctx))),
         }
         self.list(self.explorer.location().to_vec());
     }
@@ -372,12 +618,70 @@ impl ExplorerDriver {
     /// Whether any call is still in flight.
     #[cfg(all(test, feature = "fs-local"))]
     pub(super) fn is_busy(&self) -> bool {
-        self.version.is_some() || self.listing.is_some() || !self.changes.is_empty()
+        self.version.is_some()
+            || self.listing.is_some()
+            || !self.changes.is_empty()
+            || self.stepping.is_some()
+            || !self.steps.is_empty()
     }
 
     #[cfg(all(test, feature = "fs-local"))]
     pub(super) fn notice(&self) -> Option<&str> {
-        self.notice.as_deref()
+        self.notice.as_ref().map(|n| n.text.as_str())
+    }
+}
+
+/// The skipped operations, one row each: its kind, the path it was for, and why; in a grid
+/// told apart by the client's `origin`.
+fn skipped_ui(ui: &mut egui::Ui, origin: &str, skipped: &[OpRecord]) {
+    egui::Grid::new(("corundum_fs_skipped", origin))
+        .num_columns(3)
+        .striped(true)
+        .show(ui, |ui| {
+            for op in skipped {
+                ui.label(op.kind.as_str());
+                ui.label(plan_path(ui.ctx(), &op.plan));
+                if let Outcome::Skipped(skip) = &op.outcome {
+                    ui.label(reason_text(ui.ctx(), skip));
+                }
+                ui.end_row();
+            }
+        });
+}
+
+/// The path an operation's plan is for: its `path`, or where it moves `from` and `to`.
+fn plan_path(ctx: &egui::Context, plan: &Value) -> String {
+    let field = |name: &str| plan.get(name).and_then(Value::as_str);
+    match (field("path"), field("from"), field("to")) {
+        (Some(path), _, _) => path.to_owned(),
+        (None, Some(from), Some(to)) => tr!(ctx, "corundum-fs-plan-move", from = from, to = to),
+        (None, from, to) => from.or(to).unwrap_or_default().to_owned(),
+    }
+}
+
+/// Why an operation was skipped, for a person: the spec's reasons in words, another as the
+/// server named it; with the server's message, if any.
+fn reason_text(ctx: &egui::Context, skip: &Skip) -> String {
+    let id = match skip.reason.as_str() {
+        "precondition_failed" => Some("corundum-fs-reason-precondition-failed"),
+        "exists" => Some("corundum-fs-reason-exists"),
+        "not_found" => Some("corundum-fs-reason-not-found"),
+        "invalid_path" => Some("corundum-fs-reason-invalid-path"),
+        "denied" => Some("corundum-fs-reason-denied"),
+        "io" => Some("corundum-fs-reason-io"),
+        "unknown_kind" => Some("corundum-fs-reason-unknown-kind"),
+        "not_undoable" => Some("corundum-fs-reason-not-undoable"),
+        _ => None,
+    };
+    let reason = id.map_or_else(|| skip.reason.clone(), |id| tr!(ctx, id));
+    match &skip.message {
+        Some(message) => tr!(
+            ctx,
+            "corundum-fs-reason-with-message",
+            reason = reason,
+            message = message.as_str()
+        ),
+        None => reason,
     }
 }
 

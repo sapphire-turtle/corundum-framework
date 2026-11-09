@@ -18,6 +18,8 @@ struct Rig {
     driver: ExplorerDriver,
     ctx: egui::Context,
     said: Vec<DriverEvent>,
+    /// The texts the last frame drew, and where.
+    drawn: Vec<(String, egui::Rect)>,
 }
 
 impl Rig {
@@ -53,6 +55,7 @@ impl Rig {
             client,
             ctx: egui::Context::default(),
             said: Vec::new(),
+            drawn: Vec::new(),
         }
     }
 
@@ -61,12 +64,98 @@ impl Rig {
     }
 
     fn frame(&mut self) {
-        frame(&mut self.driver, &self.ctx, &mut self.said);
+        self.frame_with(vec![]);
+    }
+
+    /// A frame with `events` as its input.
+    fn frame_with(&mut self, events: Vec<egui::Event>) {
+        self.drawn = frame(&mut self.driver, &self.ctx, &mut self.said, events);
     }
 
     /// Frames until no request is in flight, for up to 5 s.
     fn settle(&mut self) {
-        settle(&mut self.driver, &self.ctx, &mut self.said);
+        self.drawn = settle(&mut self.driver, &self.ctx, &mut self.said);
+    }
+
+    /// Where the last frame drew `text`.
+    fn drawn_at(&self, text: &str) -> egui::Pos2 {
+        self.drawn
+            .iter()
+            .find(|(t, _)| t == text)
+            .unwrap_or_else(|| panic!("{text:?} was not drawn: {:?}", self.drawn))
+            .1
+            .center()
+    }
+
+    /// Whether the last frame drew a text containing `needle`.
+    fn shows(&self, needle: &str) -> bool {
+        self.drawn.iter().any(|(t, _)| t.contains(needle))
+    }
+
+    /// A click on the text `text`, where the last frame drew it, over the frames a click
+    /// takes; then the driver settles.
+    fn click_on(&mut self, text: &str) {
+        let at = self.drawn_at(text);
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        self.frame_with(vec![egui::Event::PointerMoved(at)]);
+        self.frame_with(vec![button(true)]);
+        self.frame_with(vec![button(false)]);
+        self.settle();
+    }
+
+    /// `key` pressed with `modifiers`, `times` times in one frame; then the modifiers let go.
+    fn press(&mut self, key: egui::Key, modifiers: egui::Modifiers, times: usize) {
+        let event = |pressed| egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed,
+            repeat: false,
+            modifiers,
+        };
+        let mut events = vec![egui::Event::ModifiersChanged(modifiers)];
+        for _ in 0..times {
+            events.extend([event(true), event(false)]);
+        }
+        self.frame_with(events);
+        self.frame_with(vec![egui::Event::ModifiersChanged(egui::Modifiers::NONE)]);
+    }
+
+    /// Ctrl+Z (⌘Z), `times` times in one frame, and the driver settled.
+    fn undo(&mut self, times: usize) {
+        self.press(egui::Key::Z, egui::Modifiers::COMMAND, times);
+        self.settle();
+    }
+
+    /// Ctrl+Shift+Z (⌘⇧Z), and the driver settled.
+    fn redo(&mut self) {
+        let modifiers = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
+        self.press(egui::Key::Z, modifiers, 1);
+        self.settle();
+    }
+
+    /// The rename of `name` to `to`, applied and settled.
+    fn rename(&mut self, name: &str, to: &str) {
+        self.feed(ExplorerEvent::Rename {
+            name: name.into(),
+            to: to.into(),
+        });
+        self.settle();
+    }
+
+    /// The workspace's undo batches (those undoing another), newest first.
+    fn undo_batches(&self) -> Vec<BatchRecords> {
+        let history = pending_done(self.client.history(None)).unwrap();
+        history
+            .batches
+            .iter()
+            .filter(|b| b.summary.begin.undo_of.is_some())
+            .map(|b| pending_done(self.client.status(&b.summary.begin.batch_id)).unwrap())
+            .collect()
     }
 
     /// The person going into `location`: the explorer goes there, and says so.
@@ -101,31 +190,67 @@ fn names(driver: &ExplorerDriver) -> Vec<String> {
         .collect()
 }
 
-fn frame(driver: &mut ExplorerDriver, ctx: &egui::Context, said: &mut Vec<DriverEvent>) {
+/// A frame of the driver's explorer on the left and its detail pane on the right, with
+/// `events` as its input; the texts it drew, and where.
+fn frame(
+    driver: &mut ExplorerDriver,
+    ctx: &egui::Context,
+    said: &mut Vec<DriverEvent>,
+    events: Vec<egui::Event>,
+) -> Vec<(String, egui::Rect)> {
     let input = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
-            egui::vec2(600.0, 400.0),
+            egui::vec2(900.0, 400.0),
         )),
+        events,
         ..Default::default()
     };
     let mut output = ctx.run_ui(input, |ui| {
+        egui::Panel::right("detail")
+            .resizable(false)
+            .default_size(300.0)
+            .show(ui, |ui| {
+                let _ = driver.detail_ui(ui);
+            });
         egui::CentralPanel::default().show(ui, |ui| said.extend(driver.ui(ui)));
     });
     output.textures_delta.clear();
+    let mut drawn = Vec::new();
+    for clipped in &output.shapes {
+        collect(&clipped.shape, &mut drawn);
+    }
+    drawn
 }
 
-fn settle(driver: &mut ExplorerDriver, ctx: &egui::Context, said: &mut Vec<DriverEvent>) {
+fn collect(shape: &egui::Shape, drawn: &mut Vec<(String, egui::Rect)>) {
+    match shape {
+        egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| collect(s, drawn)),
+        egui::Shape::Text(text) => {
+            drawn.push((text.galley.text().to_owned(), text.visual_bounding_rect()));
+        }
+        _ => {}
+    }
+}
+
+/// Frames until no request is in flight, for up to 5 s, and one more to draw what the last
+/// answer brought; what that one drew.
+fn settle(
+    driver: &mut ExplorerDriver,
+    ctx: &egui::Context,
+    said: &mut Vec<DriverEvent>,
+) -> Vec<(String, egui::Rect)> {
     let start = Instant::now();
-    frame(driver, ctx, said);
+    frame(driver, ctx, said, vec![]);
     while driver.is_busy() {
         assert!(
             start.elapsed() < Duration::from_secs(5),
             "still busy after 5 s"
         );
         std::thread::sleep(Duration::from_millis(5));
-        frame(driver, ctx, said);
+        frame(driver, ctx, said, vec![]);
     }
+    frame(driver, ctx, said, vec![])
 }
 
 fn strings(names: &[&str]) -> Vec<String> {
@@ -353,6 +478,158 @@ fn a_version_mismatch_shows_as_failed() {
         "This app's file API (version 1) does not match the server's (version 99)"
     );
     assert!(driver.explorer().entries().is_empty());
+}
+
+#[test]
+fn ctrl_z_undoes_the_last_change() {
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    // A click on the entry gives the explorer the keyboard.
+    rig.click_on("c.txt");
+    assert!(rig.driver.explorer().is_focused(&rig.ctx));
+    rig.undo(1);
+    assert!(rig.dir.path().join("a.txt").exists());
+    assert!(!rig.dir.path().join("c.txt").exists());
+    assert_eq!(rig.names(), ["a.txt", "b"]);
+    assert_eq!(
+        rig.driver.notice(),
+        Some("Undid 'Rename \u{201c}a.txt\u{201d}'")
+    );
+    assert_eq!(rig.undo_batches().len(), 1);
+}
+
+#[test]
+fn ctrl_shift_z_redoes_it() {
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    rig.click_on("c.txt");
+    rig.undo(1);
+    assert!(rig.dir.path().join("a.txt").exists());
+    rig.redo();
+    assert!(rig.dir.path().join("c.txt").exists());
+    assert!(!rig.dir.path().join("a.txt").exists());
+    assert_eq!(rig.names(), ["b", "c.txt"]);
+    assert_eq!(
+        rig.driver.notice(),
+        Some("Redid 'Rename \u{201c}a.txt\u{201d}'")
+    );
+}
+
+#[test]
+fn two_quick_undos_undo_two_batches() {
+    let mut rig = Rig::new(&["a.txt", "b.txt"]);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    rig.rename("b.txt", "d.txt");
+    rig.click_on("c.txt");
+    // Both in one frame: the second is pressed while the first is still to be sent.
+    rig.undo(2);
+    assert!(rig.dir.path().join("a.txt").exists());
+    assert!(rig.dir.path().join("b.txt").exists());
+    assert!(!rig.dir.path().join("c.txt").exists());
+    assert!(!rig.dir.path().join("d.txt").exists());
+    assert_eq!(rig.names(), ["a.txt", "b.txt"]);
+    // Newest first: b's rename was undone first, then a's.
+    let labels: Vec<_> = rig
+        .undo_batches()
+        .iter()
+        .map(|b| b.summary.begin.label.clone().unwrap())
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            "Rename \u{201c}a.txt\u{201d}",
+            "Rename \u{201c}b.txt\u{201d}"
+        ]
+    );
+    assert_eq!(
+        rig.driver.notice(),
+        Some("Undid 'Rename \u{201c}a.txt\u{201d}'")
+    );
+}
+
+#[test]
+fn ctrl_z_in_the_rename_field_sends_no_undo() {
+    // The explorer not focused: nothing was clicked.
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    assert!(!rig.driver.explorer().is_focused(&rig.ctx));
+    rig.undo(1);
+    assert!(rig.undo_batches().is_empty());
+    assert!(rig.dir.path().join("c.txt").exists());
+
+    // The rename field open, over the frames it takes to open and focus.
+    rig.click_on("c.txt");
+    rig.press(egui::Key::F2, egui::Modifiers::NONE, 1);
+    rig.settle();
+    rig.frame();
+    assert!(rig.driver.explorer().is_renaming());
+    rig.undo(1);
+    assert!(rig.undo_batches().is_empty());
+    assert!(rig.dir.path().join("c.txt").exists());
+    assert_eq!(rig.driver.notice(), None);
+}
+
+#[test]
+fn an_undo_that_skips_says_how_many() {
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    rig.settle();
+    rig.rename("a.txt", "c.txt");
+    // A new a.txt where the undo would put the old one back.
+    std::fs::write(rig.dir.path().join("a.txt"), b"new").unwrap();
+    rig.click_on("c.txt");
+    rig.undo(1);
+    let notice = rig.driver.notice().expect("a notice").to_owned();
+    assert_eq!(notice, "Undid 'Rename \u{201c}a.txt\u{201d}' (1 skipped)");
+    assert!(rig.dir.path().join("c.txt").exists());
+    assert_eq!(std::fs::read(rig.dir.path().join("a.txt")).unwrap(), b"new");
+    // Listed again: the new a.txt is there.
+    assert_eq!(rig.names(), ["a.txt", "b", "c.txt"]);
+    // Opened, the notice lists the skipped move with its reason.
+    let reason = "Something is already there";
+    assert!(!rig.shows(reason));
+    rig.click_on(&notice);
+    assert!(rig.shows(reason), "{:?}", rig.drawn);
+    assert!(rig.shows("fs.move"), "{:?}", rig.drawn);
+    assert!(rig.shows("c.txt \u{2192} a.txt"), "{:?}", rig.drawn);
+    // And closed again by another click.
+    rig.click_on(&notice);
+    assert!(!rig.shows(reason));
+}
+
+#[test]
+fn nothing_to_undo_is_said() {
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    rig.settle();
+    rig.click_on("a.txt");
+    rig.undo(1);
+    assert_eq!(rig.driver.notice(), Some("Nothing to undo"));
+    rig.redo();
+    assert_eq!(rig.driver.notice(), Some("Nothing to redo"));
+    assert_eq!(rig.names(), ["a.txt", "b"]);
+}
+
+#[cfg(feature = "text-preview")]
+#[test]
+fn a_picked_file_is_previewed_over_fs_read() {
+    let mut rig = Rig::new(&["a.txt", "b/"]);
+    std::fs::write(rig.dir.path().join("a.txt"), b"hello").unwrap();
+    rig.settle();
+    assert!(!rig.shows("hello"));
+    rig.click_on("a.txt");
+    let start = Instant::now();
+    while !rig.shows("hello") {
+        assert!(start.elapsed() < Duration::from_secs(10), "{:?}", rig.drawn);
+        std::thread::sleep(Duration::from_millis(5));
+        rig.frame();
+    }
+    // A folder picked: nothing is drawn for it.
+    rig.click_on("b");
+    rig.frame();
+    assert!(!rig.shows("hello"));
 }
 
 fn pending_done<T>(mut p: Pending<T>) -> T {
