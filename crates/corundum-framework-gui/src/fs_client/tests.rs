@@ -224,19 +224,33 @@ fn a_missing_file_is_not_found() {
     assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 }
 
-/// A server that stats `a.txt` as a 4-byte file and fails every other call: `fs.read`
-/// answers `Transport("gone")`.
+/// A server that stats `a.txt` as an 8-byte file, and answers each `fs.read` 300 ms late, on
+/// a thread: the first with its first 4 bytes, the next with `Transport("gone")`.
 #[cfg(feature = "text-preview")]
-struct Gone;
+#[derive(Default)]
+struct Torn {
+    reads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
 
 #[cfg(feature = "text-preview")]
-impl FsTransport for Gone {
+impl FsTransport for Torn {
     fn call(&self, method: &str, _params: Value) -> Pending<Result<Value, FsError>> {
-        Pending::ready(if method == "fs.stat" {
-            Ok(json!({"name": "a.txt", "kind": "file", "size": 4, "modified": 7}))
-        } else {
-            Err(FsError::Transport("gone".into()))
-        })
+        use std::sync::atomic::Ordering;
+        if method == "fs.stat" {
+            let entry = json!({"name": "a.txt", "kind": "file", "size": 8, "modified": 7});
+            return Pending::ready(Ok(entry));
+        }
+        let first = self.reads.fetch_add(1, Ordering::SeqCst) == 0;
+        let (answer, sender) = corundum_framework_platform::pending::channel(|| {});
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            sender.send(Some(if first {
+                Ok(json!({"data": "YWJjZA==", "total": 8}))
+            } else {
+                Err(FsError::Transport("gone".into()))
+            }));
+        });
+        answer.map(|answer| answer.unwrap_or_else(|| Err(FsError::default())))
     }
 }
 
@@ -260,7 +274,6 @@ fn the_content_is_keyed_by_what_stat_says() {
 #[test]
 fn a_read_that_fails_reaches_the_preview_as_failed() {
     use crate::preview::{FileInfo, FilePreview, State};
-    use std::io::Read;
 
     fn collect(shape: &egui::Shape, texts: &mut Vec<String>) {
         match shape {
@@ -270,44 +283,61 @@ fn a_read_that_fails_reaches_the_preview_as_failed() {
         }
     }
 
-    let client = FsClient::new(Gone);
+    let transport = Torn::default();
+    let reads = std::sync::Arc::clone(&transport.reads);
+    let client = FsClient::new(transport);
     let entry = done(client.stat("a.txt")).unwrap();
     let content = client.content("a.txt", &entry);
-    let err = content.open().unwrap().read(&mut [0u8; 4]).unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::Other);
-    assert_eq!(err.to_string(), "gone");
 
     let ctx = egui::Context::default();
+    let input = || egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(400.0, 300.0),
+        )),
+        ..Default::default()
+    };
+    // A first frame without the preview, out of the bound: it builds egui's font atlas.
+    ctx.run_ui(input(), |ui| {
+        egui::CentralPanel::default().show(ui, |ui| ui.label("Retry"));
+    })
+    .textures_delta
+    .clear();
     let file = FileInfo::new("a.txt");
     let mut preview = FilePreview::new();
     let start = Instant::now();
     let mut slowest = Duration::ZERO;
-    loop {
+    let mut frames = 0;
+    let texts = loop {
         let frame_start = Instant::now();
-        let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(400.0, 300.0),
-            )),
-            ..Default::default()
-        };
-        let mut output = ctx.run_ui(input, |ui| {
+        let mut output = ctx.run_ui(input(), |ui| {
             egui::CentralPanel::default().show(ui, |ui| {
                 let _ = preview.ui(ui, &file, State::Ready(&content), false);
             });
         });
         output.textures_delta.clear();
         slowest = slowest.max(frame_start.elapsed());
+        frames += 1;
         let mut texts = Vec::new();
         for clipped in &output.shapes {
             collect(&clipped.shape, &mut texts);
         }
         // Retry is what a failed text shows.
         if texts.iter().any(|t| t == "Retry") {
-            break;
+            break texts;
         }
         assert!(start.elapsed() < Duration::from_secs(10), "{texts:?}");
         std::thread::sleep(Duration::from_millis(5));
-    }
+    };
+    // It failed on the second read, after the first chunk came: two answers, 300 ms each.
+    assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 2);
+    assert!(start.elapsed() >= Duration::from_millis(600));
+    assert!(
+        texts.iter().any(|t| t == "Couldn't read this file: gone"),
+        "{texts:?}"
+    );
+    // The frames went on meanwhile, none of them waiting for an answer: each well under
+    // the 300 ms an answer takes.
     assert!(slowest < Duration::from_millis(100), "{slowest:?}");
+    assert!(frames > 20, "{frames} frames");
 }
