@@ -1,7 +1,8 @@
 mod common;
 
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::fs;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use common::{names, workspace};
 use corundum_framework_fs::api::{BatchRecords, DryRun, FsOp, Outcome, codes};
@@ -14,10 +15,11 @@ use corundum_framework_fs::{Access, FsCtx, FsError, FsService, Route, WorkspaceA
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// Hides `*.xmp`, moves a photo's sidecar with it, archives albums instead of trashing
-/// them, denies anything under `locked`, and lets no agent undo.
+/// Hides `*.xmp` and `meta`, moves a photo's sidecar with it, archives albums instead of
+/// trashing them, denies anything under `locked`, lets no agent undo, and keeps each
+/// operation it routes.
 struct Photos {
-    routed: Arc<AtomicUsize>,
+    routed: Arc<Mutex<Vec<FsOp>>>,
 }
 
 const LOCKED: &str = "locked is read-only";
@@ -28,11 +30,11 @@ fn under_locked(path: &str) -> bool {
 
 impl WorkspaceApp for Photos {
     fn hidden(&self, path: &WsPath) -> bool {
-        path.as_str().ends_with(".xmp")
+        path.as_str().ends_with(".xmp") || path.as_str() == "meta"
     }
 
     fn route(&self, op: &FsOp) -> Route {
-        self.routed.fetch_add(1, Ordering::SeqCst);
+        self.routed.lock().unwrap().push(op.clone());
         let paths: Vec<&str> = match op {
             FsOp::Move { from, to, .. } => vec![from, to],
             FsOp::Mkdir { path } => vec![path],
@@ -134,9 +136,11 @@ impl Operation<FsCtx<Photos>> for Archive {
     }
 }
 
-fn service(files: &[&str]) -> (tempfile::TempDir, FsService<Photos>, Arc<AtomicUsize>) {
+type Routed = Arc<Mutex<Vec<FsOp>>>;
+
+fn service(files: &[&str]) -> (tempfile::TempDir, FsService<Photos>, Routed) {
     let (dir, ws) = workspace(files);
-    let routed = Arc::new(AtomicUsize::new(0));
+    let routed = Routed::default();
     let mut kinds = Registry::new();
     kinds.register(MoveSidecar).register(Archive);
     let s = FsService::with_journal(
@@ -252,12 +256,12 @@ async fn a_hidden_path_is_never_routed() {
     assert_eq!(b.ops.len(), 1, "{b:?}");
     assert_eq!(b.ops[0].kind, "fs.move");
     assert_eq!(skipped(&b.ops[0].outcome), "invalid_path");
-    assert_eq!(routed.load(Ordering::SeqCst), 0);
+    assert_eq!(routed.lock().unwrap().len(), 0);
     // Only the destination hidden: still not routed.
     let b = apply(&s, json!([mv("locked", "z.xmp")])).await;
     assert_eq!(b.ops[0].kind, "fs.move");
     assert_eq!(skipped(&b.ops[0].outcome), "invalid_path");
-    assert_eq!(routed.load(Ordering::SeqCst), 0);
+    assert_eq!(routed.lock().unwrap().len(), 0);
     assert_eq!(names(dir.path(), ""), ["p.jpg.xmp"]);
 }
 
@@ -339,6 +343,96 @@ async fn an_op_replaced_with_nothing_vanishes_and_an_empty_batch_is_refused() {
         .unwrap();
     assert_eq!(h["batches"].as_array().unwrap().len(), 1);
     assert_eq!(names(dir.path(), ""), ["b"]);
+}
+
+/// Whether the file system under `root` ignores case.
+fn ignores_case(root: &Path) -> bool {
+    fs::write(root.join("probe"), b"").unwrap();
+    let ignores = root.join("PROBE").exists();
+    fs::remove_file(root.join("probe")).unwrap();
+    ignores
+}
+
+#[tokio::test]
+async fn route_sees_the_disks_spelling() {
+    let (dir, s, routed) = service(&["IMG_1.JPG"]);
+    if !ignores_case(dir.path()) {
+        eprintln!("skipped: the file system is case-sensitive");
+        return;
+    }
+    apply(&s, json!([mv("img_1.jpg", "b.jpg")])).await;
+    assert_eq!(
+        *routed.lock().unwrap(),
+        [FsOp::Move {
+            from: "IMG_1.JPG".into(),
+            to: "b.jpg".into(),
+            expect: None,
+        }]
+    );
+    assert_eq!(names(dir.path(), ""), ["b.jpg"]);
+}
+
+#[tokio::test]
+async fn a_new_name_keeps_the_requested_spelling() {
+    let (dir, s, routed) = service(&["Photos/"]);
+    if !ignores_case(dir.path()) {
+        eprintln!("skipped: the file system is case-sensitive");
+        return;
+    }
+    apply(&s, json!([{"kind": "fs.mkdir", "path": "photos/New"}])).await;
+    assert_eq!(
+        *routed.lock().unwrap(),
+        [FsOp::Mkdir {
+            path: "Photos/New".into(),
+        }]
+    );
+    assert_eq!(names(dir.path(), "Photos"), ["New"]);
+}
+
+#[tokio::test]
+async fn a_case_only_rename_keeps_the_new_spelling() {
+    let (dir, s, routed) = service(&["Photos/IMG_1.JPG"]);
+    if !ignores_case(dir.path()) {
+        eprintln!("skipped: the file system is case-sensitive");
+        return;
+    }
+    apply(&s, json!([mv("photos/img_1.jpg", "photos/img_1.jpg")])).await;
+    assert_eq!(
+        *routed.lock().unwrap(),
+        [FsOp::Move {
+            from: "Photos/IMG_1.JPG".into(),
+            to: "Photos/img_1.jpg".into(),
+            expect: None,
+        }]
+    );
+    assert_eq!(names(dir.path(), "Photos"), ["img_1.jpg"]);
+}
+
+#[tokio::test]
+async fn a_path_hidden_on_disk_is_not_routed() {
+    let (dir, s, routed) = service(&["meta/a.txt"]);
+    if !ignores_case(dir.path()) {
+        eprintln!("skipped: the file system is case-sensitive");
+        return;
+    }
+    let b = apply(&s, json!([mv("META/a.txt", "x.txt")])).await;
+    assert_eq!(b.ops.len(), 1, "{b:?}");
+    assert_eq!(skipped(&b.ops[0].outcome), "invalid_path");
+    assert!(routed.lock().unwrap().is_empty());
+    assert_eq!(names(dir.path(), "meta"), ["a.txt"]);
+}
+
+#[tokio::test]
+async fn a_missing_path_is_routed_as_requested() {
+    let (_dir, s, routed) = service(&[]);
+    apply(&s, json!([{"kind": "fs.trash", "path": "nope/x"}])).await;
+    assert_eq!(
+        *routed.lock().unwrap(),
+        [FsOp::Trash {
+            path: "nope/x".into(),
+            expect: None,
+        }]
+    );
 }
 
 /// Panics in every follow-up.

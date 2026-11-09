@@ -16,6 +16,10 @@
 //! differently from a hidden entry can still reach it, FAT 8.3 short names such as
 //! `CORUND~1` for `.corundum` among them. Clients should send only names they listed. On
 //! macOS and Windows, hiding is judged on the disk's spelling.
+//!
+//! For the same reason, on Linux the paths [`WorkspaceApp::route`] and
+//! [`WorkspaceApp::follow`] see stay as the request spells them; on macOS and Windows they
+//! are the disk's spelling of the entries that exist.
 
 #![warn(missing_docs)]
 

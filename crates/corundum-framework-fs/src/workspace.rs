@@ -89,6 +89,36 @@ impl Workspace {
         Ok(resolved)
     }
 
+    /// `path` as the disk spells it, whether hidden or not: an entry that exists by the disk's
+    /// spelling, one that does not by its nearest existing folder's followed by the rest as
+    /// asked. The root, and a path that cannot be told (through a symlink, say), are as asked.
+    pub(crate) fn spelled(&self, path: &WsPath) -> WsPath {
+        let mut rest = Vec::new();
+        let mut at = path.clone();
+        loop {
+            if at.is_root() {
+                return path.clone();
+            }
+            match self.resolve_with(&(), &at, false) {
+                Ok(r) if rest.is_empty() || r.meta.is_dir() => {
+                    let spelled = self.on_disk(&r).and_then(|on_disk| {
+                        rest.iter()
+                            .rev()
+                            .try_fold(on_disk, |p: WsPath, name: &String| p.join(name))
+                    });
+                    return spelled.unwrap_or_else(|_| path.clone());
+                }
+                Err(FsError::NotFound(_)) => {}
+                _ => return path.clone(),
+            }
+            let (Some(parent), Some(name)) = (at.parent(), at.name()) else {
+                return path.clone();
+            };
+            rest.push(name.to_owned());
+            at = parent;
+        }
+    }
+
     /// Opens the folder holding the last segment of `path`, one no-follow open per segment,
     /// and returns it with that segment's name (`None` for the root, whose folder is the root
     /// itself).

@@ -27,6 +27,8 @@ whether the built-in kind runs, the app's own kinds run instead, or the operatio
 (recorded as an `fs.deny`, skipped with its reason); an operation on a hidden path is never
 routed. `follow` adds the app's follow-ups after each built-in change, such as moving a
 photo's sidecar with it, as undoable children. `may_undo` decides who may undo a batch.
+`route` and `follow` see each path as the disk spells it where the entry exists, and as
+requested for a name that does not exist yet.
 
 ## Known limitations
 
@@ -35,4 +37,5 @@ On Linux, hiding is judged on the name as the request spells it, and on the name
 case (ext4 or f2fs with casefold, vfat, exFAT, CIFS/SMB), a name spelled differently from a
 hidden entry can still reach it, FAT 8.3 short names such as `CORUND~1` for `.corundum` among
 them. Clients should send only names they listed. macOS and Windows judge the disk's
-spelling.
+spelling. For the same reason, on Linux `route` and `follow` see the request's spelling, not
+the disk's.
