@@ -235,3 +235,125 @@ fn an_op_of_an_unknown_batch_is_dropped() {
         .collect();
     assert!(months.is_empty(), "{months:?}");
 }
+
+/// Appends `text` to the file at `path`, as a crash or a person might.
+fn scribble(path: &Path, text: &str) {
+    use std::io::Write;
+    let mut f = fs::OpenOptions::new().append(true).open(path).unwrap();
+    f.write_all(text.as_bytes()).unwrap();
+}
+
+/// A complete batch with one done op, begun at `at`.
+fn complete(s: &mut JsonlStore, at: i64) -> BatchId {
+    let id = add(s, begin(at));
+    s.append(&Record::Op(op(id, Outcome::Done(json!(1)))))
+        .unwrap();
+    s.append(&end(id, 1, 0)).unwrap();
+    id
+}
+
+#[test]
+fn a_torn_last_line_is_cut_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("2026-11.jsonl");
+    let a = complete(&mut open(dir.path()), NOV);
+    scribble(&file, r#"{"record":"begin","batch_"#);
+    let b = {
+        let mut s = open(dir.path());
+        assert_eq!(ids(&s, None, 10), vec![a]);
+        assert!(fs::read_to_string(&file).unwrap().ends_with('\n'));
+        add(&mut s, begin(NOV))
+    };
+    let s = open(dir.path());
+    assert_eq!(ids(&s, None, 10), vec![b, a]);
+    // a's three lines, b's begin, and the end b got, interrupted, on this open: each parses.
+    assert_eq!(records(&file).len(), 5);
+}
+
+#[test]
+fn a_line_that_does_not_parse_is_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("2026-11.jsonl");
+    let a = complete(&mut open(dir.path()), NOV);
+    scribble(&file, "{\"record\":\"later_kind\"}\ngarbage\n");
+    let b = complete(&mut open(dir.path()), NOV);
+    let s = open(dir.path());
+    assert_eq!(ids(&s, None, 10), vec![b, a]);
+    assert_eq!(s.batch(b).unwrap().unwrap().ops.len(), 1);
+    assert_eq!(s.batch(a).unwrap().unwrap().ops.len(), 1);
+}
+
+#[test]
+fn an_unfinished_batch_ends_interrupted() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("2026-11.jsonl");
+    let a = {
+        let mut s = open(dir.path());
+        let a = add(&mut s, begin(NOV));
+        s.append(&Record::Op(op(a, Outcome::Done(json!(1)))))
+            .unwrap();
+        a
+    };
+    {
+        let s = open(dir.path());
+        let got = s.batch(a).unwrap().unwrap().summary;
+        assert!(got.complete);
+        assert!(got.interrupted);
+        assert_eq!(got.done, 1);
+    }
+    assert_eq!(
+        records(&file).last(),
+        Some(&Record::End(BatchEnd {
+            batch_id: a,
+            done: 1,
+            skipped: 0,
+            interrupted: true,
+        }))
+    );
+    let n = lines(&file).len();
+    drop(open(dir.path()));
+    assert_eq!(lines(&file).len(), n);
+}
+
+#[test]
+fn an_unfinished_batch_in_an_older_month_ends_in_its_month() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = {
+        let mut s = open(dir.path());
+        let a = add(&mut s, begin(OCT));
+        complete(&mut s, NOV);
+        a
+    };
+    drop(open(dir.path()));
+    match records(&dir.path().join("2026-10.jsonl")).last() {
+        Some(Record::End(e)) => assert!(e.batch_id == a && e.interrupted, "{e:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_deleted_month_is_forgotten() {
+    let dir = tempfile::tempdir().unwrap();
+    let (a, b, c) = {
+        let mut s = open(dir.path());
+        let a = add(&mut s, begin(OCT));
+        let mut undo = begin(NOV);
+        undo.undo_of = Some(a);
+        let b = add(&mut s, undo);
+        s.append(&end(b, 0, 0)).unwrap();
+        // The op and the end of `a` go to October's file; written into November's by hand,
+        // as if the store had once put them there.
+        let late = [Record::Op(op(a, Outcome::Done(json!(1)))), end(a, 1, 0)];
+        for r in &late {
+            scribble(
+                &dir.path().join("2026-11.jsonl"),
+                &format!("{}\n", serde_json::to_string(r).unwrap()),
+            );
+        }
+        (a, b, complete(&mut s, NOV))
+    };
+    fs::remove_file(dir.path().join("2026-10.jsonl")).unwrap();
+    let s = open(dir.path());
+    assert_eq!(ids(&s, None, 10), vec![c, b]);
+    assert!(s.batch(a).unwrap().is_none());
+}
