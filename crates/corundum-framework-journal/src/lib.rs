@@ -7,7 +7,9 @@
 //! [`UndoPolicy`] allows. (In the repository, the design is in
 //! `docs/superpowers/specs/2026-11-06-workspace-fs-journal-design.md`.)
 //!
-//! [`Journal`] runs the batches on one worker thread, over a [`JournalStore`].
+//! [`Journal`] runs the batches on one worker thread, over a [`JournalStore`]:
+//! [`MemoryStore`] keeps the newest batches in memory; with the `jsonl` feature,
+//! `JsonlStore` keeps them all in a file per month.
 
 #![warn(missing_docs)]
 

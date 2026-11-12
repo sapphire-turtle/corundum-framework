@@ -43,6 +43,8 @@ jobs:
         for f in axum clap; do
           cargo clippy -p corundum-framework-keys --all-targets --features $f --locked -- -D warnings || exit 1
         done
+        # The journal crate with no features: no file system.
+        cargo clippy -p corundum-framework-journal --all-targets --locked -- -D warnings
         for f in media-picker qr-scan qr-code keys image-preview audio-preview code-editor text-preview markdown-editor markdown-preview datetime pdf-preview fs-client fs-local; do
           cargo clippy -p corundum-framework-gui --all-targets --no-default-features --features $f --locked -- -D warnings || exit 1
         done
