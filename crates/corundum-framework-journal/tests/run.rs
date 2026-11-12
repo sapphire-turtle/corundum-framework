@@ -413,3 +413,52 @@ fn children_past_the_depth_limit_are_skipped() {
         Outcome::Skipped(Skip::InvalidPlan(m)) if m == "children nest deeper than 16"
     ));
 }
+
+/// A `MemoryStore` that counts the calls to `batch`, which reads a batch's operations.
+struct CountingStore {
+    inner: MemoryStore,
+    batch_calls: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl JournalStore for CountingStore {
+    fn append(&mut self, record: &Record) -> Result<(), StoreError> {
+        self.inner.append(record)
+    }
+
+    fn batches_rev(
+        &self,
+        cursor: Option<BatchId>,
+        limit: usize,
+    ) -> Result<Vec<BatchSummary>, StoreError> {
+        self.inner.batches_rev(cursor, limit)
+    }
+
+    fn batch(&self, id: BatchId) -> Result<Option<BatchRecords>, StoreError> {
+        self.batch_calls.fetch_add(1, Ordering::SeqCst);
+        self.inner.batch(id)
+    }
+
+    fn summary(&self, id: BatchId) -> Result<Option<BatchSummary>, StoreError> {
+        self.inner.summary(id)
+    }
+}
+
+#[test]
+fn checks_read_summaries_not_operations() {
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let store = CountingStore {
+        inner: MemoryStore::default(),
+        batch_calls: Arc::clone(&calls),
+    };
+    let (j, _ctx) = journal_with_store(store, JournalConfig::default());
+    let first = submit(&j, vec![set("a", 1)]);
+    let second = submit(&j, vec![set("b", 1)]);
+    j.wait(second).unwrap();
+    calls.store(0, Ordering::SeqCst);
+    // A submit trims the stacks, from their oldest entry; check_undo checks the window;
+    // history checks the cursor. None needs a batch's operations.
+    submit(&j, vec![set("c", 1)]);
+    j.check_undo(first, &u1()).unwrap();
+    j.history(Some(first), 10).unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
