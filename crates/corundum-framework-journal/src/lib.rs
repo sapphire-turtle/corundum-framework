@@ -14,6 +14,8 @@
 mod error;
 mod ids;
 mod journal;
+#[cfg(feature = "jsonl")]
+mod jsonl;
 mod op;
 mod record;
 mod store;
@@ -22,6 +24,8 @@ mod undo;
 pub use error::JournalError;
 pub use ids::{Actor, BatchId, OpId, Origin};
 pub use journal::{Clock, Journal, JournalConfig, MAX_CHILD_DEPTH, MayUndo, UndoPolicy};
+#[cfg(feature = "jsonl")]
+pub use jsonl::JsonlStore;
 pub use op::{Applied, OpKind, Operation, Planned, Registry};
 pub use record::{
     BatchBegin, BatchEnd, BatchRecords, BatchSummary, OpRecord, Outcome, Record, Skip,
