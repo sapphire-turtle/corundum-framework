@@ -42,6 +42,16 @@ pub trait JournalStore: Send {
 
     /// A batch with its operations, if the store has it.
     fn batch(&self, id: BatchId) -> Result<Option<BatchRecords>, StoreError>;
+
+    /// A batch in brief, if the store has it.
+    ///
+    /// The journal calls it, under its lock, for its checks that need no operations: on
+    /// every submit, for the oldest entries of each origin's stacks. The default reads the
+    /// whole batch; a store that keeps its operations apart (on disk) gives the summary
+    /// without reading them.
+    fn summary(&self, id: BatchId) -> Result<Option<BatchSummary>, StoreError> {
+        Ok(self.batch(id)?.map(|b| b.summary))
+    }
 }
 
 /// A store that keeps the newest batches in memory.
@@ -155,6 +165,10 @@ impl JournalStore for MemoryStore {
 
     fn batch(&self, id: BatchId) -> Result<Option<BatchRecords>, StoreError> {
         Ok(self.batches.get(&id).cloned())
+    }
+
+    fn summary(&self, id: BatchId) -> Result<Option<BatchSummary>, StoreError> {
+        Ok(self.batches.get(&id).map(|b| b.summary.clone()))
     }
 }
 

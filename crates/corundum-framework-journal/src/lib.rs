@@ -7,13 +7,17 @@
 //! [`UndoPolicy`] allows. (In the repository, the design is in
 //! `docs/superpowers/specs/2026-11-06-workspace-fs-journal-design.md`.)
 //!
-//! [`Journal`] runs the batches on one worker thread, over a [`JournalStore`].
+//! [`Journal`] runs the batches on one worker thread, over a [`JournalStore`]:
+//! [`MemoryStore`] keeps the newest batches in memory; with the `jsonl` feature,
+//! `JsonlStore` keeps them all in a file per month.
 
 #![warn(missing_docs)]
 
 mod error;
 mod ids;
 mod journal;
+#[cfg(feature = "jsonl")]
+mod jsonl;
 mod op;
 mod record;
 mod store;
@@ -22,6 +26,8 @@ mod undo;
 pub use error::JournalError;
 pub use ids::{Actor, BatchId, OpId, Origin};
 pub use journal::{Clock, Journal, JournalConfig, MAX_CHILD_DEPTH, MayUndo, UndoPolicy};
+#[cfg(feature = "jsonl")]
+pub use jsonl::JsonlStore;
 pub use op::{Applied, OpKind, Operation, Planned, Registry};
 pub use record::{
     BatchBegin, BatchEnd, BatchRecords, BatchSummary, OpRecord, Outcome, Record, Skip,

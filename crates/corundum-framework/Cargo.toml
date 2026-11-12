@@ -69,6 +69,9 @@ fs = ["dep:corundum-framework-fs", "fs-api"]
 # An undo log for the server's changes: batches of the app's operations run on one writer
 # thread and recorded, undone and redone per UI session; no file system, no tokio.
 journal = ["dep:corundum-framework-journal"]
+# The journal kept for good, in a `YYYY-MM.jsonl` file per month in the server's state
+# directory (`journal::JsonlStore`), for an app that audits a long history.
+journal-jsonl = ["journal", "corundum-framework-journal/jsonl"]
 
 # ── gui passthrough ──────────────────────────────────────────────────────────
 # `gui::window::run`: a desktop window on eframe + wgpu, started the same way for every app.

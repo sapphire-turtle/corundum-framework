@@ -27,10 +27,9 @@ pub(crate) fn check(
     actor: &Actor,
     missing: JournalError,
 ) -> Result<BatchBegin, JournalError> {
-    let Some(records) = store.batch(target)? else {
+    let Some(summary) = store.summary(target)? else {
         return Err(missing);
     };
-    let summary = records.summary;
     if summary.undone_by.is_some() || reserved.contains(&target) {
         return Err(JournalError::AlreadyUndone(target));
     }
@@ -49,7 +48,7 @@ pub(crate) fn check(
 /// Whether `target` ended with nothing done, every operation skipped, so undoing it would
 /// change nothing. A batch still running, or one the store cannot give, did not.
 pub(crate) fn did_nothing(store: &dyn JournalStore, target: BatchId) -> bool {
-    matches!(store.batch(target), Ok(Some(r)) if r.summary.complete && r.summary.done == 0)
+    matches!(store.summary(target), Ok(Some(s)) if s.complete && s.done == 0)
 }
 
 /// Whether the batch is among the newest `max` forward batches of its own origin.

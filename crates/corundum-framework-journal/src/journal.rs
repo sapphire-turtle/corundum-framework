@@ -108,8 +108,8 @@ impl State {
     /// removed. A batch the store cannot be read for is kept.
     fn trim(&mut self, now: i64, max_age_ms: i64) {
         let store = &self.store;
-        let gone = |id: &BatchId| match store.batch(*id) {
-            Ok(Some(b)) => now.saturating_sub(b.summary.begin.at) > max_age_ms,
+        let gone = |id: &BatchId| match store.summary(*id) {
+            Ok(Some(s)) => now.saturating_sub(s.begin.at) > max_age_ms,
             Ok(None) => true,
             Err(_) => false,
         };
@@ -537,7 +537,7 @@ impl<C: Send + Sync + 'static> Journal<C> {
         let page = state.store.batches_rev(cursor, limit)?;
         if page.is_empty()
             && let Some(cursor) = cursor
-            && state.store.batch(cursor)?.is_none()
+            && state.store.summary(cursor)?.is_none()
         {
             return Err(JournalError::NotFound(cursor));
         }
