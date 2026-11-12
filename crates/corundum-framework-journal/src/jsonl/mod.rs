@@ -37,6 +37,18 @@ struct MonthFile {
     month: Month,
     path: PathBuf,
     len: u64,
+    /// A failed write left bytes past `len` that could not be cut off yet.
+    dirty: bool,
+}
+
+/// Opens a month file to write at chosen offsets. Not in append mode: on Windows an
+/// append-only handle cannot cut the file back.
+fn open_to_write(path: &Path, create: bool) -> io::Result<File> {
+    OpenOptions::new()
+        .write(true)
+        .create(create)
+        .truncate(false)
+        .open(path)
 }
 
 /// A store that keeps the journal in a directory, one `YYYY-MM.jsonl` file per month
@@ -72,7 +84,22 @@ pub struct JsonlStore {
     /// Each batch's place in `order`.
     position: HashMap<BatchId, usize>,
     batches: HashMap<BatchId, Indexed>,
+    #[cfg(test)]
+    faults: Faults,
 }
+
+/// Failures a test sets up for the next write; each is taken once.
+#[cfg(test)]
+#[derive(Debug, Default)]
+struct Faults {
+    /// Write half the line, then fail.
+    torn_write: bool,
+    /// Fail to cut a failed write back.
+    failing_cut: bool,
+}
+
+#[cfg(test)]
+mod tests;
 
 fn io_error(e: io::Error) -> StoreError {
     StoreError::Io(e.to_string())
@@ -94,20 +121,21 @@ impl JsonlStore {
             return Ok(self.files.len() - 1);
         }
         let path = self.dir.join(month.file_name());
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-            .map_err(io_error)?;
+        let file = open_to_write(&path, true).map_err(io_error)?;
         let len = file.metadata().map_err(io_error)?.len();
-        self.files.push(MonthFile { month, path, len });
+        self.files.push(MonthFile {
+            month,
+            path,
+            len,
+            dirty: false,
+        });
         self.newest = Some(file);
         Ok(self.files.len() - 1)
     }
 
     /// Writes `record` as one line at the end of file `file`, and gives where it is. On a
-    /// failed write the file is cut back to its length before it, as far as that works. An
-    /// end is synced to the disk.
+    /// failed write the file is cut back to its length before it; if that fails too, the
+    /// next write cuts first, and writes nothing if it cannot. An end is synced to the disk.
     fn write_line(&mut self, file: usize, record: &Record) -> Result<Span, StoreError> {
         let mut line = serde_json::to_vec(record).map_err(|e| StoreError::Io(e.to_string()))?;
         line.push(b'\n');
@@ -120,22 +148,47 @@ impl JsonlStore {
         {
             newest
         } else {
-            opened = OpenOptions::new()
-                .append(true)
-                .open(&self.files[file].path)
-                .map_err(io_error)?;
+            opened = open_to_write(&self.files[file].path, false).map_err(io_error)?;
             &mut opened
         };
-        let written = handle.write_all(&line).and_then(|()| {
-            if matches!(record, Record::End(_)) {
-                handle.sync_data()
-            } else {
-                Ok(())
-            }
-        });
+        if self.files[file].dirty {
+            handle.set_len(offset).map_err(io_error)?;
+            self.files[file].dirty = false;
+        }
+        #[cfg(test)]
+        let written = if std::mem::take(&mut self.faults.torn_write) {
+            handle
+                .seek(SeekFrom::Start(offset))
+                .and_then(|_| handle.write_all(&line[..line.len() / 2]))
+                .and_then(|()| Err(io::Error::other("a torn write (test)")))
+        } else {
+            Ok(())
+        };
+        #[cfg(not(test))]
+        let written = Ok(());
+        let written = handle
+            .seek(SeekFrom::Start(offset))
+            .and(written)
+            .and_then(|()| handle.write_all(&line))
+            .and_then(|()| {
+                if matches!(record, Record::End(_)) {
+                    handle.sync_data()
+                } else {
+                    Ok(())
+                }
+            });
         if let Err(e) = written {
-            if let Err(cut) = handle.set_len(offset) {
-                tracing::error!(path = %self.files[file].path.display(), error = %cut, "a failed write could not be cut back");
+            #[cfg(test)]
+            let cut = if std::mem::take(&mut self.faults.failing_cut) {
+                Err(io::Error::other("a failed cut (test)"))
+            } else {
+                handle.set_len(offset)
+            };
+            #[cfg(not(test))]
+            let cut = handle.set_len(offset);
+            if let Err(cut) = cut {
+                tracing::error!(path = %self.files[file].path.display(), error = %cut, "a failed write could not be cut back; the next write tries again");
+                self.files[file].dirty = true;
             }
             return Err(io_error(e));
         }
@@ -285,5 +338,9 @@ impl JournalStore for JsonlStore {
             summary: b.summary.clone(),
             ops,
         }))
+    }
+
+    fn summary(&self, id: BatchId) -> Result<Option<BatchSummary>, StoreError> {
+        Ok(self.batches.get(&id).map(|b| b.summary.clone()))
     }
 }

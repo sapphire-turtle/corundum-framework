@@ -30,6 +30,8 @@ impl JsonlStore {
             order: Vec::new(),
             position: HashMap::new(),
             batches: HashMap::new(),
+            #[cfg(test)]
+            faults: Default::default(),
         };
         for (month, path) in month_files(&store.dir)? {
             cut_torn_line(&path)?;
@@ -37,14 +39,12 @@ impl JsonlStore {
                 month,
                 path,
                 len: 0,
+                dirty: false,
             });
             store.replay(store.files.len() - 1)?;
         }
         if let Some(last) = store.files.last() {
-            let newest = OpenOptions::new()
-                .append(true)
-                .open(&last.path)
-                .map_err(io_error)?;
+            let newest = super::open_to_write(&last.path, false).map_err(io_error)?;
             store.newest = Some(newest);
         }
         store.end_unfinished()?;
