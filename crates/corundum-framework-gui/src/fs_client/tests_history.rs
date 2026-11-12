@@ -193,11 +193,13 @@ const CONFIRM_OTHER: &str = "This change was made in another window at 14:02. Un
 
 #[test]
 fn rows_show_newest_first_with_their_counts() {
-    let mut rig = Rig::new();
+    let (mut rig, calls) = wired(&[], false);
     rig.mkdir(&rig.client, "a", "First");
     rig.mkdir(&rig.client, "b", "Second");
+    let before = calls_of(&calls).len();
     rig.frame();
-    assert!(rig.page.is_busy(), "the first frame asks");
+    // Its answer may already be in by the frame's end, so the page need not be busy.
+    assert!(calls_of(&calls).len() > before, "the first frame asks");
     rig.settle();
     let (first, second) = (rig.drawn_at("First", false), rig.drawn_at("Second", false));
     assert!(second.top() < first.top(), "{:?}", rig.drawn);
