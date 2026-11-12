@@ -261,9 +261,10 @@ fn strings(names: &[&str]) -> Vec<String> {
 
 #[test]
 fn the_root_is_listed_on_the_first_frame() {
-    let mut rig = Rig::new(&["a.txt", "b/"]);
+    let (mut rig, calls) = wired(&["a.txt", "b/"], &[], false);
     rig.frame();
-    assert!(rig.driver.is_busy(), "the first frame asks");
+    // Its answer may already be in by the frame's end, so the driver need not be busy.
+    assert!(!calls_of(&calls).is_empty(), "the first frame asks");
     rig.settle();
     assert_eq!(rig.names(), ["a.txt", "b"]);
     let entries = rig.driver.explorer().entries();
