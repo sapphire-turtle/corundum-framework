@@ -85,6 +85,12 @@ changelog_include = [
   "corundum-framework-service",
   "corundum-framework-keys",
   "corundum-framework-build",
+  "corundum-framework-image",
+  "corundum-framework-pdf",
+  "corundum-framework-audio",
+  "corundum-framework-fs-api",
+  "corundum-framework-fs",
+  "corundum-framework-journal",
 ]
 git_tag_enable = true
 git_release_enable = true
