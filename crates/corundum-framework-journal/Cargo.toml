@@ -11,7 +11,7 @@ keywords = ["undo", "journal", "log", "server"]
 categories = ["data-structures"]
 
 [dependencies]
-grain-id = { version = "0.15", features = ["serde"] }
+grain-id = { version = "0.17", features = ["serde"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
