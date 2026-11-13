@@ -2,7 +2,7 @@
 name = "corundum-framework-fs-api"
 # Versioned with the other corundum-framework crates (release-plz's `corundum` group); the
 # API's own version is `API_VERSION`.
-version = "0.11.0"
+version = "0.12.0"
 edition.workspace = true
 description = "The fs.* methods an app's server serves over its workspace folder: their names, parameters, results and error codes"
 license = "MIT OR Apache-2.0"

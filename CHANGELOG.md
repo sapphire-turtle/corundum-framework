@@ -8,6 +8,75 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.11.0...v0.12.0) - 2026-11-13
+
+### Added
+
+- *(corundum-framework)* journal-jsonl, and the journal over JsonlStore across a restart
+- *(corundum-framework-gui)* HistoryPage, the journal's batches with Undo
+- *(corundum-framework-fs)* [**breaking**] fs.apply and the journal.* methods, with the caller's actor
+- *(corundum-framework)* the journal feature
+- *(corundum-framework-fs)* FsService::dispatch, and the facade's fs features
+- *(corundum-framework-gui)* fs-client's transport and typed client, and fs-local
+- *(corundum-framework-gui)* Ctrl+Z in the explorer, its notice, and the preview over fs.read
+- *(corundum-framework-gui)* ExplorerDriver lists and changes a workspace over fs-client
+- *(corundum-framework-gui)* FsReader, a file over fs.read for the previews
+- *(corundum-framework-fs-api)* [**breaking**] fs.version, and which history batches the caller may undo
+- *(corundum-framework-fs-api)* fs.apply and the journal.* methods
+- *(corundum-framework-fs-api)* the fs.* read methods and their types
+- *(corundum-framework-fs)* route and follow see the disk's spelling
+- *(corundum-framework-fs)* the app's route, follow and may_undo hooks
+- *(corundum-framework-fs)* fs.trash, into the app's hidden folder, and its undo
+- *(corundum-framework-fs)* fs.move and fs.mkdir, undoable, never replacing
+- *(corundum-framework-fs)* [**breaking**] resolve paths by walking directory handles, so a swapped-in symlink is never followed
+- *(corundum-framework-fs)* stat an entry and read a file's range
+- *(corundum-framework-fs)* list a folder a page at a time
+- *(corundum-framework-fs)* resolve paths in a workspace, hiding the app's files
+- *(corundum-framework-fs)* workspace-relative paths and errors
+- *(corundum-framework-journal)* JsonlStore repairs a torn line and ends interrupted batches on open
+- *(corundum-framework-journal)* JsonlStore, the journal in a jsonl file per month
+- *(corundum-framework-journal)* non-exhaustive errors, Stopped, interrupted
+- *(corundum-framework-journal)* undo and redo per origin, in an undo window
+- *(corundum-framework-journal)* run batches on one writer
+- *(corundum-framework-journal)* the store trait, and a store in memory
+- *(corundum-framework-journal)* operations and their registry
+- *(corundum-framework-journal)* ids and records
+
+### Fixed
+
+- *(corundum-framework)* pass gui's fs-client and fs-local through, and lint them alone in CI
+- *(corundum-framework-fs)* pin every journal record field to its mirror, and say undo_batch in the READMEs
+- *(corundum-framework-platform)* Pending is Sync again
+- *(corundum-framework-gui)* the preview's failed-read test fails mid-read, late, and bounds the frames
+- *(corundum-framework-gui)* send nothing before the version is confirmed, and no undo past a change in flight
+- *(corundum-framework-fs)* check only a folder's kind against an expect
+- *(corundum-framework-fs)* rename through NtSetInformationFile on Windows, and build on Apple
+- *(corundum-framework-journal)* pass over a batch that did nothing on undo and redo
+- *(corundum-framework-fs)* keep a change whose follow-up hook panics, and document routing's limits
+- *(corundum-framework-fs)* judge a restore's folder for hiding as the disk spells it
+- *(corundum-framework-fs)* rename by handle on Windows, so a move never replaces an entry
+- *(corundum-framework-fs)* judge hiding on the names on disk, whatever the case asked
+- *(corundum-framework-fs)* open a file without following a symlink swapped in after resolving it
+- *(corundum-framework-journal)* JsonlStore cuts a failed write back on Windows, and retries a failed cut
+- *(corundum-framework-journal)* the journal's checks read a batch's summary, not its operations
+- *(corundum-framework-journal)* limit child depth, trim the undo stacks, and refuse a history cursor that was dropped
+- *(corundum-framework-journal)* an undo whose target was evicted is an error
+- *(corundum-framework-journal)* count only forward batches in the undo window
+- *(corundum-framework-journal)* a store failure neither runs a refused batch nor hangs wait
+- *(corundum-framework-journal)* catch a panic in inverse, and report its errors
+
+### Other
+
+- route and follow see the request's spelling, Linux case limits, no-replace window
+- put the fs and journal feature rows in the facade's table
+- Merge pull request #144 from sapphire-turtle/flaky-first-frame
+- *(corundum-framework-gui)* the first frame's request is checked by its call, not by a busy page
+- *(corundum-framework-gui)* where fs.read decodes, when a mismatch latches, and LocalTransport's runtime
+- *(deps)* bump base64, rtrb, minisign, minisign-verify, moxcms and gradle/actions
+- *(corundum-framework-fs)* skip the non-UTF-8 name test where the file system refuses the name
+- *(corundum-framework-fs)* stat only a page's entries when listing a folder
+- *(corundum-framework-journal)* the contracts operations and stores rely on
+
 ## [0.11.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.10.0...v0.11.0) - 2026-11-06
 
 ### Added
