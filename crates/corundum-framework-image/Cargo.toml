@@ -22,7 +22,7 @@ raw = ["dep:rawler"]
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "tiff", "webp"] }
 thiserror.workspace = true
 tracing.workspace = true
-moxcms = "0.8"
+moxcms = "0.9"
 fast_image_resize = "6"
 libwebp-sys = { version = "0.14", optional = true }
 rawler = { version = "0.8", default-features = false, optional = true }
