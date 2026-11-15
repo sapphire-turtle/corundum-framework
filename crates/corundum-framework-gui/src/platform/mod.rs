@@ -43,7 +43,11 @@ pub fn needs_paste_button() -> bool {
 }
 
 /// Whether the system's dialogs and file manager are here: on the desktops.
-const DESKTOP: bool = cfg!(not(any(target_os = "android", target_os = "ios")));
+const DESKTOP: bool = cfg!(not(any(
+    target_os = "android",
+    target_os = "ios",
+    target_arch = "wasm32"
+)));
 
 /// Image files, for a [`FilePicker::filter`]: an attachment, a cover.
 pub const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "avif"];
@@ -66,11 +70,11 @@ pub fn folder_picker_available() -> bool {
 /// there is no folder dialog ([`folder_picker_available`]). The dialog holds the frame
 /// until it closes.
 pub fn pick_folder(title: &str) -> Option<PathBuf> {
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
     {
         rfd::FileDialog::new().set_title(title).pick_folder()
     }
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
     {
         let _ = title;
         None
@@ -124,11 +128,11 @@ impl FilePicker {
 
     /// One file; `None` when the person cancels.
     pub fn pick_file(self) -> Option<PathBuf> {
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
         {
             self.dialog().pick_file()
         }
-        #[cfg(any(target_os = "android", target_os = "ios"))]
+        #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
         {
             None
         }
@@ -136,17 +140,17 @@ impl FilePicker {
 
     /// Any number of files; none when the person cancels.
     pub fn pick_files(self) -> Vec<PathBuf> {
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
         {
             self.dialog().pick_files().unwrap_or_default()
         }
-        #[cfg(any(target_os = "android", target_os = "ios"))]
+        #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
         {
             Vec::new()
         }
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
     fn dialog(self) -> rfd::FileDialog {
         let mut dialog = rfd::FileDialog::new();
         if let Some(title) = self.title {
@@ -362,7 +366,7 @@ pub fn open_in_file_manager(path: &Path) {
         not(any(target_os = "macos", target_os = "android", target_os = "ios"))
     ))]
     let program = Some("xdg-open");
-    #[cfg(any(target_os = "android", target_os = "ios"))]
+    #[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
     let program: Option<&str> = None;
     if let Some(program) = program {
         let _ = std::process::Command::new(program).arg(path).spawn();
@@ -393,7 +397,7 @@ mod tests {
         assert!(!needs_paste_button());
     }
 
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_arch = "wasm32")))]
     #[test]
     fn a_desktop_has_the_dialogs_and_a_file_manager() {
         assert!(file_picker_available());
@@ -427,7 +431,10 @@ mod tests {
         assert_eq!(picker.title.as_deref(), Some("Video"));
     }
 
-    #[cfg(all(feature = "media-picker", not(target_os = "ios")))]
+    #[cfg(all(
+        feature = "media-picker",
+        not(any(target_os = "ios", target_arch = "wasm32"))
+    ))]
     #[test]
     fn a_desktop_has_the_media_picker() {
         assert!(media_picker_available());
