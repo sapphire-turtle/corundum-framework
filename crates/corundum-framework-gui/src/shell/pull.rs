@@ -7,6 +7,9 @@ use super::refresh;
 /// How far a pull goes down before letting go refreshes.
 const THRESHOLD: f32 = 64.0;
 
+/// How far a finger may slip up after touching down and still pull.
+const SLIP: f32 = 6.0;
+
 /// The size of the pull's icon and of the spinner.
 const ICON: f32 = 18.0;
 
@@ -46,7 +49,11 @@ pub fn pull_to_refresh<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
         )
     });
     let at_top = output.state.clamped_offset().y <= 0.0;
-    if state != Refresh::Idle || !at_top {
+    // A widget inside that took the drag — a slider, a text selection — keeps it.
+    let taken = ctx
+        .dragged_id()
+        .is_some_and(|dragged| dragged != output.id.with("area"));
+    if state != Refresh::Idle || !at_top || taken {
         pull = None;
     } else if pressed
         && let Some(origin) = origin.filter(|o| rect.contains(*o))
@@ -63,7 +70,7 @@ pub fn pull_to_refresh<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
     {
         let dy = pos.y - p.origin.y;
         let dx = (pos.x - p.origin.x).abs();
-        if dy < 0.0 {
+        if dy < -SLIP {
             pull = None;
         } else {
             p.armed = dy >= THRESHOLD && dy > dx;
@@ -181,6 +188,56 @@ mod tests {
         }
         drag(&mut run, FROM, egui::vec2(0.0, 300.0));
         assert_eq!(run.app.refreshed, []);
+    }
+
+    thread_local! {
+        static SLIDER: std::cell::Cell<egui::Rect> = const { std::cell::Cell::new(egui::Rect::NOTHING) };
+    }
+
+    fn slider(ui: &mut egui::Ui) {
+        pull_to_refresh(ui, |ui| {
+            let id = egui::Id::unique("test_slider");
+            let mut value: f32 = ui.data(|d| d.get_temp(id)).unwrap_or(0.5);
+            let rect = ui
+                .add_sized(
+                    [24.0, 200.0],
+                    egui::Slider::new(&mut value, 0.0..=1.0).vertical(),
+                )
+                .rect;
+            ui.data_mut(|d| d.insert_temp(id, value));
+            SLIDER.with(|s| s.set(rect));
+        });
+    }
+
+    #[test]
+    fn a_drag_on_a_slider_does_not_pull() {
+        let mut app = App::with(&[(Screen::Entries, Refresh::Idle)]);
+        app.screen = Some(slider);
+        let mut run = Run::new(app, WIDE);
+        let from = SLIDER.with(|s| s.get()).center_top() + egui::vec2(0.0, 20.0);
+        drag(&mut run, from, egui::vec2(0.0, 100.0));
+        assert_eq!(run.app.refreshed, []);
+    }
+
+    #[test]
+    fn a_small_upward_jitter_keeps_the_pull() {
+        let mut run = run(Refresh::Idle);
+        let button = |pos, pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        run.frame(vec![egui::Event::PointerMoved(FROM)]);
+        run.frame(vec![button(FROM, true)]);
+        run.frame(vec![egui::Event::PointerMoved(FROM - egui::vec2(0.0, 3.0))]);
+        for i in 1..=10 {
+            let at = FROM + egui::vec2(0.0, 10.0 * i as f32);
+            run.frame(vec![egui::Event::PointerMoved(at)]);
+        }
+        run.frame(vec![button(FROM + egui::vec2(0.0, 100.0), false)]);
+        run.frame(vec![]);
+        assert_eq!(run.app.refreshed, [Screen::Entries]);
     }
 
     #[test]

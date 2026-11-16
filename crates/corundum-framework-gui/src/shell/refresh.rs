@@ -56,7 +56,7 @@ pub(crate) fn take(ctx: &egui::Context) -> bool {
 pub(crate) fn keys(ctx: &egui::Context, state: Refresh) {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        if state != Refresh::Idle || ctx.egui_wants_keyboard_input() {
+        if state != Refresh::Idle || ctx.text_edit_focused() {
             return;
         }
         let pressed = ctx.input_mut(|i| {
@@ -68,7 +68,7 @@ pub(crate) fn keys(ctx: &egui::Context, state: Refresh) {
                 ) && !matches!(
                     e,
                     egui::Event::Key { key: egui::Key::R, pressed: true, repeat: false, modifiers, .. }
-                        if modifiers.command
+                        if modifiers.matches_exact(egui::Modifiers::COMMAND)
                 )
             });
             i.events.len() != before
@@ -293,6 +293,22 @@ pub(crate) mod tests {
         let mut run = Run::new(app, WIDE);
         run.press(Key::R, Modifiers::COMMAND);
         run.press(Key::F5, Modifiers::NONE);
+        assert_eq!(run.app.refreshed, []);
+    }
+
+    #[test]
+    fn keys_still_work_with_a_button_focused() {
+        let mut app = App::with(&[(Screen::Entries, Refresh::Idle)]);
+        app.screen = Some(|ui| ui.button("b").request_focus());
+        let mut run = Run::new(app, WIDE);
+        run.press(Key::F5, Modifiers::NONE);
+        assert_eq!(run.app.refreshed, [Screen::Entries]);
+    }
+
+    #[test]
+    fn ctrl_shift_r_is_left_alone() {
+        let mut run = Run::new(App::with(&[(Screen::Entries, Refresh::Idle)]), WIDE);
+        run.press(Key::R, Modifiers::COMMAND | Modifiers::SHIFT);
         assert_eq!(run.app.refreshed, []);
     }
 
