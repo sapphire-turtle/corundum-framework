@@ -47,6 +47,9 @@ corundum-detail-close = Close
 # The shell's More button (`Shell`), in the footer's place when items are left off the rail.
 corundum-shell-more = More
 
+# The shell's refresh button on the status bar (`ShellApp::refresh`): its tooltip.
+corundum-shell-refresh = Refresh
+
 # The rail's settings page (`settings::RailPage`): its name, what it does, a row's handle and
 # box, and the way back to the app's order.
 corundum-settings-rail = Navigation

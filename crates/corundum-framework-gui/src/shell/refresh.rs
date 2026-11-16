@@ -18,12 +18,12 @@ pub enum Refresh {
 
 /// Where the frame's state is kept, for the status bar's button and a pull.
 fn state_id() -> egui::Id {
-    egui::Id::unique("corundum-shell-refresh-state")
+    egui::Id::unique("corundum_shell_refresh_state")
 }
 
 /// Where a request for a refresh is kept until the shell takes it.
 fn request_id() -> egui::Id {
-    egui::Id::unique("corundum-shell-refresh-request")
+    egui::Id::unique("corundum_shell_refresh_request")
 }
 
 /// Keep `state` as the open screen's for this frame, and drop a request left over.
@@ -79,6 +79,31 @@ pub(crate) fn keys(ctx: &egui::Context, state: Refresh) {
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (ctx, state);
+}
+
+/// The status bar's button for the open screen: nothing when it cannot be refreshed, a
+/// spinner while it is refreshing, else a button that asks for a refresh. What was drawn.
+pub(crate) fn button_ui(ui: &mut egui::Ui) -> Option<egui::Response> {
+    const ICON: f32 = 14.0;
+    match state(ui.ctx()) {
+        Refresh::Unsupported => None,
+        Refresh::Idle => {
+            let response = ui
+                .add(crate::icons::button(crate::icons::refresh_cw(), ICON))
+                .on_hover_text(crate::tr!(ui, "corundum-shell-refresh"));
+            if response.clicked() {
+                request(ui.ctx());
+            }
+            Some(response)
+        }
+        Refresh::Running => {
+            let side = ui.spacing().interact_size.y;
+            let (rect, response) =
+                ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+            ui.put(rect, egui::Spinner::new().size(ICON));
+            Some(response)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -276,5 +301,56 @@ pub(crate) mod tests {
         let mut run = Run::new(App::with(&[(Screen::Entries, Refresh::Idle)]), NARROW);
         run.press(Key::F5, Modifiers::NONE);
         assert_eq!(run.app.refreshed, [Screen::Entries]);
+    }
+}
+
+#[cfg(test)]
+mod button_tests {
+    use super::Refresh;
+    use super::tests::{App, NARROW, Run, Screen, WIDE};
+
+    #[test]
+    fn the_button_is_absent_when_unsupported() {
+        let run = Run::new(App::default(), WIDE);
+        assert_eq!(run.shell.refresh_rect, None);
+    }
+
+    #[test]
+    fn clicking_the_button_refreshes_once() {
+        let mut run = Run::new(App::with(&[(Screen::Entries, Refresh::Idle)]), WIDE);
+        let at = run.shell.refresh_rect.expect("a button").center();
+        // On the status bar, along the bottom.
+        assert!(at.y > WIDE[1] - 30.0, "{at:?}");
+        run.click(at);
+        assert_eq!(run.app.refreshed, [Screen::Entries]);
+    }
+
+    #[test]
+    fn a_running_screen_shows_a_spinner_not_a_button() {
+        let mut run = Run::new(App::with(&[(Screen::Entries, Refresh::Running)]), WIDE);
+        let at = run.shell.refresh_rect.expect("a spinner").center();
+        run.click(at);
+        assert_eq!(run.app.refreshed, []);
+    }
+
+    #[test]
+    fn the_button_follows_the_open_screen() {
+        let app = App::with(&[
+            (Screen::Entries, Refresh::Running),
+            (Screen::Summary, Refresh::Idle),
+        ]);
+        let mut run = Run::new(app, WIDE);
+        run.shell.open(Screen::Summary);
+        run.frame(vec![]);
+        run.frame(vec![]);
+        let at = run.shell.refresh_rect.expect("a button").center();
+        run.click(at);
+        assert_eq!(run.app.refreshed, [Screen::Summary]);
+    }
+
+    #[test]
+    fn narrow_there_is_no_button() {
+        let run = Run::new(App::with(&[(Screen::Entries, Refresh::Idle)]), NARROW);
+        assert_eq!(run.shell.refresh_rect, None);
     }
 }

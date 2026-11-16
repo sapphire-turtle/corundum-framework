@@ -172,6 +172,9 @@ pub struct Shell<D> {
     more_rect: egui::Rect,
     #[cfg(test)]
     menu_rects: Vec<egui::Rect>,
+    /// The status bar's refresh button, or its spinner, when drawn.
+    #[cfg(test)]
+    refresh_rect: Option<egui::Rect>,
     open: Option<D>,
     /// How big the foot was last frame: the rail or the bar keeps room for it.
     foot_size: egui::Vec2,
@@ -410,6 +413,8 @@ impl<D: Copy + PartialEq> Shell<D> {
             more_rect: egui::Rect::NOTHING,
             #[cfg(test)]
             menu_rects: Vec::new(),
+            #[cfg(test)]
+            refresh_rect: None,
             open: None,
             foot_size: egui::Vec2::ZERO,
             pane: crate::detail::DetailPane::new("corundum_shell_side"),
@@ -779,7 +784,12 @@ impl<D: Copy + PartialEq> Shell<D> {
                 }
             });
             // Drawn after the screen, so the toggle knows of the detail pane drawn there.
-            if let Some(id) = status_bar_ui(ui, strip, app) {
+            let (opened, _refresh) = status_bar_ui(ui, strip, app);
+            #[cfg(test)]
+            {
+                self.refresh_rect = _refresh;
+            }
+            if let Some(id) = opened {
                 self.open = Some(id);
                 ui.ctx().request_repaint();
             }
@@ -1097,9 +1107,14 @@ impl<D: Copy + PartialEq> Shell<D> {
     }
 }
 
-/// The status bar along the bottom of `strip`: the app's status from the left, its foot and
-/// the side pane's toggle at the right end. The destination the foot returns, if any.
-fn status_bar_ui<D>(ui: &mut egui::Ui, strip: egui::Rect, app: &mut impl ShellApp<D>) -> Option<D> {
+/// The status bar along the bottom of `strip`: the app's status from the left; its foot,
+/// the refresh button and the side pane's toggle at the right end. The destination the foot
+/// returns, if any, and where the refresh button was drawn.
+fn status_bar_ui<D>(
+    ui: &mut egui::Ui,
+    strip: egui::Rect,
+    app: &mut impl ShellApp<D>,
+) -> (Option<D>, Option<egui::Rect>) {
     let visuals = ui.visuals();
     ui.painter().rect_filled(strip, 0.0, visuals.panel_fill);
     ui.painter().hline(
@@ -1116,11 +1131,12 @@ fn status_bar_ui<D>(ui: &mut egui::Ui, strip: egui::Rect, app: &mut impl ShellAp
             ui.set_clip_rect(row);
             crate::detail::toggle_ui(ui);
             let opened = app.foot_ui(ui);
+            let refresh = refresh::button_ui(ui).map(|r| r.rect);
             // What is left, from the left: the app's.
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 app.status_ui(ui)
             });
-            opened
+            (opened, refresh)
         },
     )
     .inner

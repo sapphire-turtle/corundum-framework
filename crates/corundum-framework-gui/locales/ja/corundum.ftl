@@ -47,6 +47,9 @@ corundum-detail-close = 閉じる
 # シェルの「その他」ボタン（`Shell`）。レールに出ない項目があるとき、フッターの位置に出る。
 corundum-shell-more = その他
 
+# ステータスバーにあるシェルの再読み込みボタン（`ShellApp::refresh`）のツールチップ。
+corundum-shell-refresh = 再読み込み
+
 # レールの設定ページ（`settings::RailPage`）：名前、説明、行のハンドルとチェックボックス、既定の順に戻すボタン。
 corundum-settings-rail = ナビゲーション
 corundum-settings-rail-intro = よく使う順にドラッグで並べ替えます。チェックを外した項目は、ウィンドウに収まらない項目と一緒に ⋯ メニューに入ります。
