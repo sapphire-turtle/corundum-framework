@@ -11,7 +11,7 @@ use corundum_framework::gui::look::{self, Look};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::store::Store;
 use corundum_framework::gui::theme::{self, ThemeSettings};
-use corundum_framework::gui::{Action, Destination, Shell, ShellApp, Side, egui, icons};
+use corundum_framework::gui::{Action, Destination, Refresh, Shell, ShellApp, Side, egui, icons};
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod first_run;
@@ -193,6 +193,14 @@ impl ShellApp<Screen> for App {
             badge.ui(ui);
         }
         ui.weak(self.state.log.text(ui.ctx()));
+    }
+
+    fn refresh_state(&self, screen: Screen) -> Refresh {
+        self.state.refresh_state(screen)
+    }
+
+    fn refresh(&mut self, screen: Screen) {
+        self.state.refresh(screen);
     }
 
     fn action(&mut self, id: &'static str, side: &mut Side) {

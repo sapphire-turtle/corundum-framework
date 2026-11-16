@@ -3,7 +3,7 @@
 use corundum_framework::gui::i18n::{self, LanguageSettings, Message};
 use corundum_framework::gui::settings::Settings;
 use corundum_framework::gui::theme::{ThemeSettings, Tint};
-use corundum_framework::gui::{Side, egui};
+use corundum_framework::gui::{Refresh, Side, egui};
 
 mod dates;
 mod detail;
@@ -90,6 +90,7 @@ pub(crate) struct State {
     pub(crate) media: media::State,
     editors: editors::State,
     dates: dates::State,
+    overview: overview::Refreshing,
 }
 
 impl State {
@@ -111,7 +112,33 @@ impl State {
             media: media::State::new(),
             editors: editors::State::default(),
             dates: dates::State::default(),
+            overview: overview::Refreshing::default(),
         }
+    }
+
+    /// Whether `screen` can be refreshed from the shell: the Overview, slowly, and the
+    /// Platform, at once.
+    pub(crate) fn refresh_state(&self, screen: Screen) -> Refresh {
+        match screen {
+            Screen::Overview => self.overview.state(),
+            Screen::Platform => Refresh::Idle,
+            _ => Refresh::Unsupported,
+        }
+    }
+
+    /// Refresh `screen`, as the shell asks.
+    pub(crate) fn refresh(&mut self, screen: Screen) {
+        match screen {
+            Screen::Overview => self.overview.start(),
+            Screen::Platform => self.platform.refresh(),
+            _ => {}
+        }
+    }
+
+    /// How many of the Overview's refreshes have ended.
+    #[cfg(test)]
+    pub(crate) fn overview_refreshes(&self) -> u32 {
+        self.overview.count()
     }
 }
 
@@ -133,22 +160,21 @@ pub(crate) fn ui(
         _ => {}
     }
     egui::CentralPanel::default().show(ui, |ui| {
-        egui::ScrollArea::vertical()
-            .auto_shrink(false)
-            .show(ui, |ui| match screen {
-                Screen::Overview => overview::ui(ui, state),
-                Screen::Theme => theme_screen::ui(ui, state, theme),
-                Screen::Fonts => fonts::ui(ui, state.cjk.as_ref()),
-                Screen::Icons => icons::ui(ui, &mut state.icon_style),
-                Screen::Language => language::ui(ui, state, language),
-                Screen::Platform => platform::ui(ui, &mut state.platform),
-                Screen::Media => media::ui(ui, &mut state.media),
-                Screen::Editors => editors::ui(ui, &mut state.editors, &mut state.log),
-                Screen::Dates => dates::ui(ui, &mut state.dates),
-                Screen::Settings | Screen::Detail | Screen::Files => {
-                    unreachable!("drawn above")
-                }
-            });
+        // Pulled down, the screens that can be refreshed are.
+        corundum_framework::gui::pull_to_refresh(ui, |ui| match screen {
+            Screen::Overview => overview::ui(ui, state),
+            Screen::Theme => theme_screen::ui(ui, state, theme),
+            Screen::Fonts => fonts::ui(ui, state.cjk.as_ref()),
+            Screen::Icons => icons::ui(ui, &mut state.icon_style),
+            Screen::Language => language::ui(ui, state, language),
+            Screen::Platform => platform::ui(ui, &mut state.platform),
+            Screen::Media => media::ui(ui, &mut state.media),
+            Screen::Editors => editors::ui(ui, &mut state.editors, &mut state.log),
+            Screen::Dates => dates::ui(ui, &mut state.dates),
+            Screen::Settings | Screen::Detail | Screen::Files => {
+                unreachable!("drawn above")
+            }
+        });
     });
 }
 
