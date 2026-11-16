@@ -92,4 +92,5 @@ mod test_support;
 
 pub use shell::{
     Action, COMPACT_WIDTH, Destination, RailItem, RailOrder, Refresh, Shell, ShellApp, Side,
+    pull_to_refresh,
 };

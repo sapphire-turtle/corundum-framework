@@ -15,9 +15,11 @@
 //! them as a [`ShellApp`], which [`Shell::show`] draws.
 
 mod order;
+mod pull;
 mod refresh;
 
 pub use order::RailOrder;
+pub use pull::pull_to_refresh;
 pub use refresh::Refresh;
 
 use crate::detail::Part;
