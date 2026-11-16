@@ -78,8 +78,8 @@ The plumbing goes in a new `shell/refresh.rs` and the helper in `shell/pull.rs`,
     press (rules in Global Constraints).
   - `pub(crate) fn take(ctx: &egui::Context) -> bool`: whether a request was marked, and
     clears it.
-  - Temp-data ids: `egui::Id::new("corundum-shell-refresh-state")` and
-    `egui::Id::new("corundum-shell-refresh-request")`.
+  - Temp-data ids: `egui::Id::unique("corundum-shell-refresh-state")` and
+    `egui::Id::unique("corundum-shell-refresh-request")`.
 
 - [ ] **Step 1: Write the failing tests** in `refresh.rs`. The fixture is a
   `ShellApp<Screen>` with `states: HashMap<Screen, Refresh>`, `refreshed: Vec<Screen>`

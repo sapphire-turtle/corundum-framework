@@ -15,8 +15,10 @@
 //! them as a [`ShellApp`], which [`Shell::show`] draws.
 
 mod order;
+mod refresh;
 
 pub use order::RailOrder;
+pub use refresh::Refresh;
 
 use crate::detail::Part;
 pub(crate) use order::{RailEntry, move_to, published, request};
@@ -258,6 +260,22 @@ pub trait ShellApp<D> {
     /// "new entry" begins the entry and opens it in the side pane through `side`.
     fn action(&mut self, id: &'static str, side: &mut Side) {
         let _ = (id, side);
+    }
+
+    /// Whether `screen` can be refreshed, and whether it is now. Asked every frame, of the
+    /// open screen. By default there is nothing to refresh.
+    fn refresh_state(&self, screen: D) -> Refresh {
+        let _ = screen;
+        Refresh::Unsupported
+    }
+
+    /// Refresh `screen`: the person clicked the status bar's button, pressed F5 or Cmd+R,
+    /// or pulled the screen's [`pull_to_refresh`] down. Called only while
+    /// [`refresh_state`](Self::refresh_state) says [`Refresh::Idle`]. A quick re-read can
+    /// finish here; slow work starts here, and `refresh_state` says
+    /// [`Refresh::Running`] until it is done.
+    fn refresh(&mut self, screen: D) {
+        let _ = screen;
     }
 }
 
@@ -721,6 +739,10 @@ impl<D: Copy + PartialEq> Shell<D> {
             self.sync_side(ui.ctx(), true);
         }
         self.sync_order(ui.ctx());
+        let opened_at_start = self.open;
+        let refresh = opened_at_start.map_or(Refresh::Unsupported, |s| app.refresh_state(s));
+        refresh::begin(ui.ctx(), refresh);
+        refresh::keys(ui.ctx(), refresh);
         let safe = unsafe_margin(ui);
         let full = ui.max_rect();
         let compact = full.width() - safe.sum().x < COMPACT_WIDTH;
@@ -788,6 +810,14 @@ impl<D: Copy + PartialEq> Shell<D> {
                     self.content_ui(ui, app, id, layout);
                 }
             });
+        }
+        // Once a frame, for the screen open when the frame began.
+        if refresh::take(ui.ctx())
+            && refresh == Refresh::Idle
+            && let Some(open) = opened_at_start
+        {
+            app.refresh(open);
+            ui.ctx().request_repaint();
         }
         self.sync_side(ui.ctx(), false);
     }
