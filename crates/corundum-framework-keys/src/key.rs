@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
@@ -100,13 +100,13 @@ pub struct Key {
     /// The hash of its token.
     pub hash: KeyHash,
     /// When it was added.
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// When its token was last replaced.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rotated_at: Option<DateTime<Utc>>,
+    pub rotated_at: Option<Timestamp>,
     /// When it was retired, if it is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub retired_at: Option<DateTime<Utc>>,
+    pub retired_at: Option<Timestamp>,
 }
 
 impl Key {
@@ -142,13 +142,13 @@ pub struct KeyInfo {
     /// See [`Key::profile`].
     pub profile: ProfileId,
     /// See [`Key::created_at`].
-    pub created_at: DateTime<Utc>,
+    pub created_at: Timestamp,
     /// See [`Key::rotated_at`].
     #[serde(default)]
-    pub rotated_at: Option<DateTime<Utc>>,
+    pub rotated_at: Option<Timestamp>,
     /// See [`Key::retired_at`].
     #[serde(default)]
-    pub retired_at: Option<DateTime<Utc>>,
+    pub retired_at: Option<Timestamp>,
 }
 
 impl KeyInfo {
@@ -161,6 +161,29 @@ impl KeyInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timestamps_written_with_chrono_still_read() {
+        // Keys and clients before 0.13 wrote chrono's RFC 3339, in UTC with a `Z`.
+        let json = r#"{
+            "id": "a",
+            "name": "n",
+            "profile": "p",
+            "created_at": "2026-10-31T09:15:42.123456789Z",
+            "rotated_at": "2026-11-01T00:00:00Z"
+        }"#;
+        let info: KeyInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            info.created_at,
+            "2026-10-31T09:15:42.123456789Z"
+                .parse::<Timestamp>()
+                .unwrap()
+        );
+        assert_eq!(info.rotated_at.unwrap().to_string(), "2026-11-01T00:00:00Z");
+        assert_eq!(info.retired_at, None);
+        let back = serde_json::to_value(&info).unwrap();
+        assert_eq!(back["created_at"], "2026-10-31T09:15:42.123456789Z");
+    }
 
     #[test]
     fn key_id_validates() {

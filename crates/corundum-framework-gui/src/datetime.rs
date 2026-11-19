@@ -15,7 +15,7 @@
 //! before the hour, until [alumina#37]. corundum's config leaves alumina's default of 24-hour
 //! time alone, so the AM / PM order only shows for an app that turns `hour12` on.
 //!
-//! Timestamps are [`chrono::NaiveDateTime`], local wall time: the app converts to and from a
+//! Timestamps are [`jiff::civil::DateTime`], local wall time: the app converts to and from a
 //! time zone.
 //!
 //! [alumina-datetime]: https://crates.io/crates/alumina-datetime
@@ -86,7 +86,7 @@ pub fn config(ctx: &egui::Context) -> CalendarConfig {
     CalendarConfig::default()
         .labels(labels(ctx))
         .icons(icons())
-        .first_weekday(chrono::Weekday::Mon)
+        .first_weekday(jiff::civil::Weekday::Monday)
 }
 
 #[cfg(test)]
@@ -143,14 +143,17 @@ mod tests {
 
     #[test]
     fn weeks_start_on_monday() {
-        assert_eq!(config(&ctx_in("en")).first_weekday, chrono::Weekday::Mon);
+        assert_eq!(
+            config(&ctx_in("en")).first_weekday,
+            jiff::civil::Weekday::Monday
+        );
     }
 
     #[test]
     fn week_numbers_show_with_corundum_s_config() {
         let ctx = ctx_in("en");
         let cfg = config(&ctx).show_week_numbers(true);
-        let mut state = CalendarState::new(chrono::NaiveDate::from_ymd_opt(2026, 11, 5).unwrap());
+        let mut state = CalendarState::new(jiff::civil::date(2026, 11, 5));
         let mut found = false;
         let mut first = ctx.run_ui(egui::RawInput::default(), |ui| {
             Calendar::new("t", &mut state).config(cfg.clone()).show(ui);

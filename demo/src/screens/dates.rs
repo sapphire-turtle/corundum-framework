@@ -3,9 +3,8 @@
 //! Every widget takes `gui::datetime::config(ctx)`: the labels follow the language and the
 //! week starts on Monday, so the week numbers are ISO.
 
-use corundum_framework::gui::datetime::chrono::{
-    Datelike as _, Local, NaiveDate, NaiveDateTime, NaiveTime, Timelike as _,
-};
+use corundum_framework::gui::datetime::jiff::ZonedDateTime;
+use corundum_framework::gui::datetime::jiff::civil::{Date, DateTime, Time};
 use corundum_framework::gui::datetime::{
     self, Calendar, CalendarState, DatePickerButton, DateTimePickerButton, Period, PeriodKind,
     PeriodPickerButton, TimePickerButton,
@@ -18,19 +17,16 @@ use super::{heading, section};
 pub(crate) struct State {
     calendar: CalendarState,
     picked: Option<Period>,
-    date: Option<NaiveDate>,
+    date: Option<Date>,
     period: Option<Period>,
-    time: NaiveTime,
-    datetime: NaiveDateTime,
+    time: Time,
+    datetime: DateTime,
 }
 
 impl Default for State {
     fn default() -> State {
-        let now = Local::now()
-            .naive_local()
-            .with_second(0)
-            .and_then(|t| t.with_nanosecond(0))
-            .unwrap_or_default();
+        let now = ZonedDateTime::now().datetime();
+        let now = now.date().at(now.hour(), now.minute(), 0, 0);
         State {
             calendar: CalendarState::new(now.date()),
             picked: None,
@@ -43,15 +39,15 @@ impl Default for State {
 }
 
 /// A made-up count of entries on a day: one dot on every 7th day.
-fn badge(day: NaiveDate) -> usize {
-    usize::from(day.day().is_multiple_of(7))
+fn badge(day: Date) -> usize {
+    usize::from(day.day() % 7 == 0)
 }
 
 pub(super) fn ui(ui: &mut egui::Ui, state: &mut State) {
     heading(ui, "demo-screen-dates");
     ui.label(tr!(ui, "demo-dates-intro"));
     let config = datetime::config(ui.ctx());
-    let badge: &dyn Fn(NaiveDate) -> usize = &badge;
+    let badge: &dyn Fn(Date) -> usize = &badge;
     let none = tr!(ui, "demo-dates-none");
 
     section(ui, "demo-dates-calendar");
