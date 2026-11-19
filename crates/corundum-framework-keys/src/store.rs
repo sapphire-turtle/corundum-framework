@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use chrono::Utc;
+use jiff::Timestamp;
 
 use crate::error::{Error, Result};
 use crate::{Key, KeyHash, KeyId, ProfileId, Token};
@@ -206,7 +206,7 @@ impl KeyStore {
             description,
             profile,
             hash: KeyHash::of_blake3(token.expose()),
-            created_at: Utc::now(),
+            created_at: Timestamp::now(),
             rotated_at: None,
             retired_at: None,
         };
@@ -217,7 +217,7 @@ impl KeyStore {
     /// Retire a key: its token stops working, its record stays.
     pub fn retire(&mut self, selector: &str) -> Result<Key> {
         self.change(selector, |k| {
-            k.retired_at.get_or_insert_with(Utc::now);
+            k.retired_at.get_or_insert_with(Timestamp::now);
         })
     }
 
@@ -231,7 +231,7 @@ impl KeyStore {
         let token = Token::generate(&self.prefix);
         let key = self.change(selector, |k| {
             k.hash = KeyHash::of_blake3(token.expose());
-            k.rotated_at = Some(Utc::now());
+            k.rotated_at = Some(Timestamp::now());
         })?;
         Ok((key, token))
     }
@@ -339,7 +339,7 @@ mod tests {
             description: None,
             profile: ProfileId::new("p").unwrap(),
             hash: format!("sha256:{hex}").parse().unwrap(),
-            created_at: Utc::now(),
+            created_at: Timestamp::now(),
             rotated_at: None,
             retired_at: None,
         };
@@ -461,7 +461,7 @@ mod tests {
             .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let mut copy = key.clone();
-        copy.retired_at = Some(Utc::now());
+        copy.retired_at = Some(Timestamp::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
         let s = KeyStore::open(dir.path()).unwrap();
         assert!(s.authenticate(token.expose()).is_none());
@@ -492,7 +492,7 @@ mod tests {
             .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let mut copy = key.clone();
-        copy.retired_at = Some(Utc::now());
+        copy.retired_at = Some(Timestamp::now());
         plant(dir.path(), "B.conflict-r-1.toml", &copy);
         let s = KeyStore::open(dir.path()).unwrap();
         assert_eq!(s.list().len(), 1);
@@ -507,7 +507,7 @@ mod tests {
             .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let mut copy = key.clone();
-        copy.retired_at = Some(Utc::now());
+        copy.retired_at = Some(Timestamp::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
         let mut s = KeyStore::open(dir.path()).unwrap();
         assert!(!s.restore(key.id.as_str()).unwrap().is_retired());
@@ -522,7 +522,7 @@ mod tests {
             .add("p", None, crate::ProfileId::new("p").unwrap())
             .unwrap();
         let mut copy = key.clone();
-        copy.retired_at = Some(Utc::now());
+        copy.retired_at = Some(Timestamp::now());
         plant(dir.path(), &format!("{}.conflict-r-1.toml", key.id), &copy);
         let mut s = KeyStore::open(dir.path()).unwrap();
         s.fail_write = true;

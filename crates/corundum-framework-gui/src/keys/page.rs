@@ -224,7 +224,7 @@ impl KeysPage {
                 if let Some(d) = &key.description {
                     ui.weak(d);
                 }
-                ui.weak(key.created_at.format("%Y-%m-%d").to_string());
+                ui.weak(key.created_at.strftime("%Y-%m-%d").to_string());
                 if key.is_retired() {
                     ui.weak(tr!(ui, "corundum-keys-retired"));
                     if ui.button(tr!(ui, "corundum-keys-restore")).clicked() {

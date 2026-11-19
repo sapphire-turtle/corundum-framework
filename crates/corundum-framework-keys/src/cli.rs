@@ -110,7 +110,7 @@ fn line(key: &Key, profiles: &[Profile]) -> String {
         key.id,
         key.name,
         profile,
-        key.created_at.format("%Y-%m-%d %H:%M")
+        key.created_at.strftime("%Y-%m-%d %H:%M")
     );
     if key.is_retired() {
         line.push_str("  retired");
