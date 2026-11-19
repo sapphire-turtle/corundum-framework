@@ -265,3 +265,33 @@ fn the_dates_screen_draws() {
     assert_eq!(app.current(), Some(Screen::Dates));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn only_overview_and_platform_refresh() {
+    use corundum_framework::gui::Refresh;
+    let state = screens::State::new(None);
+    for screen in Screen::ALL {
+        let expected = match screen {
+            Screen::Overview | Screen::Platform => Refresh::Idle,
+            _ => Refresh::Unsupported,
+        };
+        assert_eq!(state.refresh_state(screen), expected, "{screen:?}");
+    }
+}
+
+#[test]
+fn overview_refresh_runs_then_finishes() {
+    use corundum_framework::gui::Refresh;
+    let mut state = screens::State::new(None);
+    state.refresh(Screen::Overview);
+    assert_eq!(state.refresh_state(Screen::Overview), Refresh::Running);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while state.refresh_state(Screen::Overview) == Refresh::Running {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the refresh never finished"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert_eq!(state.overview_refreshes(), 1);
+}

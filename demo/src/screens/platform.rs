@@ -54,7 +54,8 @@ impl State {
         }
     }
 
-    fn refresh(&mut self) {
+    /// Read the directories and the languages again.
+    pub(super) fn refresh(&mut self) {
         self.dirs = AppDirs::new(crate::APP_NAME);
         self.languages = corundum_framework::platform::locale::system_languages();
     }
@@ -110,9 +111,6 @@ pub(super) fn ui(ui: &mut egui::Ui, state: &mut State) {
         "demo-language-system",
         languages = state.languages.join(", ")
     ));
-    if ui.button(tr!(ui, "demo-platform-refresh")).clicked() {
-        state.refresh();
-    }
 }
 
 fn clipboard_ui(ui: &mut egui::Ui, state: &mut State) {

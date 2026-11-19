@@ -90,4 +90,7 @@ pub mod window;
 #[cfg(test)]
 mod test_support;
 
-pub use shell::{Action, COMPACT_WIDTH, Destination, RailItem, RailOrder, Shell, ShellApp, Side};
+pub use shell::{
+    Action, COMPACT_WIDTH, Destination, RailItem, RailOrder, Refresh, Shell, ShellApp, Side,
+    pull_to_refresh,
+};

@@ -15,8 +15,12 @@
 //! them as a [`ShellApp`], which [`Shell::show`] draws.
 
 mod order;
+mod pull;
+mod refresh;
 
 pub use order::RailOrder;
+pub use pull::pull_to_refresh;
+pub use refresh::Refresh;
 
 use crate::detail::Part;
 pub(crate) use order::{RailEntry, move_to, published, request};
@@ -170,6 +174,9 @@ pub struct Shell<D> {
     more_rect: egui::Rect,
     #[cfg(test)]
     menu_rects: Vec<egui::Rect>,
+    /// The status bar's refresh button, or its spinner, when drawn.
+    #[cfg(test)]
+    refresh_rect: Option<egui::Rect>,
     open: Option<D>,
     /// How big the foot was last frame: the rail or the bar keeps room for it.
     foot_size: egui::Vec2,
@@ -258,6 +265,22 @@ pub trait ShellApp<D> {
     /// "new entry" begins the entry and opens it in the side pane through `side`.
     fn action(&mut self, id: &'static str, side: &mut Side) {
         let _ = (id, side);
+    }
+
+    /// Whether `screen` can be refreshed, and whether it is now. Asked every frame, of the
+    /// open screen. By default there is nothing to refresh.
+    fn refresh_state(&self, screen: D) -> Refresh {
+        let _ = screen;
+        Refresh::Unsupported
+    }
+
+    /// Refresh `screen`: the person clicked the status bar's button, pressed F5 or Cmd+R,
+    /// or pulled the screen's [`pull_to_refresh`] down. Called only while
+    /// [`refresh_state`](Self::refresh_state) says [`Refresh::Idle`]. A quick re-read can
+    /// finish here; slow work starts here, and `refresh_state` says
+    /// [`Refresh::Running`] until it is done.
+    fn refresh(&mut self, screen: D) {
+        let _ = screen;
     }
 }
 
@@ -392,6 +415,8 @@ impl<D: Copy + PartialEq> Shell<D> {
             more_rect: egui::Rect::NOTHING,
             #[cfg(test)]
             menu_rects: Vec::new(),
+            #[cfg(test)]
+            refresh_rect: None,
             open: None,
             foot_size: egui::Vec2::ZERO,
             pane: crate::detail::DetailPane::new("corundum_shell_side"),
@@ -721,6 +746,10 @@ impl<D: Copy + PartialEq> Shell<D> {
             self.sync_side(ui.ctx(), true);
         }
         self.sync_order(ui.ctx());
+        let opened_at_start = self.open;
+        let refresh = opened_at_start.map_or(Refresh::Unsupported, |s| app.refresh_state(s));
+        refresh::begin(ui.ctx(), refresh);
+        refresh::keys(ui.ctx(), refresh);
         let safe = unsafe_margin(ui);
         let full = ui.max_rect();
         let compact = full.width() - safe.sum().x < COMPACT_WIDTH;
@@ -757,7 +786,12 @@ impl<D: Copy + PartialEq> Shell<D> {
                 }
             });
             // Drawn after the screen, so the toggle knows of the detail pane drawn there.
-            if let Some(id) = status_bar_ui(ui, strip, app) {
+            let (opened, _refresh) = status_bar_ui(ui, strip, app);
+            #[cfg(test)]
+            {
+                self.refresh_rect = _refresh;
+            }
+            if let Some(id) = opened {
                 self.open = Some(id);
                 ui.ctx().request_repaint();
             }
@@ -788,6 +822,14 @@ impl<D: Copy + PartialEq> Shell<D> {
                     self.content_ui(ui, app, id, layout);
                 }
             });
+        }
+        // Once a frame, for the screen open when the frame began.
+        if refresh::take(ui.ctx())
+            && refresh == Refresh::Idle
+            && let Some(open) = opened_at_start
+        {
+            app.refresh(open);
+            ui.ctx().request_repaint();
         }
         self.sync_side(ui.ctx(), false);
     }
@@ -1067,9 +1109,14 @@ impl<D: Copy + PartialEq> Shell<D> {
     }
 }
 
-/// The status bar along the bottom of `strip`: the app's status from the left, its foot and
-/// the side pane's toggle at the right end. The destination the foot returns, if any.
-fn status_bar_ui<D>(ui: &mut egui::Ui, strip: egui::Rect, app: &mut impl ShellApp<D>) -> Option<D> {
+/// The status bar along the bottom of `strip`: the app's status from the left; its foot,
+/// the refresh button and the side pane's toggle at the right end. The destination the foot
+/// returns, if any, and where the refresh button was drawn.
+fn status_bar_ui<D>(
+    ui: &mut egui::Ui,
+    strip: egui::Rect,
+    app: &mut impl ShellApp<D>,
+) -> (Option<D>, Option<egui::Rect>) {
     let visuals = ui.visuals();
     ui.painter().rect_filled(strip, 0.0, visuals.panel_fill);
     ui.painter().hline(
@@ -1086,11 +1133,12 @@ fn status_bar_ui<D>(ui: &mut egui::Ui, strip: egui::Rect, app: &mut impl ShellAp
             ui.set_clip_rect(row);
             crate::detail::toggle_ui(ui);
             let opened = app.foot_ui(ui);
+            let refresh = refresh::button_ui(ui).map(|r| r.rect);
             // What is left, from the left: the app's.
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 app.status_ui(ui)
             });
-            opened
+            (opened, refresh)
         },
     )
     .inner

@@ -29,6 +29,9 @@ demo-overview-bar = 下部のバー（幅 { $width } pt）
 demo-overview-clicks = レールのアクションを { $count } 回クリックしました。
 demo-overview-online = フッターのスロットの点は「オンライン」です。
 demo-overview-offline = フッターのスロットの点は「オフライン」です。
+demo-overview-refresh = 再読み込み
+demo-overview-refresh-hint = この画面を下に引っぱる、F5 を押す、ステータスバーのボタンを押すと再読み込みします。同期のように 2 秒かかります。
+demo-overview-refreshed = { $count } 回再読み込みしました。
 demo-overview-open-settings = アプリから設定を開く
 
 demo-theme-settings = テーマの設定
@@ -109,7 +112,6 @@ demo-platform-config = 設定：{ $path }
 demo-platform-data = データ：{ $path }
 demo-platform-cache = キャッシュ：{ $path }
 demo-platform-none = なし
-demo-platform-refresh = 読み直す
 
 # メディア画面：OS のメディアキーと「再生中」の表示に連動する、架空のプレイヤー。
 demo-media-intro = 何も鳴らさないプレイヤーです。架空の3曲の上で時計を進めます。再生してから、キーボードのメディアキー、システムのメディアパネル、ロック画面を試してください。どの画面を開いていても従います。

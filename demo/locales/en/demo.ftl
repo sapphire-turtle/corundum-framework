@@ -32,6 +32,12 @@ demo-overview-clicks = { $count ->
 }
 demo-overview-online = The foot slot's dot says online.
 demo-overview-offline = The foot slot's dot says offline.
+demo-overview-refresh = Refresh
+demo-overview-refresh-hint = Pull this screen down, press F5, or use the button on the status bar to refresh it. It takes two seconds, as a sync would.
+demo-overview-refreshed = { $count ->
+    [one] Refreshed once.
+   *[other] Refreshed { $count } times.
+}
 demo-overview-open-settings = Open Settings from the app
 
 demo-theme-settings = The theme's settings
@@ -115,7 +121,6 @@ demo-platform-config = Config: { $path }
 demo-platform-data = Data: { $path }
 demo-platform-cache = Cache: { $path }
 demo-platform-none = none
-demo-platform-refresh = Read again
 
 # The Media screen: a made-up player under the OS's media keys and in its "now playing".
 demo-media-intro = A player that plays nothing: a clock over three made-up tracks. Play it, then try the keyboard's media keys, the system's media panel or its lock screen. It follows them from every screen.
