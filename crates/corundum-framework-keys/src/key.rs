@@ -175,7 +175,9 @@ mod tests {
         let info: KeyInfo = serde_json::from_str(json).unwrap();
         assert_eq!(
             info.created_at,
-            "2026-10-31T09:15:42.123456789Z".parse::<Timestamp>().unwrap()
+            "2026-10-31T09:15:42.123456789Z"
+                .parse::<Timestamp>()
+                .unwrap()
         );
         assert_eq!(info.rotated_at.unwrap().to_string(), "2026-11-01T00:00:00Z");
         assert_eq!(info.retired_at, None);
