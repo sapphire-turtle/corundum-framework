@@ -8,6 +8,30 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.12.0...v0.13.0) - 2026-11-19
+
+### Added
+
+- *(corundum-framework-gui)* pull a screen down to refresh it
+- *(corundum-framework-gui)* a refresh button on the status bar
+- *(corundum-framework-gui)* let a ShellApp refresh its open screen with F5 or Cmd+R
+
+### Fixed
+
+- gate folder and file dialogs and the file manager on wasm
+- *(corundum-framework-gui)* leave drags to the widgets that take them, and keys to focused buttons
+
+### Other
+
+- *(corundum-framework-gui)* [**breaking**] datetime is alumina-datetime 0.3, on jiff
+- *(corundum-framework-keys)* [**breaking**] timestamps are jiff's Timestamp, not chrono's
+- Merge pull request #151 from sapphire-turtle/fix/wasm-gate-dialogs
+- Merge pull request #147 from sapphire-turtle/dependabot/cargo/rfd-0.18.0
+- Merge pull request #148 from sapphire-turtle/dependabot/cargo/grain-id-0.17.0
+- *(deps)* bump grain-id from 0.15.0 to 0.17.0
+- *(deps)* bump rfd from 0.17.2 to 0.18.0
+- rustfmt the chrono compatibility test
+
 ## [0.12.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.11.0...v0.12.0) - 2026-11-13
 
 ### Added
