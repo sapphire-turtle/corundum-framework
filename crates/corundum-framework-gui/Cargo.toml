@@ -178,7 +178,7 @@ corundum-framework-fs = { version = "0.12.0", path = "../corundum-framework-fs",
 # fs.read's bytes, in standard base64 (`fs-client`).
 base64 = { version = "0.23", optional = true }
 # The id in each `FsClient`'s origin (`fs-client`).
-grain-id = { version = "0.15", optional = true }
+grain-id = { version = "0.17", optional = true }
 # The params and results of the fs.* calls, as JSON (`fs-client`).
 serde_json = { workspace = true, optional = true }
 # The update panel's HTTP client, made by corundum-framework-update and named by its

@@ -17,7 +17,7 @@ cap-fs-ext = "4"
 cap-std = "4"
 corundum-framework-fs-api = { version = "0.12.0", path = "../corundum-framework-fs-api" }
 corundum-framework-journal = { version = "0.12.0", path = "../corundum-framework-journal" }
-grain-id = "0.15"
+grain-id = "0.17"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
