@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use cargo_packager_updater::{Config, Update, UpdateFormat, UpdaterBuilder};
 use corundum_framework_platform::dirs::AppDirs;
-use corundum_framework_platform::package;
+use corundum_framework_platform::package::{self, PackageKind, PackageLayout};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -82,8 +82,6 @@ struct Kept {
     format: String,
     /// The file's name in the update directory.
     file: String,
-    /// What the update replaces: the `.app`, the AppImage, the install directory.
-    extract_path: PathBuf,
 }
 
 const KEPT: &str = "pending.json";
@@ -94,6 +92,10 @@ pub(crate) struct Packager {
     source: Source,
     current: Version,
     exe: PathBuf,
+    /// What an update replaces: the install directory, the `.app`, the AppImage file.
+    installed: PathBuf,
+    /// The path cargo-packager's updater is given as the executable.
+    updater_path: PathBuf,
     /// Where the downloaded update is kept: the cache directory's `update`.
     dir: PathBuf,
 }
@@ -102,6 +104,7 @@ impl Packager {
     /// `Error::NotPackaged` when the running executable is not in a package.
     pub(crate) fn new(spec: &'static PackageSpec, source: Source) -> Result<Packager, Error> {
         let exe = package::current_exe().ok_or(Error::NotPackaged)?;
+        let layout = package::current().ok_or(Error::NotPackaged)?;
         let current = Version::parse(spec.version)
             .map_err(|e| Error::Update(format!("the app's version {:?}: {e}", spec.version)))?;
         let dir = AppDirs::new(spec.app_name)
@@ -112,6 +115,8 @@ impl Packager {
             spec,
             source,
             current,
+            updater_path: updater_path(&layout, &exe),
+            installed: layout.root,
             exe,
             dir,
         })
@@ -184,6 +189,16 @@ fn newest_feed(repo: &str, feed: &str) -> Result<String, Error> {
         .ok_or_else(|| Error::Update(format!("no release of {repo} has {feed}")))
 }
 
+/// The executable path to give cargo-packager's updater, from which it takes what an update
+/// replaces. On Linux it takes the path as is: the binary inside a running AppImage is in
+/// the image's read-only mount, so it is given the AppImage file (`$APPIMAGE`) instead.
+fn updater_path(layout: &PackageLayout, exe: &Path) -> PathBuf {
+    match layout.kind {
+        PackageKind::AppImage => layout.root.clone(),
+        PackageKind::Windows | PackageKind::MacBundle => exe.to_path_buf(),
+    }
+}
+
 impl Backend for Packager {
     fn current(&self) -> Version {
         self.current.clone()
@@ -196,7 +211,7 @@ impl Backend for Packager {
             windows: None,
         };
         let update = UpdaterBuilder::new(self.current.clone(), config)
-            .executable_path(&self.exe)
+            .executable_path(&self.updater_path)
             .build()
             .map_err(from_updater)?
             .check()
@@ -241,7 +256,6 @@ impl Backend for Packager {
             version: found.version.to_string(),
             format: format.to_owned(),
             file,
-            extract_path: update.extract_path.clone(),
         };
         fs::write(
             self.dir.join(KEPT),
@@ -275,7 +289,15 @@ impl Backend for Packager {
             After::RestartWith(args) => args,
         };
         let restart = !matches!(after, After::Exit);
-        install(&kept, &file, &self.exe, restart, args, self.spec)?;
+        install(
+            &kept,
+            &file,
+            &self.exe,
+            &self.installed,
+            restart,
+            args,
+            self.spec,
+        )?;
         if !restart {
             std::process::exit(0);
         }
@@ -304,6 +326,7 @@ fn install(
     kept: &Kept,
     file: &Path,
     exe: &Path,
+    _installed: &Path,
     restart: bool,
     args: &[OsString],
     _spec: &PackageSpec,
@@ -376,11 +399,15 @@ fn windows_script(pid: u32, setup: &Path, exe: &Path, restart: bool, args: &[OsS
 
 /// macOS and Linux: the updater replaces the `.app` or the AppImage in place (the running
 /// process keeps its open files), then the app is started again from the same path.
+///
+/// `installed` is this run's, not the one at the download: an AppImage's mount differs at
+/// every start, and the image may have been moved since.
 #[cfg(not(windows))]
 fn install(
     kept: &Kept,
     file: &Path,
     _exe: &Path,
+    installed: &Path,
     restart: bool,
     args: &[OsString],
     spec: &PackageSpec,
@@ -404,7 +431,7 @@ fn install(
         version: kept.version.clone(),
         date: None,
         target: String::new(),
-        extract_path: kept.extract_path.clone(),
+        extract_path: installed.to_path_buf(),
         download_url: url::Url::parse("file:///").expect("a valid URL"),
         signature: String::new(),
         timeout: None,
@@ -414,7 +441,7 @@ fn install(
     update.install(bytes).map_err(from_updater)?;
     let _ = fs::remove_file(file);
     if restart {
-        restart_from(&kept.extract_path, args)?;
+        restart_from(installed, args)?;
     }
     Ok(())
 }
@@ -566,9 +593,40 @@ mod tests {
             version: "1.2.0".into(),
             format: "appimage".into(),
             file: "1.2.0.appimage".into(),
-            extract_path: PathBuf::from("/home/u/Demo.AppImage"),
         };
         let text = serde_json::to_string(&kept).unwrap();
         assert_eq!(serde_json::from_str::<Kept>(&text).unwrap(), kept);
+    }
+
+    #[test]
+    fn a_kept_update_from_before_still_reads_back() {
+        let text = r#"{"version":"1.2.0","format":"appimage","file":"1.2.0.appimage",
+            "extract_path":"/tmp/.mount_DemoAb/usr/bin/demo"}"#;
+        assert_eq!(serde_json::from_str::<Kept>(text).unwrap().version, "1.2.0");
+    }
+
+    #[test]
+    fn an_appimage_s_updater_is_given_the_image_not_its_mount() {
+        let exe = Path::new("/tmp/.mount_DemoAb/usr/bin/demo");
+        let layout = PackageLayout {
+            kind: PackageKind::AppImage,
+            root: PathBuf::from("/home/u/Apps/Demo.AppImage"),
+            bin_dir: PathBuf::from("/tmp/.mount_DemoAb/usr/bin"),
+        };
+        assert_eq!(
+            updater_path(&layout, exe),
+            PathBuf::from("/home/u/Apps/Demo.AppImage")
+        );
+    }
+
+    #[test]
+    fn a_bundle_s_or_an_install_s_updater_is_given_the_executable() {
+        let exe = Path::new("/Applications/Demo.app/Contents/MacOS/demo");
+        let layout = PackageLayout {
+            kind: PackageKind::MacBundle,
+            root: PathBuf::from("/Applications/Demo.app"),
+            bin_dir: PathBuf::from("/Applications/Demo.app/Contents/MacOS"),
+        };
+        assert_eq!(updater_path(&layout, exe), exe);
     }
 }
