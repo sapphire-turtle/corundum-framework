@@ -8,6 +8,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.1](https://github.com/sapphire-turtle/corundum-framework/compare/v0.13.0...v0.13.1) - 2026-11-21
+
+### Fixed
+
+- *(corundum-framework-package)* an AppImage's update replaces the image, not its mount
+
+### Other
+
+- Merge pull request #157 from sapphire-turtle/fix/appimage-update-target
+
 ## [0.13.0](https://github.com/sapphire-turtle/corundum-framework/compare/v0.12.0...v0.13.0) - 2026-11-19
 
 ### Added
