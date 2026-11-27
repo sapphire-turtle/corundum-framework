@@ -170,7 +170,7 @@ fluent-langneg = "0.14"
 fluent-syntax = "0.12"
 fontdb = "0.24"
 # The QR codes `qr` draws (`qr-code`); the encoder alone, without its image renderers.
-qrcode = { version = "0.14", optional = true, default-features = false }
+qrcode = { version = "0.15", optional = true, default-features = false }
 # The fs.* and journal.* methods' names, parameters and results (`fs-client`).
 corundum-framework-fs-api = { version = "0.13.1", path = "../corundum-framework-fs-api", optional = true }
 # The workspace's engine, answering in this process (`fs-local`).
